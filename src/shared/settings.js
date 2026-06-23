@@ -120,10 +120,11 @@ export function normalizeSettings(input = {}) {
   merged.customPrompt = String(merged.customPrompt || "").slice(0, 4000);
   merged.openaiModel = String(merged.openaiModel || DEFAULT_SETTINGS.openaiModel).trim().slice(0, 100);
   merged.openaiApiKey = String(merged.openaiApiKey || "").trim();
-  merged.selectedTargetWindowId =
+  const selectedTargetWindowId =
     merged.selectedTargetWindowId === null || merged.selectedTargetWindowId === ""
       ? null
       : Number(merged.selectedTargetWindowId);
+  merged.selectedTargetWindowId = Number.isInteger(selectedTargetWindowId) ? selectedTargetWindowId : null;
 
   return merged;
 }

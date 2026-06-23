@@ -20,16 +20,8 @@ export async function createOpenAIPlan(inventory, rawSettings = {}, fetchImpl = 
     },
     body: JSON.stringify({
       model: settings.openaiModel,
-      input: [
-        {
-          role: "system",
-          content: [{ type: "input_text", text: buildPlannerSystemPrompt(settings) }]
-        },
-        {
-          role: "user",
-          content: [{ type: "input_text", text: JSON.stringify(buildPlannerPayload(inventory, settings)) }]
-        }
-      ],
+      instructions: buildPlannerSystemPrompt(settings),
+      input: JSON.stringify(buildPlannerPayload(inventory, settings)),
       text: {
         format: {
           type: "json_schema",

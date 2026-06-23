@@ -37,6 +37,8 @@ test("OpenAI planner posts a structured-output Responses request", async () => {
     assert.equal(options.headers.authorization, "Bearer test-key");
     const body = JSON.parse(options.body);
     assert.equal(body.model, "gpt-5.5");
+    assert.match(body.instructions, /planner for a Chrome tab organization extension/);
+    assert.match(body.input, /OpenAI docs/);
     assert.equal(body.text.format.type, "json_schema");
     assert.equal(body.text.format.strict, true);
     assert.equal(body.text.format.name, "semantic_tab_action_plan");
