@@ -40,6 +40,8 @@ const nodes = {
   targetWindowField: document.querySelector("#targetWindowField"),
   progressBar: document.querySelector("#progressBar"),
   progressFill: document.querySelector("#progressFill"),
+  progressLabel: document.querySelector("#progressLabel"),
+  progressPercent: document.querySelector("#progressPercent"),
   settingsSummaryBtn: document.querySelector("#settingsSummaryBtn"),
   settingsSummaryText: document.querySelector("#settingsSummaryText"),
   closeWindowBtn: document.querySelector("#closeWindowBtn"),
@@ -191,9 +193,15 @@ async function analyze() {
   startProgressPolling();
   try {
     const settings = readSettings();
+    updateLocalProgress("正在检查权限", 8);
     await ensurePlannerHostPermission(settings);
+    if (settings.pageContextMode !== "off" && settings.pageSamplingConsentMode !== "not_acknowledged") {
+      updateLocalProgress("正在检查页面摘要权限", 12);
+    }
     await ensurePageSamplingPermissions(settings);
+    updateLocalProgress("正在确认当前窗口", 14);
     const windowId = await resolveInvocationWindowId();
+    updateLocalProgress("正在提交给后台整理", 16);
     const job = await sendMessage({ type: "tabs:analyze", settings, windowId });
     lastPreview = job.preview;
     lastCanApply = Boolean(job.validation?.ok);
@@ -260,8 +268,6 @@ function renderPreview(job) {
   nodes.previewSection.hidden = false;
   const preview = job.preview;
   const groups = preview.groups || [];
-  const warnings = preview.warnings || [];
-  const sample = preview.pageSampling || { requested: 0, ok: 0, permissionRequired: 0, blocked: 0 };
   const reviewTabsCount = preview.reviewTabsCount || 0;
 
   if (!groups.length && !reviewTabsCount && !preview.lockedGroupsCount) {
@@ -298,15 +304,7 @@ function renderPreview(job) {
 
       row.append(swatch, body, badge);
       return row;
-    }),
-    previewStats([
-      ["待确认", reviewTabsCount],
-      ["不会处理", preview.excludedTabsCount || 0],
-      ["保留原分组", preview.lockedGroupsCount || 0],
-      ["页面摘要", `${sample.ok}/${sample.requested}`],
-      ["需要授权", sample.permissionRequired || 0],
-      ["提醒", warnings.length]
-    ])
+    })
   );
 }
 
@@ -317,18 +315,6 @@ function previewSummary(groupCount, reviewTabsCount) {
   const reviewText = reviewTabsCount ? `，${reviewTabsCount} 个放到待确认` : "";
   summary.textContent = `${groupText}${reviewText}。`;
   return summary;
-}
-
-function previewStats(items) {
-  const stats = document.createElement("div");
-  stats.className = "preview-stats";
-  for (const [label, count] of items) {
-    const chip = document.createElement("span");
-    chip.className = "stat-chip";
-    chip.textContent = `${label} ${count}`;
-    stats.append(chip);
-  }
-  return stats;
 }
 
 function swatchForIndex(index) {
@@ -370,8 +356,12 @@ function setBusy(isBusy, label = "", options = {}) {
   nodes.cancelBtn.disabled = false;
   nodes.actions.dataset.busy = isBusy ? "true" : "false";
   nodes.progressBar.hidden = !isBusy;
+  nodes.progressBar.dataset.estimated = "";
   showProgress(isBusy ? options.progress || 8 : 0);
-  if (isBusy && label) setStatus(label);
+  if (isBusy && label) {
+    setStatus(label);
+    setProgressLabel(label);
+  }
   syncActionState();
 }
 
@@ -413,9 +403,14 @@ function updateProgressFromJob(job) {
   if (!job) return;
   if (typeof job.progress === "number") {
     nodes.progressBar.hidden = false;
+    nodes.progressBar.dataset.estimated = isLiveAiWait(job) ? "true" : "";
     showProgress(displayProgressForJob(job));
   }
-  if (job.message) setStatus(displayMessageForJob(job), job.status === "error");
+  if (job.message) {
+    const message = displayMessageForJob(job);
+    setStatus(message, job.status === "error");
+    setProgressLabel(message);
+  }
   if (job.status === "canceling") {
     nodes.cancelBtn.hidden = false;
     nodes.cancelBtn.disabled = true;
@@ -428,6 +423,19 @@ function updateProgressFromJob(job) {
 function showProgress(value) {
   const progress = Number.isFinite(Number(value)) ? Math.max(0, Math.min(100, Number(value))) : 0;
   nodes.progressFill.style.width = `${progress}%`;
+  nodes.progressPercent.textContent = `${Math.round(progress)}%`;
+}
+
+function setProgressLabel(text) {
+  if (nodes.progressLabel) nodes.progressLabel.textContent = text;
+}
+
+function updateLocalProgress(label, progress) {
+  nodes.progressBar.hidden = false;
+  nodes.progressBar.dataset.estimated = "";
+  showProgress(progress);
+  setProgressLabel(label);
+  setStatus(label);
 }
 
 function displayProgressForJob(job) {

@@ -56,6 +56,8 @@ test("floating window renders settings and mock preview", async ({ page }) => {
   await page.getByRole("button", { name: "生成方案" }).click();
   await expect(page.locator(".preview").getByText("AI 研究", { exact: true })).toBeVisible();
   await expect(page.locator(".preview").getByText("当前项目", { exact: true })).toBeVisible();
+  await expect(page.locator(".preview-stats")).toHaveCount(0);
+  await expect(page.locator(".stat-chip")).toHaveCount(0);
   await expect(page.getByRole("button", { name: "开始整理" })).toBeEnabled();
   await expect(page.getByRole("button", { name: "撤销" })).toBeHidden();
 
@@ -114,6 +116,12 @@ test("floating window shows optimistic progress while waiting for AI", async ({ 
   await expect(page.locator("#statusText")).toHaveText(
     /(理解标题线索|寻找相邻任务|避开域名硬分组|检查待确认页|整理分组边界) · \d+秒/
   );
+  await expect(page.locator(".actions #progressBar")).toBeVisible();
+  await expect(page.locator("#progressLabel")).toHaveText(
+    /(理解标题线索|寻找相邻任务|避开域名硬分组|检查待确认页|整理分组边界) · \d+秒/
+  );
+  await expect(page.locator("#progressPercent")).toContainText("%");
+  await expect(page.locator("#progressBar")).toHaveAttribute("data-estimated", "true");
   const displayedProgress = await page.locator("#progressFill").evaluate((element) => Number.parseFloat(element.style.width));
   expect(displayedProgress).toBeGreaterThan(45);
   await expect(page.getByRole("button", { name: "取消" })).toBeVisible();

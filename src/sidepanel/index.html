@@ -23,10 +23,6 @@
         </button>
       </header>
 
-      <div id="progressBar" class="progress" hidden>
-        <div id="progressFill"></div>
-      </div>
-
       <button id="settingsSummaryBtn" class="settings-summary" type="button" hidden>
         <span id="settingsSummaryText">当前窗口</span>
         <strong>调整</strong>
@@ -214,6 +210,15 @@
       </details>
 
       <div class="actions">
+        <div id="progressBar" class="task-progress" hidden>
+          <div class="task-progress-meta">
+            <span id="progressLabel">正在准备整理</span>
+            <strong id="progressPercent">0%</strong>
+          </div>
+          <div class="progress-track">
+            <div id="progressFill"></div>
+          </div>
+        </div>
         <button id="analyzeBtn" class="primary-action" type="button"><span class="button-label">生成方案</span></button>
         <button id="cancelBtn" class="danger-action" type="button" hidden><span class="button-label">取消</span></button>
         <button id="applyBtn" type="button" disabled><span class="button-label">开始整理</span></button>
