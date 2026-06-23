@@ -844,8 +844,11 @@ async function resolveInvocationWindowId() {
 
 function sourceWindowIdFromUrl() {
   try {
-    const sourceWindowId = Number(new URL(globalThis.location.href).searchParams.get("sourceWindowId"));
-    return Number.isInteger(sourceWindowId) ? sourceWindowId : null;
+    const rawSourceWindowId = new URL(globalThis.location.href).searchParams.get("sourceWindowId");
+    if (!rawSourceWindowId) return null;
+
+    const sourceWindowId = Number(rawSourceWindowId);
+    return Number.isInteger(sourceWindowId) && sourceWindowId > 0 ? sourceWindowId : null;
   } catch {
     return null;
   }

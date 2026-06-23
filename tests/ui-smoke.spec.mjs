@@ -263,6 +263,80 @@ test("default gateway does not request host permission from the floating window"
   await expect.poll(() => page.evaluate(() => window.__analyzeWindowId)).toBe(77);
 });
 
+test("current-window generation without sourceWindowId uses the focused normal window", async ({ page }) => {
+  await page.addInitScript(() => {
+    const settings = {
+      organizeMode: "current_window",
+      targetWindowMode: "current_window",
+      existingGroupMode: "preserve_existing_groups",
+      reviewGroupMode: "create_review_group",
+      undoTargetWindowMode: "leave_empty_target_window",
+      pageContextMode: "off",
+      hostPermissionRequestMode: "never",
+      pageSamplingConsentMode: "not_acknowledged",
+      urlPrivacyMode: "sanitized_url",
+      includePinnedTabs: false,
+      includeIncognitoTabs: false,
+      collapseGroupsAfterApply: true,
+      minConfidenceToApply: 0.65,
+      maxTabsPerGroup: 40,
+      promptPreset: "conservative",
+      plannerProvider: "gateway",
+      rememberProviderKeys: false,
+      gatewayBaseUrl: "",
+      gatewayModel: "gpt-5.5",
+      gatewayThinkingIntensity: "high",
+      gatewayApiKey: "",
+      customPrompt: ""
+    };
+    const activeJob = {
+      operationId: "job_focused_window",
+      status: "complete",
+      phase: "complete",
+      progress: 100,
+      message: "方案好了，可以先检查",
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+    const job = {
+      validation: { ok: true, warnings: [] },
+      preview: {
+        requiresConfirmation: false,
+        groups: [{ title: "当前窗口", reason: "Mock plan.", tabCount: 2 }],
+        reviewTabsCount: 0,
+        excludedTabsCount: 0,
+        lockedGroupsCount: 0,
+        warnings: []
+      }
+    };
+    window.__analyzeWindowId = null;
+    window.chrome = {
+      windows: {
+        getLastFocused: async () => ({ id: 42, type: "normal" }),
+        getCurrent: async () => ({ id: 999, type: "popup" })
+      },
+      runtime: {
+        sendMessage: async (message) => {
+          if (message.type === "settings:get") return { ok: true, result: settings };
+          if (message.type === "settings:save") return { ok: true, result: message.settings };
+          if (message.type === "tabs:getActiveJob") return { ok: true, result: activeJob };
+          if (message.type === "tabs:getLastJob") return { ok: true, result: job };
+          if (message.type === "tabs:startAnalyze") {
+            window.__analyzeWindowId = message.windowId;
+            return { ok: true, result: { operationId: activeJob.operationId } };
+          }
+          return { ok: true, result: null };
+        }
+      }
+    };
+  });
+
+  await page.goto(`${baseUrl}/src/sidepanel/index.html`);
+  await page.getByRole("button", { name: "生成方案" }).click();
+  await expect(page.locator(".preview").getByText("当前窗口", { exact: true })).toBeVisible();
+  await expect.poll(() => page.evaluate(() => window.__analyzeWindowId)).toBe(42);
+});
+
 test("review-only previews are shown as a pending classification group", async ({ page }) => {
   await page.addInitScript(() => {
     const settings = {
