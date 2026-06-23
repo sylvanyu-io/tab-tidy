@@ -35,7 +35,7 @@ test.afterAll(async () => {
 test("side panel renders settings and mock preview", async ({ page }) => {
   await page.goto(`${baseUrl}/src/sidepanel/index.html`);
 
-  await expect(page.getByRole("heading", { name: "把标签页收拾成几组" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Tab Tidy" })).toBeVisible();
   await expect(page.locator("#previewSection")).toBeHidden();
   await expect(page.locator("#samplingRisk")).toBeHidden();
 
@@ -43,7 +43,7 @@ test("side panel renders settings and mock preview", async ({ page }) => {
   await page.locator("#ackSampling").check();
   await expect(page.locator("#samplingRisk")).toBeVisible();
 
-  await page.getByRole("button", { name: "先看方案" }).click();
+  await page.getByRole("button", { name: "生成方案" }).click();
   await expect(page.locator(".preview").getByText("AI 研究", { exact: true })).toBeVisible();
   await expect(page.locator(".preview").getByText("当前项目", { exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "开始整理" })).toBeEnabled();

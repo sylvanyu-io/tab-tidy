@@ -8,16 +8,15 @@
   </head>
   <body>
     <main class="app-shell">
-      <header class="hero">
+      <header class="topbar">
         <div class="brand-mark" aria-hidden="true">
           <span></span>
           <span></span>
           <span></span>
         </div>
-        <div class="hero-copy">
-          <p class="eyebrow">Tab Tidy</p>
-          <h1>把标签页收拾成几组</h1>
-          <p id="statusText">准备就绪</p>
+        <div class="brand-copy">
+          <h1>Tab Tidy</h1>
+          <p id="statusText">AI 标签页整理</p>
         </div>
       </header>
 
@@ -31,17 +30,16 @@
       </button>
 
       <section class="launch-panel">
-        <div class="compact-row">
-          <div>
-            <p class="step-label">范围</p>
-            <h2>整理哪里</h2>
+        <div class="control-group">
+          <div class="control-label">
+            <span>范围</span>
+            <span class="quiet-pill">可撤销</span>
           </div>
-          <span class="quiet-pill">可撤销</span>
-        </div>
 
-        <div class="choice-grid compact-choice-grid" data-choice-for="organizeMode">
-          <button class="choice-card" type="button" data-value="current_window">当前窗口</button>
-          <button class="choice-card" type="button" data-value="consolidate_one_window">所有窗口</button>
+          <div class="choice-grid compact-choice-grid" data-choice-for="organizeMode">
+            <button class="choice-card" type="button" data-value="current_window">当前窗口</button>
+            <button class="choice-card" type="button" data-value="consolidate_one_window">所有窗口</button>
+          </div>
         </div>
 
         <select id="organizeMode" class="native-select" aria-label="整理范围">
@@ -49,17 +47,16 @@
           <option value="consolidate_one_window">合并并整理所有窗口</option>
         </select>
 
-        <div class="compact-row ai-row">
-          <div>
-            <p class="step-label">AI</p>
-            <h2>整理助手</h2>
+        <div class="control-group">
+          <div class="control-label">
+            <span>AI 服务</span>
           </div>
-        </div>
 
-        <div class="segmented" data-choice-for="plannerProvider">
-          <button type="button" data-value="fake">预览</button>
-          <button type="button" data-value="deepseek">DeepSeek</button>
-          <button type="button" data-value="openai">OpenAI</button>
+          <div class="segmented" data-choice-for="plannerProvider">
+            <button type="button" data-value="fake">预览</button>
+            <button type="button" data-value="deepseek">DeepSeek</button>
+            <button type="button" data-value="openai">OpenAI</button>
+          </div>
         </div>
 
         <select id="plannerProvider" class="native-select" aria-label="整理助手">
@@ -70,14 +67,14 @@
 
         <div id="openaiFields" class="provider-fields">
           <div class="field inline-secret">
-            <label for="openaiApiKey">OpenAI key</label>
+            <label for="openaiApiKey">密钥</label>
             <input id="openaiApiKey" type="password" autocomplete="off" placeholder="sk-..." />
           </div>
         </div>
 
         <div id="deepseekFields" class="provider-fields">
           <div class="field inline-secret">
-            <label for="deepseekApiKey">DeepSeek key</label>
+            <label for="deepseekApiKey">密钥</label>
             <input id="deepseekApiKey" type="password" autocomplete="off" placeholder="sk-..." />
           </div>
         </div>
@@ -93,7 +90,7 @@
         <details class="preferences-panel">
           <summary>
             <span>整理偏好</span>
-            <small>页面摘要、prompt</small>
+            <small>页面摘要、自定义要求</small>
           </summary>
 
           <label class="switch-row emphasis-toggle">
@@ -223,7 +220,7 @@
       </details>
 
       <div class="actions">
-        <button id="analyzeBtn" class="primary-action" type="button">先看方案</button>
+        <button id="analyzeBtn" class="primary-action" type="button">生成方案</button>
         <button id="applyBtn" type="button" disabled>开始整理</button>
         <button id="undoBtn" type="button">撤销</button>
       </div>
