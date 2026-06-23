@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { normalizePlanOrder } from "../src/core/plan-normalizer.js";
 import { validatePlan } from "../src/core/plan-validator.js";
 import { DEFAULT_SETTINGS, EXISTING_GROUP_MODES, ORGANIZE_MODES, TARGET_WINDOW_MODES } from "../src/shared/settings.js";
 
@@ -154,4 +155,54 @@ test("current target window in consolidate mode must be the invocation window", 
   const result = validatePlan(plan, inventory, settings);
   assert.equal(result.ok, false);
   assert.match(result.errors.join("\n"), /targetWindow\.windowId must be 2/);
+});
+
+test("invalid plan collections are rejected without throwing", () => {
+  const inventory = {
+    scope: { kind: "current_window", currentWindowId: 1, windowIds: [1] },
+    plannerTabs: [{ tabId: 10, windowId: 1, pinned: false, incognito: false }],
+    lockedGroups: [],
+    excludedTabs: []
+  };
+  const malformedPlan = {
+    schemaVersion: 1,
+    mode: "current_window",
+    targetWindow: { kind: "current_window", windowId: 1, title: "Current Window" },
+    groups: { bad: true },
+    reviewTabs: { bad: true },
+    excludedTabs: { bad: true }
+  };
+
+  const normalized = normalizePlanOrder(malformedPlan, inventory);
+  const result = validatePlan(normalized, inventory, DEFAULT_SETTINGS);
+
+  assert.equal(result.ok, false);
+  assert.match(result.errors.join("\n"), /groups must be an array/);
+  assert.match(result.errors.join("\n"), /reviewTabs must be an array/);
+  assert.match(result.errors.join("\n"), /excludedTabs must be an array/);
+  assert.match(result.errors.join("\n"), /Eligible tab 10 is missing/);
+});
+
+test("invalid group tabRefs are rejected without throwing", () => {
+  const inventory = {
+    scope: { kind: "current_window", currentWindowId: 1, windowIds: [1] },
+    plannerTabs: [{ tabId: 10, windowId: 1, pinned: false, incognito: false }],
+    lockedGroups: [],
+    excludedTabs: []
+  };
+  const plan = {
+    schemaVersion: 1,
+    mode: "current_window",
+    targetWindow: { kind: "current_window", windowId: 1, title: "Current Window" },
+    groups: [{ groupKey: "bad", title: "Bad", color: "blue", confidence: 0.9, tabRefs: { tabId: 10 } }],
+    reviewTabs: [],
+    excludedTabs: []
+  };
+
+  const normalized = normalizePlanOrder(plan, inventory);
+  const result = validatePlan(normalized, inventory, DEFAULT_SETTINGS);
+
+  assert.equal(result.ok, false);
+  assert.match(result.errors.join("\n"), /missing tabRefs/);
+  assert.match(result.errors.join("\n"), /Eligible tab 10 is missing/);
 });

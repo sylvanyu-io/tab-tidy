@@ -21,10 +21,18 @@ export function validatePlan(plan, inventory, rawSettings = {}) {
   const plannerTabMap = new Map((inventory.plannerTabs || []).map((tab) => [tab.tabId, tab]));
   const lockedTabIds = new Set((inventory.lockedGroups || []).flatMap((group) => group.tabIds));
   const seen = new Map();
+  const groups = Array.isArray(plan.groups) ? plan.groups : [];
+  const reviewTabs = Array.isArray(plan.reviewTabs) ? plan.reviewTabs : [];
+  const excludedTabs = Array.isArray(plan.excludedTabs) ? plan.excludedTabs : [];
 
-  for (const group of plan.groups || []) {
+  if (!Array.isArray(plan.groups)) errors.push("Plan groups must be an array.");
+  if (!Array.isArray(plan.reviewTabs)) errors.push("Plan reviewTabs must be an array.");
+  if (!Array.isArray(plan.excludedTabs)) errors.push("Plan excludedTabs must be an array.");
+
+  for (const group of groups) {
     validateGroup(group, settings, errors, warnings);
-    for (const ref of group.tabRefs || []) {
+    const tabRefs = Array.isArray(group?.tabRefs) ? group.tabRefs : [];
+    for (const ref of tabRefs) {
       validateTabRef(ref, group.title || group.groupKey, {
         settings,
         currentWindowId,
@@ -36,7 +44,7 @@ export function validatePlan(plan, inventory, rawSettings = {}) {
     }
   }
 
-  for (const ref of plan.reviewTabs || []) {
+  for (const ref of reviewTabs) {
     validateTabRef(ref, "Review", {
       settings,
       currentWindowId,
@@ -54,7 +62,7 @@ export function validatePlan(plan, inventory, rawSettings = {}) {
   }
 
   if (settings.organizeMode === ORGANIZE_MODES.CURRENT_WINDOW) {
-    for (const ref of [...collectGroupRefs(plan), ...(plan.reviewTabs || [])]) {
+    for (const ref of [...collectGroupRefs(groups), ...reviewTabs]) {
       if (ref.windowId !== currentWindowId) {
         errors.push(`Current-window mode cannot include tab ${ref.tabId} from window ${ref.windowId}.`);
       }
@@ -68,7 +76,7 @@ export function validatePlan(plan, inventory, rawSettings = {}) {
     }
   }
 
-  const planExcludedIds = new Set((plan.excludedTabs || []).map((tab) => tab.tabId));
+  const planExcludedIds = new Set(excludedTabs.map((tab) => tab.tabId));
   for (const excluded of inventory.excludedTabs || []) {
     if (!planExcludedIds.has(excluded.tabId)) {
       warnings.push(`Excluded tab ${excluded.tabId} is not listed in plan.excludedTabs.`);
@@ -165,6 +173,6 @@ function validateTabRef(ref, owner, context) {
   }
 }
 
-function collectGroupRefs(plan) {
-  return (plan.groups || []).flatMap((group) => group.tabRefs || []);
+function collectGroupRefs(groups) {
+  return groups.flatMap((group) => (Array.isArray(group?.tabRefs) ? group.tabRefs : []));
 }

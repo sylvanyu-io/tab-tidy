@@ -706,11 +706,16 @@ function normalizeGatewayPlan(plan, inventory, settings) {
 function normalizeSchemaPlanOrder(plan, inventory) {
   return {
     ...plan,
-    groups: orderGroupsByOriginalPosition(
-      (plan.groups || []).map((group) => ({ ...group, tabRefs: sortRefsByOriginalOrder(group.tabRefs || [], inventory) })),
-      inventory
-    ),
-    reviewTabs: sortRefsByOriginalOrder(plan.reviewTabs || [], inventory)
+    groups: Array.isArray(plan.groups)
+      ? orderGroupsByOriginalPosition(
+          plan.groups.map((group) => ({
+            ...group,
+            tabRefs: Array.isArray(group?.tabRefs) ? sortRefsByOriginalOrder(group.tabRefs, inventory) : group?.tabRefs
+          })),
+          inventory
+        )
+      : plan.groups,
+    reviewTabs: Array.isArray(plan.reviewTabs) ? sortRefsByOriginalOrder(plan.reviewTabs, inventory) : plan.reviewTabs
   };
 }
 
@@ -754,16 +759,16 @@ function toPlainTabRef(ref) {
 
 function sortRefsByOriginalOrder(refs, inventory) {
   const tabOrder = buildTabOrder(inventory);
-  return [...(refs || [])].sort((left, right) => tabOrder(left.tabId) - tabOrder(right.tabId));
+  return asArray(refs).sort((left, right) => tabOrder(left.tabId) - tabOrder(right.tabId));
 }
 
 function orderGroupsByOriginalPosition(groups, inventory) {
   const tabOrder = buildTabOrder(inventory);
-  return [...(groups || [])].sort((left, right) => firstGroupOrder(left, tabOrder) - firstGroupOrder(right, tabOrder));
+  return asArray(groups).sort((left, right) => firstGroupOrder(left, tabOrder) - firstGroupOrder(right, tabOrder));
 }
 
 function firstGroupOrder(group, tabOrder) {
-  const orders = (group.tabRefs || []).map((ref) => tabOrder(ref.tabId));
+  const orders = asArray(group?.tabRefs).map((ref) => tabOrder(ref.tabId));
   return orders.length ? Math.min(...orders) : Number.MAX_SAFE_INTEGER;
 }
 
@@ -774,6 +779,10 @@ function buildTabOrder(inventory) {
     order.set(tab.tabId, value);
   }
   return (tabId) => order.get(tabId) ?? Number.MAX_SAFE_INTEGER;
+}
+
+function asArray(value) {
+  return Array.isArray(value) ? [...value] : [];
 }
 
 function stripCodeFence(text) {
