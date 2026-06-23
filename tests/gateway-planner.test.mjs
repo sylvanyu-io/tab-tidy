@@ -307,7 +307,7 @@ test("AI gateway planner uses coarse then refine planning for large inventories"
 
   assert.equal(requests.length, 3);
   assert.equal(requests[0].reasoning_effort, "low");
-  assert.equal(requests[1].reasoning_effort, "medium");
+  assert.equal(requests[1].reasoning_effort, "high");
   assert.match(requests[0].messages[0].content, /fast first-pass/);
   assert.match(requests[1].messages[0].content, /JSON-only planner/);
   assert.equal(validation.ok, true, validation.errors.join(" "));
@@ -366,7 +366,7 @@ test("AI gateway planner splits oversized coarse buckets before refinement", asy
 
   assert.equal(requests.length, 4);
   assert.equal(requests[0].reasoning_effort, "low");
-  assert.equal(requests.slice(1).every((request) => request.reasoning_effort === "medium"), true);
+  assert.equal(requests.slice(1).every((request) => request.reasoning_effort === "high"), true);
   assert.equal(validation.ok, true, validation.errors.join(" "));
   assert.equal(plan.groups.length, 3);
 });

@@ -13,6 +13,7 @@ export async function createDeepSeekPlan(inventory, rawSettings = {}, fetchImpl 
     throw new Error("Fetch is not available in this environment.");
   }
 
+  await emitProgress(options, { phase: "planning", progress: 45, message: "正在请求 DeepSeek 规划" });
   const { response, data } = await fetchJsonWithTimeout(
     fetchImpl,
     DEEPSEEK_CHAT_COMPLETIONS_URL,
@@ -34,12 +35,14 @@ export async function createDeepSeekPlan(inventory, rawSettings = {}, fetchImpl 
       })
     },
     "DeepSeek planner",
-    options.timeoutMs
+    options.timeoutMs,
+    options.signal
   );
   if (!response.ok) {
     throw new Error(data?.error?.message || `DeepSeek planner failed with status ${response.status}.`);
   }
 
+  await emitProgress(options, { phase: "planning", progress: 82, message: "DeepSeek 已返回，正在解析方案" });
   return parsePlanFromDeepSeekResponse(data);
 }
 
@@ -84,4 +87,10 @@ function stripCodeFence(text) {
   const trimmed = String(text).trim();
   const match = trimmed.match(/^```(?:json)?\s*([\s\S]*?)\s*```$/i);
   return match ? match[1] : trimmed;
+}
+
+async function emitProgress(options, event) {
+  if (typeof options.onProgress === "function") {
+    await options.onProgress(event);
+  }
 }

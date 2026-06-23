@@ -26,6 +26,9 @@ export async function createGatewayPlan(inventory, rawSettings = {}, fetchImpl =
 }
 
 async function createSingleGatewayPlan(inventory, settings, fetchImpl, options = {}) {
+  if (!options.suppressSingleRequestProgress) {
+    await emitProgress(options, { phase: "planning", progress: 45, message: "正在请求 AI 规划" });
+  }
   const body = {
     model: settings.gatewayModel,
     messages: [
@@ -49,24 +52,47 @@ async function createSingleGatewayPlan(inventory, settings, fetchImpl, options =
       body: JSON.stringify(body)
     },
     "AI gateway planner",
-    options.timeoutMs
+    options.timeoutMs,
+    options.signal
   );
   if (!response.ok) {
     throw new Error(data?.error?.message || `AI gateway planner failed with status ${response.status}.`);
   }
 
+  if (!options.suppressSingleRequestProgress) {
+    await emitProgress(options, { phase: "planning", progress: 82, message: "AI 已返回，正在解析方案" });
+  }
   return parsePlanFromGatewayResponse(data, inventory, settings);
 }
 
 async function createHierarchicalGatewayPlan(inventory, settings, fetchImpl, options = {}) {
+  await emitProgress(options, { phase: "coarse_planning", progress: 42, message: "正在快速粗分标签页" });
   const coarse = await createCoarseGatewayBuckets(inventory, settings, fetchImpl, options);
+  await emitProgress(options, {
+    phase: "coarse_planning",
+    progress: 55,
+    message: `粗分完成：${coarse.buckets.length} 个候选主题`
+  });
   const finalGroups = [];
   const finalReviewTabs = [];
   const seen = new Set();
+  const refinementTotal = countRefinementRequests(coarse, settings, options);
+  let refinementDone = 0;
 
   for (const bucket of coarse.buckets) {
     if (shouldRefineBucket(bucket, settings, options)) {
+      await emitProgress(options, {
+        phase: "refining",
+        progress: refinementProgress(refinementDone, refinementTotal),
+        message: `正在精分「${bucket.title}」`
+      });
       const refined = await refineBucket(bucket, inventory, settings, fetchImpl, options);
+      refinementDone += countBucketRefinementRequests(bucket, settings, options);
+      await emitProgress(options, {
+        phase: "refining",
+        progress: refinementProgress(refinementDone, refinementTotal),
+        message: `已精分「${bucket.title}」`
+      });
       mergePlanParts(refined.groups, refined.reviewTabs, { finalGroups, finalReviewTabs, seen });
     } else if (bucket.confidence >= settings.minConfidenceToApply) {
       mergePlanParts([bucketToGroup(bucket)], [], { finalGroups, finalReviewTabs, seen });
@@ -88,7 +114,18 @@ async function createHierarchicalGatewayPlan(inventory, settings, fetchImpl, opt
       tabRefs: coarse.reviewTabs,
       reason: "Coarse pass left these tabs uncertain."
     };
+    await emitProgress(options, {
+      phase: "refining",
+      progress: refinementProgress(refinementDone, refinementTotal),
+      message: "正在精分待确认标签页"
+    });
     const refined = await refineBucket(reviewBucket, inventory, settings, fetchImpl, options);
+    refinementDone += countBucketRefinementRequests(reviewBucket, settings, options);
+    await emitProgress(options, {
+      phase: "refining",
+      progress: refinementProgress(refinementDone, refinementTotal),
+      message: "待确认标签页已精分"
+    });
     mergePlanParts(refined.groups, refined.reviewTabs, { finalGroups, finalReviewTabs, seen });
   }
 
@@ -99,6 +136,7 @@ async function createHierarchicalGatewayPlan(inventory, settings, fetchImpl, opt
     }
   }
 
+  await emitProgress(options, { phase: "building_plan", progress: 86, message: "正在合并精分结果" });
   return buildActionPlan(finalGroups, finalReviewTabs, inventory, settings);
 }
 
@@ -213,7 +251,8 @@ async function createCoarseGatewayBuckets(inventory, settings, fetchImpl, option
       body: JSON.stringify(body)
     },
     "AI gateway coarse planner",
-    options.timeoutMs
+    options.timeoutMs,
+    options.signal
   );
   if (!response.ok) {
     throw new Error(data?.error?.message || `AI gateway coarse planner failed with status ${response.status}.`);
@@ -250,12 +289,11 @@ async function refineBucket(bucket, inventory, settings, fetchImpl, options = {}
 
   const refineSettings = {
     ...settings,
-    gatewayThinkingIntensity: resolveRefineThinkingIntensity(settings, options),
     customPrompt: [
       settings.customPrompt,
       `Refine this coarse bucket: ${bucket.title}.`,
       `Coarse reason: ${bucket.reason}`,
-      "This is a large-session refinement pass; use the configured refinement effort without overthinking obvious matches.",
+      "This is a large-session refinement pass; use the configured thinking effort.",
       "Split it only when there are clearly different semantic tasks or topics.",
       "Keep uncertain or sensitive tabs in reviewTabs."
     ]
@@ -265,7 +303,10 @@ async function refineBucket(bucket, inventory, settings, fetchImpl, options = {}
   };
 
   try {
-    const plan = await createSingleGatewayPlan(subInventory, refineSettings, fetchImpl, options);
+    const plan = await createSingleGatewayPlan(subInventory, refineSettings, fetchImpl, {
+      ...options,
+      suppressSingleRequestProgress: true
+    });
     return {
       groups: (plan.groups || []).map((group) => ({
         ...group,
@@ -391,17 +432,31 @@ function shouldUseHierarchicalPlanner(inventory, options = {}) {
   return (inventory.plannerTabs || []).length >= minTabs;
 }
 
-function resolveRefineThinkingIntensity(settings, options = {}) {
-  if (options.refineThinkingIntensity) return options.refineThinkingIntensity;
-  if (settings.gatewayThinkingIntensity === "ultra") return "high";
-  if (settings.gatewayThinkingIntensity === "high") return "medium";
-  return settings.gatewayThinkingIntensity;
-}
-
 function shouldRefineBucket(bucket, settings, options = {}) {
   const minTabs = options.refineBucketMinTabs || Math.min(settings.maxTabsPerGroup, REFINE_BUCKET_MIN_TABS);
   const confidenceBelow = options.refineConfidenceBelow ?? REFINE_CONFIDENCE_BELOW;
   return bucket.tabRefs.length >= minTabs || bucket.confidence < confidenceBelow;
+}
+
+function countRefinementRequests(coarse, settings, options = {}) {
+  const bucketRequests = (coarse.buckets || []).reduce(
+    (sum, bucket) => sum + (shouldRefineBucket(bucket, settings, options) ? countBucketRefinementRequests(bucket, settings, options) : 0),
+    0
+  );
+  const reviewRequests = coarse.reviewTabs?.length
+    ? countBucketRefinementRequests({ tabRefs: coarse.reviewTabs }, settings, options)
+    : 0;
+  return Math.max(1, bucketRequests + reviewRequests);
+}
+
+function countBucketRefinementRequests(bucket, settings, options = {}) {
+  const maxTabsPerRequest = options.refineMaxTabsPerRequest || Math.min(settings.maxTabsPerGroup, REFINE_MAX_TABS_PER_REQUEST);
+  return Math.max(1, Math.ceil((bucket.tabRefs || []).length / Math.max(1, maxTabsPerRequest)));
+}
+
+function refinementProgress(completed, total) {
+  const ratio = Math.min(1, Math.max(0, completed / Math.max(1, total)));
+  return 55 + Math.round(ratio * 30);
 }
 
 function chunkRefs(refs, size) {
@@ -730,6 +785,12 @@ function thinkingIntensityText(value) {
   if (value === "high") return "high, spend more reasoning on semantic grouping";
   if (value === "ultra") return "ultra-high, be especially careful with semantic overlap, cross-window context, and low-confidence tabs";
   return "high, spend more reasoning on semantic grouping";
+}
+
+async function emitProgress(options, event) {
+  if (typeof options.onProgress === "function") {
+    await options.onProgress(event);
+  }
 }
 
 function exampleActionPlan() {

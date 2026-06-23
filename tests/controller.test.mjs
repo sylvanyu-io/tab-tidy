@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { analyzeTabs, applyLastPlan, undoLastApply } from "../src/core/controller.js";
+import { analyzeTabs, applyLastPlan, cancelActiveJob, getActiveJob, undoLastApply } from "../src/core/controller.js";
 import { undoFromRollback } from "../src/core/chrome-executor.js";
 import {
   DEFAULT_SETTINGS,
@@ -364,3 +364,56 @@ test("active tab page samples are attached to analysis preview", async () => {
   assert.equal(job.preview.pageSampling.ok, 1);
   assert.equal(job.preview.pageSampling.requested, 1);
 });
+
+test("active analysis exposes progress and can be canceled", async () => {
+  const chrome = createFakeChrome({
+    windows: [
+      {
+        id: 1,
+        focused: true,
+        tabs: [{ id: 10, title: "Gateway planner docs", url: "https://example.com/docs", active: true }]
+      }
+    ]
+  });
+  const originalFetch = globalThis.fetch;
+  let sawAbortSignal = false;
+  globalThis.fetch = async (_url, options) => {
+    sawAbortSignal = Boolean(options.signal);
+    return new Promise((resolve, reject) => {
+      options.signal.addEventListener("abort", () => reject(new Error("fetch aborted")));
+    });
+  };
+
+  try {
+    const pending = analyzeTabs(
+      chrome,
+      { ...DEFAULT_SETTINGS, plannerProvider: PLANNER_PROVIDERS.GATEWAY, gatewayApiKey: "gateway-test-key" },
+      { windowId: 1 }
+    );
+
+    await waitForActiveJob(chrome, (job) => job?.phase === "planning" && job.progress >= 40);
+    const activeJob = await getActiveJob(chrome);
+    assert.equal(activeJob.status, "running");
+    assert.equal(sawAbortSignal, true);
+
+    const cancelResult = await cancelActiveJob(chrome);
+    assert.equal(cancelResult.canceled, true);
+    await assert.rejects(pending, /已取消整理/);
+
+    const canceledJob = await getActiveJob(chrome);
+    assert.equal(canceledJob.status, "canceled");
+    assert.equal(canceledJob.message, "已取消整理。");
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+async function waitForActiveJob(chrome, predicate) {
+  const deadline = Date.now() + 1000;
+  while (Date.now() < deadline) {
+    const job = await getActiveJob(chrome);
+    if (predicate(job)) return job;
+    await new Promise((resolve) => setTimeout(resolve, 10));
+  }
+  assert.fail("Timed out waiting for active analysis job.");
+}

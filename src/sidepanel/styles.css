@@ -791,8 +791,26 @@ details[open] > summary::before {
   display: none;
 }
 
+.actions[data-busy="true"] {
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.actions[data-busy="true"] #applyBtn,
+.actions[data-busy="true"] #undoBtn {
+  display: none;
+}
+
 .actions[data-state="idle"] #analyzeBtn {
   grid-column: 1 / -1;
+}
+
+.actions[data-busy="true"] #analyzeBtn {
+  grid-column: auto;
+}
+
+.actions .danger-action {
+  color: var(--danger);
+  background: var(--coral-soft);
 }
 
 .actions[data-state="preview"] #applyBtn {
@@ -951,6 +969,10 @@ pre {
 
   .actions[data-state="idle"] #analyzeBtn {
     grid-column: 1 / -1;
+  }
+
+  .actions[data-busy="true"] #analyzeBtn {
+    grid-column: auto;
   }
 
   .actions[data-state="preview"] {

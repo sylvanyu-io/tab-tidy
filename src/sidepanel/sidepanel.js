@@ -40,6 +40,7 @@ const nodes = {
   settingsSummaryText: document.querySelector("#settingsSummaryText"),
   actions: document.querySelector(".actions"),
   analyzeBtn: document.querySelector("#analyzeBtn"),
+  cancelBtn: document.querySelector("#cancelBtn"),
   applyBtn: document.querySelector("#applyBtn"),
   undoBtn: document.querySelector("#undoBtn"),
   previewSection: document.querySelector("#previewSection"),
@@ -54,6 +55,7 @@ let lastCanApply = false;
 let isEditingSettings = false;
 let pageSamplingOriginCache = { origins: [], refreshedAt: 0 };
 let pageSamplingOriginRefreshTimer = null;
+let progressPollTimer = null;
 
 init().catch((error) => setStatus(error.message, true));
 
@@ -65,6 +67,7 @@ async function init() {
   writeSettings(settings);
   updateConditionalUi();
   schedulePageSamplingOriginRefresh();
+  await hydrateActiveJob();
   syncActionState();
 }
 
@@ -78,6 +81,7 @@ function bindEvents() {
   fields.plannerProvider.addEventListener("change", updateConditionalUi);
 
   nodes.analyzeBtn.addEventListener("click", analyze);
+  nodes.cancelBtn.addEventListener("click", cancelAnalyze);
   nodes.applyBtn.addEventListener("click", applyLastPlan);
   nodes.undoBtn.addEventListener("click", undoLastApply);
   nodes.settingsSummaryBtn.addEventListener("click", () => {
@@ -175,7 +179,8 @@ function updateConditionalUi() {
 }
 
 async function analyze() {
-  setBusy(true, "正在思考怎么整理");
+  setBusy(true, "正在准备整理", { cancelable: true, progress: 4 });
+  startProgressPolling();
   try {
     const settings = readSettings();
     await ensurePlannerHostPermission(settings);
@@ -194,7 +199,19 @@ async function analyze() {
     setStatus(error.message, true);
     renderError(error);
   } finally {
+    stopProgressPolling();
     setBusy(false);
+  }
+}
+
+async function cancelAnalyze() {
+  nodes.cancelBtn.disabled = true;
+  setStatus("正在取消整理");
+  try {
+    await sendMessage({ type: "tabs:cancelActiveJob" });
+  } catch (error) {
+    setStatus(error.message, true);
+    nodes.cancelBtn.disabled = false;
   }
 }
 
@@ -335,14 +352,76 @@ function replacerForDetails(key, value) {
   return value;
 }
 
-function setBusy(isBusy, label = "") {
+function setBusy(isBusy, label = "", options = {}) {
   nodes.analyzeBtn.disabled = isBusy;
   nodes.undoBtn.disabled = isBusy;
   nodes.applyBtn.disabled = isBusy || !lastPreview || !lastCanApply;
+  nodes.cancelBtn.hidden = !(isBusy && options.cancelable);
+  nodes.cancelBtn.disabled = false;
+  nodes.actions.dataset.busy = isBusy ? "true" : "false";
   nodes.progressBar.hidden = !isBusy;
-  nodes.progressFill.style.width = isBusy ? "65%" : "0";
+  showProgress(isBusy ? options.progress || 8 : 0);
   if (isBusy && label) setStatus(label);
   syncActionState();
+}
+
+async function hydrateActiveJob() {
+  const job = await sendMessage({ type: "tabs:getActiveJob" }).catch(() => null);
+  if (!job) return;
+  if (isLiveJob(job)) {
+    updateProgressFromJob(job);
+    setBusy(true, job.message || "正在整理", { cancelable: true, progress: job.progress || 8 });
+    startProgressPolling();
+  } else if (job.status === "error" || job.status === "canceled") {
+    setStatus(job.message || "上次整理没有完成", job.status === "error");
+  }
+}
+
+function startProgressPolling() {
+  stopProgressPolling();
+  pollActiveJob();
+  progressPollTimer = setInterval(pollActiveJob, 600);
+}
+
+function stopProgressPolling() {
+  if (!progressPollTimer) return;
+  clearInterval(progressPollTimer);
+  progressPollTimer = null;
+}
+
+async function pollActiveJob() {
+  try {
+    const job = await sendMessage({ type: "tabs:getActiveJob" });
+    updateProgressFromJob(job);
+    if (!isLiveJob(job)) stopProgressPolling();
+  } catch {
+    stopProgressPolling();
+  }
+}
+
+function updateProgressFromJob(job) {
+  if (!job) return;
+  if (typeof job.progress === "number") {
+    nodes.progressBar.hidden = false;
+    showProgress(job.progress);
+  }
+  if (job.message) setStatus(job.message, job.status === "error");
+  if (job.status === "canceling") {
+    nodes.cancelBtn.hidden = false;
+    nodes.cancelBtn.disabled = true;
+  }
+  if (job.status === "canceled" || job.status === "error" || job.status === "complete") {
+    nodes.cancelBtn.hidden = true;
+  }
+}
+
+function showProgress(value) {
+  const progress = Number.isFinite(Number(value)) ? Math.max(0, Math.min(100, Number(value))) : 0;
+  nodes.progressFill.style.width = `${progress}%`;
+}
+
+function isLiveJob(job) {
+  return job?.status === "running" || job?.status === "canceling";
 }
 
 function setStatus(text, isError = false) {
@@ -605,6 +684,8 @@ async function mockMessage(message) {
   }
   if (message.type === "tabs:applyLastPlan") return { createdGroupIds: [1, 2] };
   if (message.type === "tabs:undoLastApply") return { restoredTabs: 20 };
+  if (message.type === "tabs:getActiveJob") return null;
+  if (message.type === "tabs:cancelActiveJob") return { canceled: false, job: null };
   throw new Error(`Mock does not implement ${message.type}`);
 }
 
