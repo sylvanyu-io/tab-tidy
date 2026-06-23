@@ -1,11 +1,9 @@
-export const DEFAULT_PLANNER_TIMEOUT_MS = 180000;
-
 export async function fetchJsonWithTimeout(
   fetchImpl,
   url,
   options,
   label,
-  timeoutMs = DEFAULT_PLANNER_TIMEOUT_MS,
+  timeoutMs = null,
   externalSignal = null
 ) {
   if (externalSignal?.aborted) {
@@ -15,7 +13,8 @@ export async function fetchJsonWithTimeout(
   const controller = new AbortController();
   let timeoutId = null;
   let abortedByExternalSignal = false;
-  const timeout = Math.max(10, Number(timeoutMs) || DEFAULT_PLANNER_TIMEOUT_MS);
+  const timeout = Number(timeoutMs);
+  const shouldUseTimeout = Number.isFinite(timeout) && timeout > 0;
   const abortFromExternalSignal = () => {
     abortedByExternalSignal = true;
     controller.abort();
@@ -23,31 +22,31 @@ export async function fetchJsonWithTimeout(
 
   externalSignal?.addEventListener?.("abort", abortFromExternalSignal, { once: true });
 
-  const timeoutPromise = new Promise((_, reject) => {
-    timeoutId = setTimeout(() => {
-      controller.abort();
-      reject(new Error(`${label} timed out after ${Math.round(timeout / 1000)} seconds.`));
-    }, timeout);
-  });
+  const timeoutPromise = shouldUseTimeout
+    ? new Promise((_, reject) => {
+        timeoutId = setTimeout(() => {
+          controller.abort();
+          reject(new Error(`${label} timed out after ${Math.round(timeout / 1000)} seconds.`));
+        }, Math.max(10, timeout));
+      })
+    : null;
 
   try {
-    return await Promise.race([
-      (async () => {
-        try {
-          const response = await fetchImpl(url, { ...options, signal: controller.signal });
-          const data = await response.json();
-          return { response, data };
-        } catch (error) {
-          if (abortedByExternalSignal) {
-            throw new Error(`${label} was canceled.`);
-          }
-          throw error;
+    const fetchPromise = (async () => {
+      try {
+        const response = await fetchImpl(url, { ...options, signal: controller.signal });
+        const data = await response.json();
+        return { response, data };
+      } catch (error) {
+        if (abortedByExternalSignal) {
+          throw new Error(`${label} was canceled.`);
         }
-      })(),
-      timeoutPromise
-    ]);
+        throw error;
+      }
+    })();
+    return await (timeoutPromise ? Promise.race([fetchPromise, timeoutPromise]) : fetchPromise);
   } finally {
-    clearTimeout(timeoutId);
+    if (timeoutId) clearTimeout(timeoutId);
     externalSignal?.removeEventListener?.("abort", abortFromExternalSignal);
   }
 }
