@@ -3,6 +3,12 @@ import { fetchJsonWithTimeout } from "./fetch-timeout.js";
 import { ACTION_PLAN_JSON_SCHEMA } from "./plan-schema.js";
 import { CHROME_GROUP_COLORS } from "./plan-validator.js";
 
+const HIERARCHICAL_MIN_TABS = 100;
+const REFINE_BUCKET_MIN_TABS = 50;
+const REFINE_MAX_TABS_PER_REQUEST = 80;
+const REFINE_CONFIDENCE_BELOW = 0.78;
+const COARSE_MAX_BUCKETS = 24;
+
 export async function createGatewayPlan(inventory, rawSettings = {}, fetchImpl = globalThis.fetch, options = {}) {
   const settings = normalizeSettings(rawSettings);
   if (!settings.gatewayApiKey) {
@@ -12,6 +18,14 @@ export async function createGatewayPlan(inventory, rawSettings = {}, fetchImpl =
     throw new Error("Fetch is not available in this environment.");
   }
 
+  if (shouldUseHierarchicalPlanner(inventory, options)) {
+    return createHierarchicalGatewayPlan(inventory, settings, fetchImpl, options);
+  }
+
+  return createSingleGatewayPlan(inventory, settings, fetchImpl, options);
+}
+
+async function createSingleGatewayPlan(inventory, settings, fetchImpl, options = {}) {
   const body = {
     model: settings.gatewayModel,
     messages: [
@@ -42,6 +56,50 @@ export async function createGatewayPlan(inventory, rawSettings = {}, fetchImpl =
   }
 
   return parsePlanFromGatewayResponse(data, inventory, settings);
+}
+
+async function createHierarchicalGatewayPlan(inventory, settings, fetchImpl, options = {}) {
+  const coarse = await createCoarseGatewayBuckets(inventory, settings, fetchImpl, options);
+  const finalGroups = [];
+  const finalReviewTabs = [];
+  const seen = new Set();
+
+  for (const bucket of coarse.buckets) {
+    if (shouldRefineBucket(bucket, settings, options)) {
+      const refined = await refineBucket(bucket, inventory, settings, fetchImpl, options);
+      mergePlanParts(refined.groups, refined.reviewTabs, { finalGroups, finalReviewTabs, seen });
+    } else if (bucket.confidence >= settings.minConfidenceToApply) {
+      mergePlanParts([bucketToGroup(bucket)], [], { finalGroups, finalReviewTabs, seen });
+    } else {
+      mergePlanParts([], bucket.tabRefs.map((ref) => ({ ...ref, reason: `Low-confidence coarse bucket: ${bucket.title}.` })), {
+        finalGroups,
+        finalReviewTabs,
+        seen
+      });
+    }
+  }
+
+  if (coarse.reviewTabs.length) {
+    const reviewBucket = {
+      groupKey: "coarse-review",
+      title: "Review",
+      color: "grey",
+      confidence: 0.5,
+      tabRefs: coarse.reviewTabs,
+      reason: "Coarse pass left these tabs uncertain."
+    };
+    const refined = await refineBucket(reviewBucket, inventory, settings, fetchImpl, options);
+    mergePlanParts(refined.groups, refined.reviewTabs, { finalGroups, finalReviewTabs, seen });
+  }
+
+  for (const tab of inventory.plannerTabs || []) {
+    if (!seen.has(tab.tabId)) {
+      finalReviewTabs.push({ tabId: tab.tabId, windowId: tab.windowId, reason: "Hierarchical planner did not assign this tab." });
+      seen.add(tab.tabId);
+    }
+  }
+
+  return buildActionPlan(finalGroups, finalReviewTabs, inventory, settings);
 }
 
 export function gatewayChatCompletionsUrl(settings) {
@@ -125,6 +183,307 @@ export function buildGatewayUserPrompt(inventory, settings) {
     "Return the JSON action plan only.",
     JSON.stringify(buildPlannerPayload(inventory, settings))
   ].join("\n");
+}
+
+async function createCoarseGatewayBuckets(inventory, settings, fetchImpl, options = {}) {
+  const body = {
+    model: settings.gatewayModel,
+    messages: [
+      { role: "system", content: buildCoarseSystemPrompt(settings, options) },
+      { role: "user", content: buildCoarseUserPrompt(inventory, settings) }
+    ],
+    response_format: { type: "json_object" },
+    max_tokens: 8192,
+    reasoning_effort: "low"
+  };
+  const { response, data } = await fetchJsonWithTimeout(
+    fetchImpl,
+    gatewayChatCompletionsUrl(settings),
+    {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        authorization: `Bearer ${settings.gatewayApiKey}`
+      },
+      body: JSON.stringify(body)
+    },
+    "AI gateway coarse planner",
+    options.timeoutMs
+  );
+  if (!response.ok) {
+    throw new Error(data?.error?.message || `AI gateway coarse planner failed with status ${response.status}.`);
+  }
+  return normalizeCoarsePlan(parseGatewayJson(data), inventory);
+}
+
+async function refineBucket(bucket, inventory, settings, fetchImpl, options = {}) {
+  const maxTabsPerRequest = options.refineMaxTabsPerRequest || Math.min(settings.maxTabsPerGroup, REFINE_MAX_TABS_PER_REQUEST);
+  if (bucket.tabRefs.length > maxTabsPerRequest) {
+    const refinedParts = { groups: [], reviewTabs: [] };
+    for (const [index, tabRefs] of chunkRefs(bucket.tabRefs, maxTabsPerRequest).entries()) {
+      const refined = await refineBucket(
+        {
+          ...bucket,
+          groupKey: `${bucket.groupKey}-part-${index + 1}`,
+          title: `${bucket.title} ${index + 1}`,
+          tabRefs,
+          reason: `${bucket.reason} Split from an oversized coarse bucket.`
+        },
+        inventory,
+        settings,
+        fetchImpl,
+        options
+      );
+      refinedParts.groups.push(...refined.groups);
+      refinedParts.reviewTabs.push(...refined.reviewTabs);
+    }
+    return refinedParts;
+  }
+
+  const subInventory = subsetInventory(inventory, bucket.tabRefs);
+  if (!(subInventory.plannerTabs || []).length) return { groups: [], reviewTabs: [] };
+
+  const refineSettings = {
+    ...settings,
+    customPrompt: [
+      settings.customPrompt,
+      `Refine this coarse bucket: ${bucket.title}.`,
+      `Coarse reason: ${bucket.reason}`,
+      "Split it only when there are clearly different semantic tasks or topics.",
+      "Keep uncertain or sensitive tabs in reviewTabs."
+    ]
+      .filter(Boolean)
+      .join("\n")
+      .slice(0, 4000)
+  };
+
+  try {
+    const plan = await createSingleGatewayPlan(subInventory, refineSettings, fetchImpl, options);
+    return {
+      groups: (plan.groups || []).map((group) => ({
+        ...group,
+        groupKey: `${bucket.groupKey}-${group.groupKey || slugify(group.title)}`.slice(0, 64)
+      })),
+      reviewTabs: plan.reviewTabs || []
+    };
+  } catch (error) {
+    if (bucket.confidence >= settings.minConfidenceToApply) {
+      return {
+        groups: [
+          {
+            ...bucketToGroup(bucket),
+            reason: `${bucket.reason} Refinement unavailable: ${error.message}`
+          }
+        ],
+        reviewTabs: []
+      };
+    }
+
+    return {
+      groups: [],
+      reviewTabs: bucket.tabRefs.map((ref) => ({ ...ref, reason: `Refinement unavailable for uncertain bucket: ${error.message}` }))
+    };
+  }
+}
+
+function buildCoarseSystemPrompt(settings, options = {}) {
+  const presetText = PROMPT_PRESET_TEXT[settings.promptPreset] || PROMPT_PRESET_TEXT.conservative;
+  const maxBuckets = options.coarseMaxBuckets || COARSE_MAX_BUCKETS;
+  return [
+    "This is a fast first-pass software engineering task for a Chrome tab organization extension.",
+    "Return exactly one compact JSON object. Do not include markdown or prose outside JSON.",
+    "Shape: {\"buckets\":[{\"bucketKey\":\"topic\",\"title\":\"Topic\",\"color\":\"blue\",\"confidence\":0.8,\"tabIds\":[1],\"reason\":\"Short reason.\"}],\"reviewTabIds\":[2]}",
+    "Use tabIds arrays, not full tab objects.",
+    `Use at most ${maxBuckets} broad semantic buckets.`,
+    `Allowed colors: ${CHROME_GROUP_COLORS.join(", ")}.`,
+    "Prefer broad, useful semantic topics over domain-only grouping.",
+    "This is a coarse pass: mixed or large buckets are acceptable because a second pass will refine them.",
+    "Every eligible tab id must appear exactly once, either in buckets[].tabIds or reviewTabIds.",
+    "Put generic, sensitive, or very uncertain tabs in reviewTabIds.",
+    `Runtime preset: ${presetText}`
+  ].join("\n");
+}
+
+function buildCoarseUserPrompt(inventory, settings) {
+  const payload = buildPlannerPayload(inventory, settings);
+  return [
+    "Software engineering task input: create broad semantic buckets for these browser tabs.",
+    "Return compact coarse-bucket JSON only.",
+    JSON.stringify({
+      settings: payload.settings,
+      scope: payload.scope,
+      windows: payload.windows,
+      eligibleTabs: payload.eligibleTabs.map((tab) => ({
+        tabId: tab.tabId,
+        windowId: tab.windowId,
+        title: tab.title,
+        hostname: tab.hostname,
+        sanitizedUrl: tab.sanitizedUrl,
+        pageSample: tab.pageSample
+      })),
+      lockedGroups: payload.lockedGroups,
+      pageSampleResults: payload.pageSampleResults
+    })
+  ].join("\n");
+}
+
+function normalizeCoarsePlan(plan, inventory) {
+  const tabById = new Map((inventory.plannerTabs || []).map((tab) => [tab.tabId, tab]));
+  const seen = new Set();
+  const buckets = [];
+  const sourceBuckets = Array.isArray(plan?.buckets) ? plan.buckets : Array.isArray(plan?.groups) ? plan.groups : [];
+
+  for (const [index, bucket] of sourceBuckets.entries()) {
+    const tabRefs = normalizeTabRefs(bucket.tabRefs || bucket.tabIds || bucket.tabs || [], tabById)
+      .filter((ref) => {
+        if (seen.has(ref.tabId)) return false;
+        seen.add(ref.tabId);
+        return true;
+      })
+      .map(toPlainTabRef);
+    if (!tabRefs.length) continue;
+
+    buckets.push({
+      groupKey: slugify(bucket.bucketKey || bucket.groupKey || bucket.key || bucket.title || bucket.name || `bucket-${index + 1}`),
+      title: String(bucket.title || bucket.name || `Bucket ${index + 1}`).slice(0, 40),
+      color: CHROME_GROUP_COLORS.includes(bucket.color) ? bucket.color : CHROME_GROUP_COLORS[index % CHROME_GROUP_COLORS.length],
+      confidence: clampConfidence(bucket.confidence),
+      tabRefs,
+      reason: String(bucket.reason || bucket.rationale || "Coarse semantic bucket.").slice(0, 280)
+    });
+  }
+
+  const reviewTabs = normalizeTabRefs(plan?.reviewTabs || plan?.reviewTabIds || plan?.ungrouped || [], tabById)
+    .filter((ref) => !seen.has(ref.tabId))
+    .map((ref) => {
+      seen.add(ref.tabId);
+      return { ...ref, reason: ref.reason || "Coarse pass left this tab for review." };
+    });
+
+  for (const tab of inventory.plannerTabs || []) {
+    if (!seen.has(tab.tabId)) {
+      reviewTabs.push({ tabId: tab.tabId, windowId: tab.windowId, reason: "Coarse pass did not assign this tab." });
+      seen.add(tab.tabId);
+    }
+  }
+
+  return { buckets, reviewTabs };
+}
+
+function shouldUseHierarchicalPlanner(inventory, options = {}) {
+  if (options.hierarchical === false) return false;
+  if (options.hierarchical === true) return true;
+  const minTabs = options.hierarchicalMinTabs || HIERARCHICAL_MIN_TABS;
+  return (inventory.plannerTabs || []).length >= minTabs;
+}
+
+function shouldRefineBucket(bucket, settings, options = {}) {
+  const minTabs = options.refineBucketMinTabs || Math.min(settings.maxTabsPerGroup, REFINE_BUCKET_MIN_TABS);
+  const confidenceBelow = options.refineConfidenceBelow ?? REFINE_CONFIDENCE_BELOW;
+  return bucket.tabRefs.length >= minTabs || bucket.confidence < confidenceBelow;
+}
+
+function chunkRefs(refs, size) {
+  const chunks = [];
+  const chunkSize = Math.max(1, size);
+  for (let index = 0; index < refs.length; index += chunkSize) {
+    chunks.push(refs.slice(index, index + chunkSize));
+  }
+  return chunks;
+}
+
+function subsetInventory(inventory, refs) {
+  const ids = new Set(refs.map((ref) => ref.tabId));
+  const plannerTabs = (inventory.plannerTabs || []).filter((tab) => ids.has(tab.tabId));
+  const tabs = (inventory.tabs || []).filter((tab) => ids.has(tab.tabId));
+  const windows = (inventory.windows || []).map((window) => ({
+    ...window,
+    tabCount: plannerTabs.filter((tab) => tab.windowId === window.windowId).length
+  }));
+
+  return {
+    ...inventory,
+    windows,
+    tabs,
+    plannerTabs,
+    excludedTabs: [],
+    lockedGroups: [],
+    pageSamples: (inventory.pageSamples || []).filter((sample) => ids.has(sample.tabId))
+  };
+}
+
+function bucketToGroup(bucket) {
+  return {
+    groupKey: bucket.groupKey,
+    title: bucket.title,
+    color: bucket.color,
+    confidence: bucket.confidence,
+    tabRefs: bucket.tabRefs.map(toPlainTabRef),
+    reason: bucket.reason
+  };
+}
+
+function mergePlanParts(groups, reviewTabs, state) {
+  for (const group of groups || []) {
+    const tabRefs = (group.tabRefs || [])
+      .filter((ref) => !state.seen.has(ref.tabId))
+      .map((ref) => {
+        state.seen.add(ref.tabId);
+        return toPlainTabRef(ref);
+      });
+    if (!tabRefs.length) continue;
+    state.finalGroups.push({ ...group, tabRefs });
+  }
+
+  for (const ref of reviewTabs || []) {
+    if (state.seen.has(ref.tabId)) continue;
+    state.seen.add(ref.tabId);
+    state.finalReviewTabs.push({
+      tabId: ref.tabId,
+      windowId: ref.windowId,
+      reason: ref.reason || "Left for review by hierarchical planner."
+    });
+  }
+}
+
+function buildActionPlan(groups, reviewTabs, inventory, settings) {
+  return {
+    schemaVersion: 1,
+    mode: settings.organizeMode,
+    scope:
+      settings.organizeMode === ORGANIZE_MODES.CONSOLIDATE_ONE_WINDOW
+        ? { kind: "all_normal_windows", windowIds: inventory.scope.windowIds }
+        : { kind: "current_window", windowIds: [inventory.scope.currentWindowId] },
+    targetWindow:
+      settings.organizeMode === ORGANIZE_MODES.CONSOLIDATE_ONE_WINDOW
+        ? { kind: settings.targetWindowMode, windowId: settings.selectedTargetWindowId, title: "AI Organized" }
+        : { kind: "current_window", windowId: inventory.scope.currentWindowId },
+    eligibleTabs: (inventory.plannerTabs || []).map((tab) => ({ tabId: tab.tabId, windowId: tab.windowId })),
+    excludedTabs: (inventory.excludedTabs || []).map((tab) => ({
+      tabId: tab.tabId,
+      windowId: tab.windowId,
+      reason: tab.exclusionReason
+    })),
+    groups: uniquifyGroupKeys(groups),
+    reviewTabs
+  };
+}
+
+function uniquifyGroupKeys(groups) {
+  const seen = new Map();
+  return groups.map((group) => {
+    const base = slugify(group.groupKey || group.title);
+    const count = seen.get(base) || 0;
+    seen.set(base, count + 1);
+    return {
+      ...group,
+      groupKey: count ? `${base}-${count + 1}` : base,
+      title: String(group.title || "Topic").slice(0, 40),
+      color: CHROME_GROUP_COLORS.includes(group.color) ? group.color : "grey",
+      confidence: clampConfidence(group.confidence),
+      reason: String(group.reason || "Semantic grouping.").slice(0, 280)
+    };
+  });
 }
 
 function formatPageSample(result) {

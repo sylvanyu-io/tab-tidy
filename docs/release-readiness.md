@@ -19,14 +19,18 @@ Implemented:
 - Fake Chrome harness, Playwright UI smoke test, and real-extension stress
   runner against an isolated Chromium profile.
 - Planner network calls have a timeout instead of hanging indefinitely.
+- Large AI gateway jobs use a coarse-then-refine planner: a low-effort coarse
+  bucket pass, followed by high-effort refinement for oversized or uncertain
+  buckets, then normal local validation.
 
 Not production-complete yet:
 
 - No Chrome Web Store assets or listing text.
 - No signed release package workflow.
 - No provider key management beyond local BYOK storage.
-- No chunking/reduce flow for hundreds or thousands of tabs when the selected
-  provider is too slow for a single high-reasoning request.
+- No user-visible progress breakdown for multi-pass AI planning.
+- No provider-specific adaptive scheduler beyond the AI gateway coarse/refine
+  path.
 - No telemetry/diagnostics toggle.
 
 ## Release Gates

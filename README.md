@@ -23,6 +23,10 @@ The AI gateway defaults to `http://127.0.0.1:8317/v1`. The side panel exposes
 only `gpt-5.5`, `claude-opus-4-8`, and `claude-sonnet-4-6` for tab planning.
 Thinking intensity defaults to high and can be set to low, medium, high, or
 ultra-high from advanced settings.
+Large AI gateway jobs automatically use a coarse-then-refine strategy: a fast
+low-effort pass creates broad semantic buckets, then only oversized or uncertain
+buckets are sent through the higher-effort planner before the local validator
+accepts the final plan.
 Image models can exist on the same gateway, but they are not useful planner
 models for this workflow. The key is stored only when "remember key" is enabled.
 
