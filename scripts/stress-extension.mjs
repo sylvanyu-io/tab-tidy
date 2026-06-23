@@ -261,8 +261,9 @@ function renderPage(page) {
 async function openExtensionControl(context) {
   const worker = context.serviceWorkers()[0] || (await context.waitForEvent("serviceworker", { timeout: 10000 }));
   const pagePromise = context.waitForEvent("page");
-  // Test harness entrypoint: load the popup document as a page so Playwright can
-  // keep it open while exercising the same runtime code as the toolbar popup.
+  // Harness-only entrypoint: production uses action.default_popup from the
+  // toolbar icon. This separate window keeps the same popup document alive long
+  // enough for Playwright to drive multi-window stress cases.
   await worker.evaluate(async () =>
     chrome.windows.create({
       url: chrome.runtime.getURL("src/sidepanel/index.html"),

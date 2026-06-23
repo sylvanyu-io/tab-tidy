@@ -30,6 +30,8 @@ Implemented:
 - Fake Chrome harness, Playwright UI smoke test, and real-extension stress
   runner against an isolated Chromium profile.
 - Planner network calls have a timeout instead of hanging indefinitely.
+- Active analysis jobs expose coarse progress states in the popup and can be
+  canceled; cancellation aborts provider fetches when the request is still live.
 - Large AI gateway jobs use a coarse-then-refine planner: a low-effort coarse
   bucket pass, followed by high-effort refinement for oversized or uncertain
   buckets, then normal local validation.
@@ -39,7 +41,6 @@ Not production-complete yet:
 - No Chrome Web Store assets or listing text.
 - No signed release package workflow.
 - No provider key management beyond local BYOK storage.
-- No user-visible progress breakdown for multi-pass AI planning.
 - No provider-specific adaptive scheduler beyond the AI gateway coarse/refine
   path.
 - No telemetry/diagnostics toggle.
@@ -76,7 +77,6 @@ Recommended before public listing:
 - Add export/import settings without exporting API keys by default.
 - Add first-run privacy disclosure.
 - Add error recovery UI for provider rate limit, invalid key, and invalid plan.
-- Add per-operation progress and cancellation.
 - Expand adaptive planning beyond the AI gateway path if other providers become
   first-class large-session targets.
 - Add release build script that zips only manifest, src, docs/licenses needed by

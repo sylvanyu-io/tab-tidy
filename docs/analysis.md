@@ -52,7 +52,8 @@ action popup UI
 ### Extension Parts
 
 - Service worker: handles Chrome events, tab inventory, grouping execution, and state persistence.
-- Side panel: review UI, long-running job progress, model settings, and apply/undo controls.
+- Action popup: review UI, long-running job progress, model settings, cancellation,
+  and apply/undo controls.
 - Content script or programmatic injection: collects optional page evidence such as meta description, headings, canonical URL, and a short visible-text sample.
 - LLM adapter: provider-independent interface. Start with BYOK cloud model support, later add Chrome built-in AI or a local native-messaging bridge.
 - Planner validator: rejects invalid tab IDs, duplicate assignments, over-broad groups, or actions touching incognito/private tabs unless explicitly enabled.

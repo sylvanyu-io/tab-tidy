@@ -27,8 +27,8 @@ Large AI gateway jobs automatically use a coarse-then-refine strategy: a fast
 low-effort pass creates broad semantic buckets, then only oversized or uncertain
 buckets are sent through the higher-effort planner before the local validator
 accepts the final plan.
-For 100+ tab jobs, refinement defaults to medium effort to keep latency down;
-selecting ultra-high thinking uses the gateway's high effort for refinement.
+For 100+ tab jobs, refinement follows the selected thinking intensity; the
+default remains high.
 Image models can exist on the same gateway, but they are not useful planner
 models for this workflow. The key is stored only when "remember key" is enabled.
 
@@ -81,7 +81,9 @@ npm run stress:extension
 This launches an isolated Chromium profile, opens hundreds of generated HTTP
 pages across multiple normal browser windows, then verifies current-window mode,
 all-windows-to-one-window mode, apply, undo, page-sampling permission gates, and
-page body sampling. Optional gateway stress:
+page body sampling. The stress harness opens the popup document in a separate
+test-only window so Playwright can keep it alive; the installed extension entry
+is still the toolbar action popup. Optional gateway stress:
 
 ```bash
 GATEWAY_BASE_URL=http://127.0.0.1:8317/v1 GATEWAY_API_KEY=... STRESS_GATEWAY_TABS=60 npm run stress:extension
