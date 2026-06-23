@@ -32,10 +32,19 @@ test.afterAll(async () => {
   await new Promise((resolveClose) => server.close(resolveClose));
 });
 
+test.beforeEach(async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 680 });
+});
+
 test("floating window renders settings and mock preview", async ({ page }) => {
   await page.goto(`${baseUrl}/src/sidepanel/index.html`);
 
   await expect(page.getByRole("heading", { name: "Tab Tidy" })).toBeVisible();
+  await expect(page.locator(".actions")).toHaveCSS("position", "fixed");
+  await expect(page.locator(".actions")).toHaveCSS("display", "grid");
+  await expect(page.locator("#analyzeBtn")).toHaveCSS("background-color", "rgb(31, 85, 255)");
+  await expect(page.locator("#analyzeBtn")).toHaveCSS("border-radius", "10px");
+  await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
   await expect(page.locator(".segmented")).toHaveCount(0);
   await expect(page.locator("#previewSection")).toBeHidden();
   await expect(page.locator("#samplingRisk")).toBeHidden();

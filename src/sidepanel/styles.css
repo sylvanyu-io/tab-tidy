@@ -595,6 +595,8 @@ button:focus-visible {
   transition:
     background 160ms var(--ease),
     border-color 160ms var(--ease);
+}
+
 .switch-row input[type="checkbox"]::before {
   content: "";
   position: absolute;
