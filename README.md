@@ -3,7 +3,7 @@
 AI-assisted Chrome extension for semantic tab grouping across many browser windows.
 
 Current status: runnable MV3 prototype with metadata-only planning, preview,
-apply, and best-effort undo. The default planner uses an OpenAI-compatible AI
+apply, and best-effort undo. The default planner uses a chat-completions-compatible AI
 gateway, then runs the generated plan through the same local validator and
 executor path as every other planner.
 
@@ -21,10 +21,12 @@ window only after preview and confirmation.
 
 The AI gateway defaults to `http://127.0.0.1:8317/v1`. The side panel exposes
 only `gpt-5.5`, `claude-opus-4-8`, and `claude-sonnet-4-6` for tab planning.
+Thinking intensity defaults to high and can be set to low, medium, high, or
+ultra-high from advanced settings.
 Image models can exist on the same gateway, but they are not useful planner
 models for this workflow. The key is stored only when "remember key" is enabled.
 
-DeepSeek is also supported. It uses DeepSeek's OpenAI-compatible
+DeepSeek is also supported. It uses DeepSeek's chat-completions-compatible
 `/chat/completions` API with JSON Output, then the same local validator and
 executor as every other planner.
 
@@ -60,7 +62,7 @@ DEEPSEEK_API_KEY=... npm run smoke:deepseek
 Optional AI gateway live smoke:
 
 ```bash
-GATEWAY_BASE_URL=http://127.0.0.1:8317/v1 GATEWAY_API_KEY=... npm run smoke:gateway
+GATEWAY_BASE_URL=http://127.0.0.1:8317/v1 GATEWAY_API_KEY=... GATEWAY_THINKING_INTENSITY=high npm run smoke:gateway
 ```
 
 Do not commit provider keys. Rotate any key that has appeared in chat, shell

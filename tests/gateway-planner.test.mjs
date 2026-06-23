@@ -56,6 +56,7 @@ test("AI gateway planner posts a chat-completions JSON request", async () => {
     const body = JSON.parse(options.body);
     assert.equal(body.model, "gpt-5.5");
     assert.equal(body.response_format.type, "json_object");
+    assert.equal(body.reasoning_effort, "high");
     assert.match(body.messages[0].content, /JSON-only planner/);
     assert.match(body.messages[0].content, /tabRefs and reviewTabs/);
     assert.match(body.messages[1].content, /Structured output docs/);
@@ -80,10 +81,12 @@ test("AI gateway planner posts a chat-completions JSON request", async () => {
   assert.deepEqual(plan, expectedPlan);
 });
 
-test("AI gateway planner sends reasoning effort only when explicitly selected", async () => {
+test("AI gateway planner maps ultra thinking to gateway-compatible high effort", async () => {
   const fetchImpl = async (_url, options) => {
     const body = JSON.parse(options.body);
     assert.equal(body.reasoning_effort, "high");
+    assert.match(body.messages[0].content, /ultra-high/);
+    assert.match(body.messages[1].content, /"thinkingIntensity":"ultra"/);
     return {
       ok: true,
       async json() {
@@ -121,7 +124,7 @@ test("AI gateway planner sends reasoning effort only when explicitly selected", 
       ...DEFAULT_SETTINGS,
       plannerProvider: PLANNER_PROVIDERS.GATEWAY,
       gatewayApiKey: "gateway-test-key",
-      gatewayThinkingIntensity: "high"
+      gatewayThinkingIntensity: "ultra"
     },
     fetchImpl
   );

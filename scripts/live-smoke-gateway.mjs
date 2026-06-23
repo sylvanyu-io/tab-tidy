@@ -6,7 +6,7 @@ import { buildPreview } from "../src/core/preview.js";
 import { DEFAULT_SETTINGS, PLANNER_PROVIDERS } from "../src/shared/settings.js";
 import { createFakeChrome } from "../tests/helpers/fake-chrome.mjs";
 
-const key = process.env.GATEWAY_API_KEY || process.env.OPENAI_API_KEY || (await readKeyFromStdin());
+const key = process.env.GATEWAY_API_KEY || (await readKeyFromStdin());
 if (!key) {
   console.error("Missing GATEWAY_API_KEY.");
   process.exit(2);
@@ -16,8 +16,8 @@ const settings = {
   ...DEFAULT_SETTINGS,
   plannerProvider: PLANNER_PROVIDERS.GATEWAY,
   gatewayApiKey: key,
-  gatewayBaseUrl: process.env.GATEWAY_BASE_URL || process.env.OPENAI_BASE_URL || DEFAULT_SETTINGS.gatewayBaseUrl,
-  gatewayModel: process.env.GATEWAY_MODEL || process.env.OPENAI_MODEL || DEFAULT_SETTINGS.gatewayModel,
+  gatewayBaseUrl: process.env.GATEWAY_BASE_URL || DEFAULT_SETTINGS.gatewayBaseUrl,
+  gatewayModel: process.env.GATEWAY_MODEL || DEFAULT_SETTINGS.gatewayModel,
   gatewayThinkingIntensity: process.env.GATEWAY_THINKING_INTENSITY || DEFAULT_SETTINGS.gatewayThinkingIntensity,
   customPrompt: "Prefer semantic topic grouping over domain grouping. Put uncertain tabs in Review."
 };

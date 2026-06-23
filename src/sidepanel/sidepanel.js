@@ -452,7 +452,7 @@ async function mockMessage(message) {
       rememberProviderKeys: false,
       gatewayBaseUrl: "http://127.0.0.1:8317/v1",
       gatewayModel: "gpt-5.5",
-      gatewayThinkingIntensity: "auto",
+      gatewayThinkingIntensity: "high",
       gatewayApiKey: "",
       deepseekModel: "deepseek-chat",
       deepseekApiKey: "",

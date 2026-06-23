@@ -68,7 +68,7 @@ The extension uses bring-your-own-key provider credentials. Runtime rules:
 
 AI gateway:
 
-- Uses OpenAI-compatible `/chat/completions` with JSON object output.
+- Uses a chat-completions-compatible gateway with JSON object output.
 - Exposes only planner-suitable text models in the UI.
 - Adapts common `tabIds` grouping output, then still requires local validation.
 

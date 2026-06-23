@@ -62,10 +62,10 @@ export const DEFAULT_GATEWAY_BASE_URL = "http://127.0.0.1:8317/v1";
 export const GATEWAY_MODELS = Object.freeze(["gpt-5.5", "claude-opus-4-8", "claude-sonnet-4-6"]);
 
 export const THINKING_INTENSITIES = Object.freeze({
-  AUTO: "auto",
   LOW: "low",
   MEDIUM: "medium",
-  HIGH: "high"
+  HIGH: "high",
+  ULTRA: "ultra"
 });
 
 export const PROMPT_PRESET_TEXT = Object.freeze({
@@ -101,7 +101,7 @@ export const DEFAULT_SETTINGS = Object.freeze({
   rememberProviderKeys: false,
   gatewayBaseUrl: DEFAULT_GATEWAY_BASE_URL,
   gatewayModel: "gpt-5.5",
-  gatewayThinkingIntensity: THINKING_INTENSITIES.AUTO,
+  gatewayThinkingIntensity: THINKING_INTENSITIES.HIGH,
   gatewayApiKey: "",
   deepseekModel: "deepseek-chat",
   deepseekApiKey: ""
@@ -122,8 +122,7 @@ const enumValues = {
 };
 
 export function normalizeSettings(input = {}) {
-  const migrated = migrateLegacySettings(input || {});
-  const merged = { ...DEFAULT_SETTINGS, ...migrated };
+  const merged = { ...DEFAULT_SETTINGS, ...(input || {}) };
 
   for (const [key, values] of Object.entries(enumValues)) {
     if (!values.includes(merged[key])) {
@@ -150,21 +149,6 @@ export function normalizeSettings(input = {}) {
   merged.selectedTargetWindowId = Number.isInteger(selectedTargetWindowId) ? selectedTargetWindowId : null;
 
   return merged;
-}
-
-function migrateLegacySettings(input) {
-  const migrated = { ...input };
-  if (migrated.plannerProvider === "openai") migrated.plannerProvider = PLANNER_PROVIDERS.GATEWAY;
-  if (migrated.gatewayBaseUrl === undefined && migrated.openaiBaseUrl !== undefined) {
-    migrated.gatewayBaseUrl = migrated.openaiBaseUrl;
-  }
-  if (migrated.gatewayModel === undefined && migrated.openaiModel !== undefined) {
-    migrated.gatewayModel = migrated.openaiModel;
-  }
-  if (migrated.gatewayApiKey === undefined && migrated.openaiApiKey !== undefined) {
-    migrated.gatewayApiKey = migrated.openaiApiKey;
-  }
-  return migrated;
 }
 
 function clampNumber(value, min, max, fallback) {

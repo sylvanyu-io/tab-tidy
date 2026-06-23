@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { getSettings, saveSettings } from "../src/core/controller.js";
-import { DEFAULT_SETTINGS, PAGE_SAMPLING_CONSENT_MODES } from "../src/shared/settings.js";
+import { DEFAULT_SETTINGS, PAGE_SAMPLING_CONSENT_MODES, THINKING_INTENSITIES } from "../src/shared/settings.js";
 import { normalizeSettings } from "../src/shared/settings.js";
 import { createFakeChrome } from "./helpers/fake-chrome.mjs";
 
@@ -23,7 +23,7 @@ test("invalid selected target window ids normalize to null", () => {
   assert.equal(settings.selectedTargetWindowId, null);
 });
 
-test("AI gateway base URLs and legacy OpenAI fields normalize safely", () => {
+test("AI gateway settings normalize safely", () => {
   assert.equal(
     normalizeSettings({ ...DEFAULT_SETTINGS, gatewayBaseUrl: "http://127.0.0.1:8317/v1/" }).gatewayBaseUrl,
     "http://127.0.0.1:8317/v1"
@@ -33,12 +33,12 @@ test("AI gateway base URLs and legacy OpenAI fields normalize safely", () => {
     DEFAULT_SETTINGS.gatewayBaseUrl
   );
   assert.equal(
-    normalizeSettings({ plannerProvider: "openai", openaiModel: "claude-opus-4-8" }).plannerProvider,
-    "gateway"
+    normalizeSettings({ ...DEFAULT_SETTINGS, gatewayThinkingIntensity: "nope" }).gatewayThinkingIntensity,
+    THINKING_INTENSITIES.HIGH
   );
   assert.equal(
-    normalizeSettings({ openaiModel: "claude-opus-4-8" }).gatewayModel,
-    "claude-opus-4-8"
+    normalizeSettings({ ...DEFAULT_SETTINGS, gatewayThinkingIntensity: THINKING_INTENSITIES.ULTRA }).gatewayThinkingIntensity,
+    THINKING_INTENSITIES.ULTRA
   );
 });
 

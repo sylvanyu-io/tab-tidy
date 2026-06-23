@@ -273,15 +273,15 @@ function clampConfidence(value) {
 }
 
 function applyThinkingIntensity(body, settings) {
-  if (settings.gatewayThinkingIntensity === "auto") return;
-  body.reasoning_effort = settings.gatewayThinkingIntensity;
+  body.reasoning_effort = settings.gatewayThinkingIntensity === "ultra" ? "high" : settings.gatewayThinkingIntensity;
 }
 
 function thinkingIntensityText(value) {
   if (value === "low") return "low, prefer a faster but still valid plan";
   if (value === "medium") return "medium, balance quality and speed";
   if (value === "high") return "high, spend more reasoning on semantic grouping";
-  return "auto, use the model or gateway default";
+  if (value === "ultra") return "ultra-high, be especially careful with semantic overlap, cross-window context, and low-confidence tabs";
+  return "high, spend more reasoning on semantic grouping";
 }
 
 function exampleActionPlan() {

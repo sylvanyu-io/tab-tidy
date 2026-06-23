@@ -34,7 +34,7 @@ The extension service worker or side panel can call remote LLM providers only if
 
 - `https://api.anthropic.com/`
 - `https://generativelanguage.googleapis.com/`
-- `http://127.0.0.1/` for local OpenAI-compatible gateways during development.
+- `http://127.0.0.1/` for local chat-completions-compatible gateways during development.
 
 Avoid declaring `https://*/*` as a required host permission for provider calls. Use provider-specific required or optional host permissions.
 
