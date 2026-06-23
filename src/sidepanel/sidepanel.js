@@ -1,3 +1,5 @@
+import { BUILTIN_GATEWAY_BASE_URL } from "../shared/settings.js";
+
 const fields = {
   organizeMode: document.querySelector("#organizeMode"),
   targetWindowMode: document.querySelector("#targetWindowMode"),
@@ -668,10 +670,9 @@ function setButtonLabel(button, text) {
 
 async function ensurePlannerHostPermission(settings) {
   if (settings.plannerProvider !== "gateway") return;
-  if (!settings.gatewayBaseUrl) return;
   if (!globalThis.chrome?.permissions?.contains || !globalThis.chrome?.permissions?.request) return;
 
-  const pattern = providerPermissionPattern(settings.gatewayBaseUrl);
+  const pattern = providerPermissionPattern(settings.gatewayBaseUrl || BUILTIN_GATEWAY_BASE_URL);
   if (!pattern) return;
 
   const hasPermission = await chrome.permissions.contains({ origins: [pattern] });
@@ -700,21 +701,27 @@ async function ensurePageSamplingPermissions(settings) {
 
   if (settings.hostPermissionRequestMode === "ask_per_origin" && missingOrigins.length > 1) {
     const [firstOrigin, ...remainingOrigins] = missingOrigins;
-    await requireOptionalPermission({
-      permissions: missingPermissions,
-      origins: firstOrigin ? [firstOrigin] : []
-    });
+    await requireOptionalPermission(
+      {
+        permissions: missingPermissions,
+        origins: firstOrigin ? [firstOrigin] : []
+      },
+      "需要授权页面摘要权限，才能读取网页文字摘要。"
+    );
     for (const origin of remainingOrigins) {
-      await requireOptionalPermission({ origins: [origin] });
+      await requireOptionalPermission({ origins: [origin] }, "需要授权页面摘要权限，才能读取网页文字摘要。");
     }
     return;
   }
 
   if (missingPermissions.length || missingOrigins.length) {
-    await requireOptionalPermission({
-      permissions: missingPermissions,
-      origins: missingOrigins
-    });
+    await requireOptionalPermission(
+      {
+        permissions: missingPermissions,
+        origins: missingOrigins
+      },
+      "需要授权页面摘要权限，才能读取网页文字摘要。"
+    );
   }
 }
 
@@ -751,20 +758,29 @@ async function getMissingOrigins(origins) {
 }
 
 async function requestOptionalPermission(request) {
-  const permissions = request.permissions?.filter(Boolean) || [];
-  const origins = request.origins?.filter(Boolean) || [];
-  if (!permissions.length && !origins.length) return true;
+  const permissionRequest = compactPermissionRequest(request);
+  if (!permissionRequest) return true;
 
-  const hasPermission = await chrome.permissions.contains({ permissions, origins });
+  const hasPermission = await chrome.permissions.contains(permissionRequest);
   if (hasPermission) return true;
-  return chrome.permissions.request({ permissions, origins });
+  return chrome.permissions.request(permissionRequest);
 }
 
-async function requireOptionalPermission(request) {
+async function requireOptionalPermission(request, errorMessage) {
   const granted = await requestOptionalPermission(request);
   if (!granted) {
-    throw new Error("需要授权页面摘要权限，才能读取网页文字摘要。");
+    throw new Error(errorMessage || "需要授权后才能继续。");
   }
+}
+
+function compactPermissionRequest(request = {}) {
+  const permissions = request.permissions?.filter(Boolean) || [];
+  const origins = request.origins?.filter(Boolean) || [];
+  if (!permissions.length && !origins.length) return null;
+  return {
+    ...(permissions.length ? { permissions } : {}),
+    ...(origins.length ? { origins } : {})
+  };
 }
 
 async function collectPageSamplingOrigins(settings, windowId) {

@@ -190,7 +190,7 @@ test("floating window shows optimistic progress while waiting for AI", async ({ 
   await expect(page.getByRole("button", { name: "取消" })).toBeVisible();
 });
 
-test("default gateway does not request host permission from the floating window", async ({ page }) => {
+test("default gateway permission request is narrow and compact", async ({ page }) => {
   await page.addInitScript(() => {
     const settings = {
       organizeMode: "current_window",
@@ -216,7 +216,7 @@ test("default gateway does not request host permission from the floating window"
       gatewayApiKey: "",
       customPrompt: ""
     };
-    window.__permissionRequests = 0;
+    window.__permissionRequests = [];
     const activeJob = {
       operationId: "job_default_gateway",
       status: "complete",
@@ -240,9 +240,9 @@ test("default gateway does not request host permission from the floating window"
     window.chrome = {
       permissions: {
         contains: async () => false,
-        request: async () => {
-          window.__permissionRequests += 1;
-          return false;
+        request: async (request) => {
+          window.__permissionRequests.push(request);
+          return true;
         }
       },
       windows: {
@@ -268,7 +268,7 @@ test("default gateway does not request host permission from the floating window"
   await page.goto(`${baseUrl}/src/sidepanel/index.html?sourceWindowId=77`);
   await page.getByRole("button", { name: "生成方案" }).click();
   await expect(page.locator(".preview").getByText("资料整理", { exact: true })).toBeVisible();
-  await expect.poll(() => page.evaluate(() => window.__permissionRequests)).toBe(0);
+  await expect.poll(() => page.evaluate(() => window.__permissionRequests)).toEqual([{ origins: ["http://127.0.0.1/*"] }]);
   await expect.poll(() => page.evaluate(() => window.__analyzeWindowId)).toBe(77);
 });
 
@@ -545,7 +545,7 @@ test("page summary main toggle requests scripting and page origins", async ({ pa
     window.__savedSettings = [];
     window.chrome = {
       permissions: {
-        contains: async () => false,
+        contains: async (request) => Boolean(request.origins?.includes("http://127.0.0.1/*")),
         request: async (request) => {
           window.__permissionRequests.push(request);
           return true;
@@ -623,7 +623,7 @@ test("page summary permission denial stops generation", async ({ page }) => {
     window.__startAnalyzeCalled = false;
     window.chrome = {
       permissions: {
-        contains: async () => false,
+        contains: async (request) => Boolean(request.origins?.includes("http://127.0.0.1/*")),
         request: async (request) => {
           window.__permissionRequests.push(request);
           return false;
@@ -797,7 +797,7 @@ test("page sampling permission request returns to the floating window flow", asy
     };
     window.chrome = {
       permissions: {
-        contains: async () => false,
+        contains: async (request) => Boolean(request.origins?.includes("http://127.0.0.1/*")),
         request: async (request) => {
           window.__permissionRequests.push(request);
           return true;

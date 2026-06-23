@@ -9,5 +9,6 @@ test("extension uses a persistent action-launched popup window", async () => {
   assert.equal(manifest.background.service_worker, "src/background/service-worker.js");
   assert.equal(manifest.side_panel, undefined);
   assert.equal((manifest.permissions || []).includes("sidePanel"), false);
-  assert.equal(manifest.host_permissions, undefined);
+  assert.deepEqual(manifest.host_permissions, ["http://127.0.0.1/*"]);
+  assert.deepEqual(manifest.optional_host_permissions, ["https://*/*", "http://*/*"]);
 });

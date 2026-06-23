@@ -45,7 +45,7 @@ MVP required permissions:
 ```json
 {
   "permissions": ["tabs", "tabGroups", "storage", "activeTab"],
-  "host_permissions": [],
+  "host_permissions": ["http://127.0.0.1/*"],
   "optional_permissions": ["scripting"],
   "optional_host_permissions": ["https://*/*", "http://*/*"],
   "action": {"default_title": "Semantic Tab Agent"}
@@ -54,7 +54,8 @@ MVP required permissions:
 
 Notes:
 
-- Provider host permissions depend on the configured provider. If the provider is user-selectable, prefer optional provider host permissions and request them during setup.
+- The built-in local gateway needs a narrow required host permission so metadata-only planning can call it without a runtime prompt.
+- Custom provider host permissions should stay optional and be requested during setup.
 - Keep `scripting` optional until page sampling is enabled.
 - Keep `optional_host_permissions` broad only as an optional declaration. Request concrete origins at runtime.
 - Do not ask for all site access during install.
