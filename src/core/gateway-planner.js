@@ -338,12 +338,7 @@ async function refineBucket(bucket, inventory, settings, fetchImpl, options = {}
   } catch (error) {
     if (bucket.confidence >= settings.minConfidenceToApply) {
       return {
-        groups: [
-          {
-            ...bucketToGroup(bucket),
-            reason: `${bucket.reason} Refinement unavailable: ${error.message}`
-          }
-        ],
+        groups: fallbackGroupsForBucket(bucket, settings, error),
         reviewTabs: []
       };
     }
@@ -518,6 +513,20 @@ function bucketToGroup(bucket) {
     tabRefs: bucket.tabRefs.map(toPlainTabRef),
     reason: bucket.reason
   };
+}
+
+function fallbackGroupsForBucket(bucket, settings, error) {
+  const chunkSize = Math.max(1, Number(settings.maxTabsPerGroup) || 1);
+  const chunks = chunkRefs(bucket.tabRefs || [], chunkSize);
+  return chunks.map((tabRefs, index) => {
+    const suffix = chunks.length > 1 ? ` ${index + 1}` : "";
+    return {
+      ...bucketToGroup({ ...bucket, tabRefs }),
+      groupKey: chunks.length > 1 ? `${bucket.groupKey}-${index + 1}` : bucket.groupKey,
+      title: `${bucket.title}${suffix}`.slice(0, 40),
+      reason: `${bucket.reason} Refinement unavailable: ${error.message}`.slice(0, 280)
+    };
+  });
 }
 
 function mergePlanParts(groups, reviewTabs, state) {

@@ -526,6 +526,77 @@ test("AI gateway planner splits oversized coarse buckets before refinement", asy
   assert.equal(plan.groups.length, 3);
 });
 
+test("AI gateway planner splits high-confidence fallback buckets by original order", async () => {
+  const plannerTabs = [10, 11, 12, 13, 14].map((tabId, sequenceIndex) => ({
+    tabId,
+    windowId: 1,
+    index: sequenceIndex,
+    sequenceIndex,
+    title: `Fallback bucket tab ${tabId}`,
+    hostname: "example.com"
+  }));
+  const largeInventory = { ...inventory, plannerTabs, tabs: plannerTabs, pageSamples: [] };
+  const requests = [];
+
+  const fetchImpl = async (_url, options) => {
+    requests.push(JSON.parse(options.body));
+    if (requests.length === 1) {
+      return {
+        ok: true,
+        async json() {
+          return {
+            choices: [
+              {
+                message: {
+                  content: JSON.stringify({
+                    buckets: [
+                      {
+                        bucketKey: "large",
+                        title: "Large Bucket",
+                        color: "blue",
+                        confidence: 0.95,
+                        tabIds: [14, 10, 13, 12, 11],
+                        reason: "High-confidence but needs refinement."
+                      }
+                    ],
+                    reviewTabIds: []
+                  })
+                }
+              }
+            ]
+          };
+        }
+      };
+    }
+    return {
+      ok: false,
+      status: 503,
+      async json() {
+        return { error: { message: "refinement service unavailable" } };
+      }
+    };
+  };
+
+  const settings = { ...DEFAULT_SETTINGS, plannerProvider: PLANNER_PROVIDERS.GATEWAY, gatewayApiKey: "gateway-test-key", maxTabsPerGroup: 2 };
+  const plan = await createGatewayPlan(largeInventory, settings, fetchImpl, {
+    hierarchical: true,
+    refineBucketMinTabs: 2,
+    refineMaxTabsPerRequest: 10
+  });
+  const validation = validatePlan(plan, largeInventory, settings);
+
+  assert.equal(requests.length, 2);
+  assert.equal(validation.ok, true, validation.errors.join(" "));
+  assert.deepEqual(
+    plan.groups.map((group) => group.tabRefs.map((ref) => ref.tabId)),
+    [
+      [10, 11],
+      [12, 13],
+      [14]
+    ]
+  );
+});
+
 test("AI gateway planner keeps high refinement when large jobs request ultra thinking", async () => {
   const plannerTabs = [10, 11, 12].map((tabId) => ({
     tabId,
