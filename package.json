@@ -1,0 +1,15 @@
+{
+  "name": "semantic-tab-agent",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Chrome extension prototype for AI-assisted semantic tab grouping.",
+  "scripts": {
+    "test": "node --test",
+    "test:ui": "playwright test tests/ui-smoke.spec.mjs",
+    "check": "npm test && npm run test:ui"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.56.0"
+  }
+}

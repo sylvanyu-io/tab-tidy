@@ -1,0 +1,21 @@
+{
+  "manifest_version": 3,
+  "name": "Semantic Tab Agent",
+  "version": "0.1.0",
+  "description": "AI-assisted semantic organization for large sets of browser tabs.",
+  "minimum_chrome_version": "116",
+  "permissions": ["tabs", "tabGroups", "storage", "sidePanel"],
+  "host_permissions": ["https://api.openai.com/*"],
+  "optional_permissions": ["scripting"],
+  "optional_host_permissions": ["https://*/*", "http://*/*"],
+  "background": {
+    "service_worker": "src/background/service-worker.js",
+    "type": "module"
+  },
+  "side_panel": {
+    "default_path": "src/sidepanel/index.html"
+  },
+  "action": {
+    "default_title": "Semantic Tab Agent"
+  }
+}

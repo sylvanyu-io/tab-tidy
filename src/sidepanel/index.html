@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Semantic Tab Agent</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <main class="app-shell">
+      <header class="topbar">
+        <div>
+          <h1>Semantic Tab Agent</h1>
+          <p id="statusText">Ready</p>
+        </div>
+      </header>
+
+      <section class="panel">
+        <div class="field">
+          <label for="organizeMode">Scope</label>
+          <select id="organizeMode">
+            <option value="current_window">Current window</option>
+            <option value="consolidate_one_window">All windows to one window</option>
+          </select>
+        </div>
+
+        <div class="field">
+          <label for="existingGroupMode">Existing groups</label>
+          <select id="existingGroupMode">
+            <option value="preserve_existing_groups">Preserve</option>
+            <option value="dissolve_existing_groups">Dissolve</option>
+          </select>
+        </div>
+
+        <div class="field">
+          <label for="reviewGroupMode">Review tabs</label>
+          <select id="reviewGroupMode">
+            <option value="create_review_group">Create Review group</option>
+            <option value="leave_review_ungrouped">Leave ungrouped</option>
+          </select>
+        </div>
+
+        <div class="field">
+          <label for="urlPrivacyMode">URL detail</label>
+          <select id="urlPrivacyMode">
+            <option value="title_only">Title only</option>
+            <option value="sanitized_url">Sanitized URL</option>
+            <option value="full_url">Full URL</option>
+          </select>
+        </div>
+
+        <div class="field">
+          <label for="pageContextMode">Page context</label>
+          <select id="pageContextMode">
+            <option value="off">Off</option>
+            <option value="active_tab_only">Active tab only</option>
+            <option value="ambiguous_with_permission">Ambiguous tabs with permission</option>
+            <option value="all_granted_origins">All granted origins</option>
+          </select>
+        </div>
+
+        <div id="samplingRisk" class="risk" hidden>
+          <strong>Page sampling risk</strong>
+          <p>
+            Page samples can expose sensitive page text to the selected AI provider.
+            Passwords, form values, cookies, local storage, and full HTML are not collected.
+          </p>
+          <label class="checkbox-row">
+            <input id="ackSampling" type="checkbox" />
+            <span>Acknowledge for this session</span>
+          </label>
+        </div>
+
+        <div class="field">
+          <label for="promptPreset">Prompt preset</label>
+          <select id="promptPreset">
+            <option value="conservative">Conservative</option>
+            <option value="research">Research</option>
+            <option value="project_work">Project work</option>
+            <option value="aggressive_cleanup">Aggressive cleanup</option>
+          </select>
+        </div>
+
+        <div class="field">
+          <label for="customPrompt">Custom prompt</label>
+          <textarea id="customPrompt" rows="5" spellcheck="true"></textarea>
+        </div>
+
+        <div class="toggles">
+          <label class="checkbox-row">
+            <input id="includePinnedTabs" type="checkbox" />
+            <span>Include pinned tabs</span>
+          </label>
+          <label class="checkbox-row">
+            <input id="collapseGroupsAfterApply" type="checkbox" />
+            <span>Collapse groups after apply</span>
+          </label>
+        </div>
+
+        <div class="actions">
+          <button id="analyzeBtn" type="button">Analyze</button>
+          <button id="applyBtn" type="button" disabled>Apply</button>
+          <button id="undoBtn" type="button">Undo</button>
+        </div>
+      </section>
+
+      <section class="preview" aria-live="polite">
+        <h2>Preview</h2>
+        <div id="previewRoot" class="empty">No plan yet.</div>
+      </section>
+    </main>
+
+    <script type="module" src="./sidepanel.js"></script>
+  </body>
+</html>
