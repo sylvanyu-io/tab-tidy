@@ -40,6 +40,8 @@ test("floating window renders settings and mock preview", async ({ page }) => {
   await expect(page.locator("#previewSection")).toBeHidden();
   await expect(page.locator("#samplingRisk")).toBeHidden();
   await expect(page.getByText("整理偏好")).toHaveCount(0);
+  await expect(page.getByText("调整", { exact: true })).toHaveCount(0);
+  await expect(page.locator("#settingsSummaryBtn")).toHaveCount(0);
 
   await page.locator("#ackSampling").check();
   await expect(page.locator("#samplingRisk")).toBeVisible();
@@ -62,8 +64,23 @@ test("floating window renders settings and mock preview", async ({ page }) => {
   await expect(page.locator(".stat-chip")).toHaveCount(0);
   await expect(page.getByRole("button", { name: "开始整理" })).toBeEnabled();
   await expect(page.getByRole("button", { name: "撤销" })).toBeHidden();
+  await expect(page.getByText("调整", { exact: true })).toHaveCount(0);
+
+  await page.getByRole("button", { name: "重新生成" }).click();
+  await expect(page.locator("#previewSection")).toBeHidden();
+  await expect(page.locator(".launch-panel")).toBeVisible();
+  await expect(page.getByRole("button", { name: "生成方案" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "开始整理" })).toBeHidden();
+
+  await page.getByRole("button", { name: "生成方案" }).click();
+  await expect(page.locator(".preview").getByText("AI 研究", { exact: true })).toBeVisible();
 
   await page.getByRole("button", { name: "开始整理" }).click();
+  await expect(page.getByRole("button", { name: "撤销" })).toBeVisible();
+
+  await page.getByRole("button", { name: "重新生成" }).click();
+  await expect(page.locator("#previewSection")).toBeHidden();
+  await expect(page.getByRole("button", { name: "生成方案" })).toBeVisible();
   await expect(page.getByRole("button", { name: "撤销" })).toBeVisible();
 });
 

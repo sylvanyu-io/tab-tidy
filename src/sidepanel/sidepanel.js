@@ -43,8 +43,6 @@ const nodes = {
   progressFill: document.querySelector("#progressFill"),
   progressLabel: document.querySelector("#progressLabel"),
   progressPercent: document.querySelector("#progressPercent"),
-  settingsSummaryBtn: document.querySelector("#settingsSummaryBtn"),
-  settingsSummaryText: document.querySelector("#settingsSummaryText"),
   closeWindowBtn: document.querySelector("#closeWindowBtn"),
   actions: document.querySelector(".actions"),
   analyzeBtn: document.querySelector("#analyzeBtn"),
@@ -61,7 +59,6 @@ const nodes = {
 let lastPreview = null;
 let lastCanApply = false;
 let canUndo = false;
-let isEditingSettings = false;
 let pageSamplingOriginCache = { origins: [], refreshedAt: 0 };
 let pageSamplingOriginRefreshTimer = null;
 let progressPollTimer = null;
@@ -91,15 +88,11 @@ function bindEvents() {
   fields.organizeMode.addEventListener("change", updateConditionalUi);
   fields.plannerProvider.addEventListener("change", updateConditionalUi);
 
-  nodes.analyzeBtn.addEventListener("click", analyze);
+  nodes.analyzeBtn.addEventListener("click", handleAnalyzeClick);
   nodes.cancelBtn.addEventListener("click", cancelAnalyze);
   nodes.applyBtn.addEventListener("click", applyLastPlan);
   nodes.undoBtn.addEventListener("click", undoLastApply);
   nodes.closeWindowBtn?.addEventListener("click", () => window.close());
-  nodes.settingsSummaryBtn.addEventListener("click", () => {
-    isEditingSettings = true;
-    syncActionState();
-  });
 }
 
 function bindChoiceGroups() {
@@ -191,6 +184,15 @@ function updateConditionalUi() {
   schedulePageSamplingOriginRefresh();
 }
 
+function handleAnalyzeClick() {
+  if (lastPreview) {
+    resetToSetup();
+    setStatus("AI 标签页整理");
+    return;
+  }
+  analyze();
+}
+
 async function analyze() {
   setBusy(true, "正在准备整理", { cancelable: true, progress: 4 });
   try {
@@ -208,7 +210,6 @@ async function analyze() {
     const job = await waitForAnalysisCompletion(started?.operationId);
     lastPreview = job.preview;
     lastCanApply = Boolean(job.validation?.ok);
-    isEditingSettings = false;
     renderPreview(job);
     renderDetails(job);
     nodes.applyBtn.disabled = !lastCanApply;
@@ -336,6 +337,18 @@ function renderError(error) {
   nodes.detailsRoot.hidden = false;
   nodes.previewCount.textContent = "出错";
   nodes.detailsText.textContent = JSON.stringify({ error: error.message }, null, 2);
+}
+
+function resetToSetup() {
+  lastPreview = null;
+  lastCanApply = false;
+  nodes.previewSection.hidden = true;
+  nodes.previewCount.textContent = "待生成";
+  nodes.previewRoot.className = "empty";
+  nodes.previewRoot.textContent = "还没有方案。";
+  nodes.detailsRoot.hidden = true;
+  nodes.detailsText.textContent = "";
+  syncActionState();
 }
 
 function replacerForDetails(key, value) {
@@ -534,10 +547,7 @@ function syncChoiceGroups() {
 }
 
 function syncActionState() {
-  const compactPreview = Boolean(lastPreview && !isEditingSettings);
-  nodes.appShell.dataset.flowState = compactPreview ? "preview" : "setup";
-  nodes.settingsSummaryBtn.hidden = !compactPreview;
-  nodes.settingsSummaryText.textContent = scopeLabel();
+  nodes.appShell.dataset.flowState = lastPreview ? "preview" : "setup";
   nodes.actions.dataset.state = lastPreview ? "preview" : "idle";
   nodes.actions.dataset.canUndo = canUndo ? "true" : "false";
   setButtonLabel(nodes.analyzeBtn, lastPreview ? "重新生成" : "生成方案");
@@ -551,10 +561,6 @@ function setButtonLabel(button, text) {
   } else {
     button.textContent = text;
   }
-}
-
-function scopeLabel() {
-  return fields.organizeMode.value === "consolidate_one_window" ? "所有窗口" : "当前窗口";
 }
 
 async function ensurePlannerHostPermission(settings) {

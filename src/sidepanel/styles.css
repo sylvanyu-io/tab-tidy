@@ -234,37 +234,6 @@ h2 {
   transform: translateY(-0.5px);
 }
 
-.settings-summary {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  min-height: 38px;
-  padding: 0 12px;
-  color: var(--text);
-  background: var(--surface);
-  border: 1px solid var(--line);
-  border-radius: var(--radius-sm);
-  box-shadow: var(--shadow-sm);
-  cursor: pointer;
-}
-
-.settings-summary span {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  color: var(--muted);
-  font-size: 13px;
-  font-weight: 720;
-}
-
-.settings-summary strong {
-  flex: 0 0 auto;
-  color: var(--blue);
-  font-size: 13px;
-}
-
 .launch-panel,
 .preview,
 .advanced-settings {
@@ -840,10 +809,6 @@ details[open] > summary::before {
   display: none;
 }
 
-.actions[data-state="idle"] #undoBtn {
-  display: none;
-}
-
 .actions[data-can-undo="false"] #undoBtn {
   display: none;
 }
@@ -857,7 +822,7 @@ details[open] > summary::before {
   display: none;
 }
 
-.actions[data-state="idle"] #analyzeBtn {
+.actions[data-state="idle"][data-can-undo="false"] #analyzeBtn {
   grid-column: 1 / -1;
 }
 
@@ -1007,7 +972,7 @@ pre {
     grid-template-columns: minmax(0, 1fr) auto auto;
   }
 
-  .actions[data-state="idle"] #analyzeBtn {
+  .actions[data-state="idle"][data-can-undo="false"] #analyzeBtn {
     grid-column: 1 / -1;
   }
 
