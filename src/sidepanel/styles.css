@@ -104,17 +104,22 @@ h2,
 
 .app-shell {
   display: grid;
-  gap: 14px;
-  padding: 16px;
+  gap: 9px;
+  padding: 11px;
+}
+
+.app-shell[data-flow-state="preview"] .launch-panel,
+.app-shell[data-flow-state="preview"] .advanced-settings {
+  display: none;
 }
 
 .hero {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
-  gap: 13px;
+  gap: 9px;
   align-items: center;
-  min-height: 92px;
-  padding: 18px 16px;
+  min-height: 62px;
+  padding: 10px 11px;
   color: #fffdf8;
   background:
     linear-gradient(135deg, rgba(255, 255, 255, 0.18), transparent 42%),
@@ -126,9 +131,9 @@ h2,
 
 .brand-mark {
   display: grid;
-  gap: 4px;
-  width: 45px;
-  padding: 10px;
+  gap: 3px;
+  width: 34px;
+  padding: 7px;
   background: rgba(255, 255, 255, 0.14);
   border: 1px solid rgba(255, 255, 255, 0.2);
   border-radius: 15px;
@@ -136,7 +141,7 @@ h2,
 
 .brand-mark span {
   display: block;
-  height: 5px;
+  height: 4px;
   background: #fff7df;
   border-radius: 999px;
 }
@@ -170,8 +175,8 @@ h2,
 }
 
 h1 {
-  margin-top: 3px;
-  font-size: 24px;
+  margin-top: 1px;
+  font-size: 19px;
   line-height: 1.08;
   font-weight: 820;
 }
@@ -183,9 +188,9 @@ h2 {
 }
 
 #statusText {
-  margin-top: 7px;
+  margin-top: 2px;
   color: var(--muted);
-  font-size: 13px;
+  font-size: 12px;
 }
 
 #statusText[data-tone="error"] {
@@ -207,25 +212,68 @@ h2 {
   transition: width 240ms var(--ease);
 }
 
-.flow-section,
+.settings-summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-height: 38px;
+  padding: 0 12px;
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  cursor: pointer;
+}
+
+.settings-summary span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 720;
+}
+
+.settings-summary strong {
+  flex: 0 0 auto;
+  color: var(--primary);
+  font-size: 13px;
+}
+
+.launch-panel,
 .preview,
 .advanced-settings {
   display: grid;
-  gap: 13px;
-  padding: 0 2px 15px;
+  gap: 8px;
+  padding: 0 2px 10px;
   border-bottom: 1px solid var(--line);
 }
 
 .preview,
 .advanced-settings {
-  padding-top: 3px;
+  padding-top: 2px;
 }
 
-.section-heading {
+.section-heading,
+.compact-row {
   display: flex;
-  align-items: start;
+  align-items: center;
   justify-content: space-between;
   gap: 12px;
+}
+
+.ai-row {
+  margin-top: 0;
+}
+
+.launch-panel .step-label {
+  display: none;
+}
+
+.launch-panel h2 {
+  font-size: 15px;
 }
 
 .quiet-pill {
@@ -243,7 +291,7 @@ h2 {
 .choice-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 9px;
+  gap: 7px;
 }
 
 .choice-card,
@@ -270,6 +318,17 @@ h2 {
   color: var(--text);
   background: var(--surface);
   border-radius: var(--radius-md);
+}
+
+.compact-choice-grid .choice-card {
+  place-items: center;
+  min-height: 38px;
+  padding: 0 10px;
+  text-align: center;
+  border-radius: 999px;
+  font-family: ui-rounded, "SF Pro Rounded", "Avenir Next", -apple-system, BlinkMacSystemFont, sans-serif;
+  font-size: 14px;
+  font-weight: 800;
 }
 
 .choice-card:hover,
@@ -318,7 +377,7 @@ h2 {
 }
 
 .segmented button {
-  min-height: 36px;
+  min-height: 34px;
   padding: 0 8px;
   color: var(--muted);
   background: transparent;
@@ -385,11 +444,86 @@ button:focus-visible {
 
 .provider-fields {
   display: grid;
-  gap: 11px;
+  gap: 8px;
+}
+
+.inline-secret {
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+}
+
+.inline-secret label {
+  color: var(--faint);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.inline-secret input {
+  min-height: 36px;
+  padding: 7px 10px;
+}
+
+.mini-check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.mini-check input {
+  width: 16px;
+  height: 16px;
+  margin: 0;
+}
+
+.mini-check span {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  min-width: 0;
+}
+
+.mini-check strong {
+  color: var(--text);
+  font-size: 12px;
+}
+
+.mini-check small {
+  color: var(--muted);
+  font-size: 11px;
 }
 
 .prompt-field {
   margin-top: 1px;
+}
+
+.preferences-panel {
+  padding-top: 2px;
+  border-top: 1px solid var(--line);
+}
+
+.preferences-panel[open] {
+  display: grid;
+  gap: 10px;
+}
+
+.preferences-panel summary {
+  min-height: 30px;
+  justify-content: space-between;
+}
+
+.preferences-panel summary span {
+  color: var(--text);
+}
+
+.preferences-panel summary small {
+  margin-left: auto;
+  color: var(--faint);
+  font-size: 12px;
+  font-weight: 650;
 }
 
 .switch-row {
@@ -495,7 +629,8 @@ button:focus-visible {
 }
 
 .advanced-settings {
-  gap: 12px;
+  gap: 10px;
+  padding-bottom: 10px;
 }
 
 .advanced-settings[open] {
@@ -553,13 +688,13 @@ details[open] > summary::before {
   position: sticky;
   bottom: 0;
   z-index: 2;
-  padding: 10px 0 2px;
+  padding: 8px 0 2px;
   background: linear-gradient(180deg, transparent, var(--canvas) 28%);
 }
 
 .actions button {
   min-width: 70px;
-  min-height: 46px;
+  min-height: 44px;
   padding: 0 13px;
   color: var(--text);
   background: var(--surface);
@@ -614,7 +749,7 @@ details[open] > summary::before {
 
 .preview-list {
   display: grid;
-  gap: 10px;
+  gap: 8px;
 }
 
 .preview-summary {

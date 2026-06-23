@@ -23,6 +23,7 @@ const fields = {
 };
 
 const nodes = {
+  appShell: document.querySelector(".app-shell"),
   statusText: document.querySelector("#statusText"),
   samplingRisk: document.querySelector("#samplingRisk"),
   hostPermissionField: document.querySelector("#hostPermissionField"),
@@ -32,10 +33,13 @@ const nodes = {
   rememberProviderKeysRow: document.querySelector("#rememberProviderKeysRow"),
   progressBar: document.querySelector("#progressBar"),
   progressFill: document.querySelector("#progressFill"),
+  settingsSummaryBtn: document.querySelector("#settingsSummaryBtn"),
+  settingsSummaryText: document.querySelector("#settingsSummaryText"),
   actions: document.querySelector(".actions"),
   analyzeBtn: document.querySelector("#analyzeBtn"),
   applyBtn: document.querySelector("#applyBtn"),
   undoBtn: document.querySelector("#undoBtn"),
+  previewSection: document.querySelector("#previewSection"),
   previewCount: document.querySelector("#previewCount"),
   previewRoot: document.querySelector("#previewRoot"),
   detailsRoot: document.querySelector("#detailsRoot"),
@@ -44,6 +48,7 @@ const nodes = {
 
 let lastPreview = null;
 let lastCanApply = false;
+let isEditingSettings = false;
 
 init().catch((error) => setStatus(error.message, true));
 
@@ -69,6 +74,10 @@ function bindEvents() {
   nodes.analyzeBtn.addEventListener("click", analyze);
   nodes.applyBtn.addEventListener("click", applyLastPlan);
   nodes.undoBtn.addEventListener("click", undoLastApply);
+  nodes.settingsSummaryBtn.addEventListener("click", () => {
+    isEditingSettings = true;
+    syncActionState();
+  });
 }
 
 function bindChoiceGroups() {
@@ -162,6 +171,7 @@ async function analyze() {
     const job = await sendMessage({ type: "tabs:analyze", settings: readSettings(), windowId });
     lastPreview = job.preview;
     lastCanApply = Boolean(job.validation?.ok);
+    isEditingSettings = false;
     renderPreview(job);
     renderDetails(job);
     nodes.applyBtn.disabled = !lastCanApply;
@@ -207,6 +217,7 @@ async function undoLastApply() {
 }
 
 function renderPreview(job) {
+  nodes.previewSection.hidden = false;
   const preview = job.preview;
   const groups = preview.groups || [];
   const warnings = preview.warnings || [];
@@ -292,6 +303,7 @@ function renderDetails(payload) {
 }
 
 function renderError(error) {
+  nodes.previewSection.hidden = false;
   nodes.detailsRoot.hidden = false;
   nodes.previewCount.textContent = "出错";
   nodes.detailsText.textContent = JSON.stringify({ error: error.message }, null, 2);
@@ -337,9 +349,23 @@ function syncChoiceGroups() {
 }
 
 function syncActionState() {
+  const compactPreview = Boolean(lastPreview && !isEditingSettings);
+  nodes.appShell.dataset.flowState = compactPreview ? "preview" : "setup";
+  nodes.settingsSummaryBtn.hidden = !compactPreview;
+  nodes.settingsSummaryText.textContent = `${scopeLabel()} · ${providerLabel()}`;
   nodes.actions.dataset.state = lastPreview ? "preview" : "idle";
   nodes.analyzeBtn.textContent = lastPreview ? "重新生成" : "先看方案";
   nodes.applyBtn.dataset.role = lastPreview && lastCanApply ? "primary" : "";
+}
+
+function scopeLabel() {
+  return fields.organizeMode.value === "consolidate_one_window" ? "所有窗口" : "当前窗口";
+}
+
+function providerLabel() {
+  if (fields.plannerProvider.value === "openai") return "OpenAI";
+  if (fields.plannerProvider.value === "deepseek") return "DeepSeek";
+  return "本地预览";
 }
 
 async function sendMessage(message) {

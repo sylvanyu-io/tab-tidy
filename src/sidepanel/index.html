@@ -25,37 +25,34 @@
         <div id="progressFill"></div>
       </div>
 
-      <section class="flow-section">
-        <div class="section-heading">
+      <button id="settingsSummaryBtn" class="settings-summary" type="button" hidden>
+        <span id="settingsSummaryText">当前窗口 · DeepSeek</span>
+        <strong>调整</strong>
+      </button>
+
+      <section class="launch-panel">
+        <div class="compact-row">
           <div>
-            <p class="step-label">第一步</p>
+            <p class="step-label">范围</p>
             <h2>整理哪里</h2>
           </div>
           <span class="quiet-pill">可撤销</span>
         </div>
 
-        <div class="choice-grid" data-choice-for="organizeMode">
-          <button class="choice-card" type="button" data-value="current_window">
-            <span class="choice-title">当前窗口</span>
-            <span class="choice-copy">只整理眼前这批标签页</span>
-          </button>
-          <button class="choice-card" type="button" data-value="consolidate_one_window">
-            <span class="choice-title">所有窗口</span>
-            <span class="choice-copy">先汇总到一个窗口再整理</span>
-          </button>
+        <div class="choice-grid compact-choice-grid" data-choice-for="organizeMode">
+          <button class="choice-card" type="button" data-value="current_window">当前窗口</button>
+          <button class="choice-card" type="button" data-value="consolidate_one_window">所有窗口</button>
         </div>
 
         <select id="organizeMode" class="native-select" aria-label="整理范围">
           <option value="current_window">只整理当前窗口</option>
           <option value="consolidate_one_window">合并并整理所有窗口</option>
         </select>
-      </section>
 
-      <section class="flow-section">
-        <div class="section-heading">
+        <div class="compact-row ai-row">
           <div>
-            <p class="step-label">第二步</p>
-            <h2>选择 AI</h2>
+            <p class="step-label">AI</p>
+            <h2>整理助手</h2>
           </div>
         </div>
 
@@ -72,58 +69,56 @@
         </select>
 
         <div id="openaiFields" class="provider-fields">
-          <div class="field">
-            <label for="openaiApiKey">连接 OpenAI</label>
+          <div class="field inline-secret">
+            <label for="openaiApiKey">OpenAI key</label>
             <input id="openaiApiKey" type="password" autocomplete="off" placeholder="sk-..." />
           </div>
         </div>
 
         <div id="deepseekFields" class="provider-fields">
-          <div class="field">
-            <label for="deepseekApiKey">连接 DeepSeek</label>
+          <div class="field inline-secret">
+            <label for="deepseekApiKey">DeepSeek key</label>
             <input id="deepseekApiKey" type="password" autocomplete="off" placeholder="sk-..." />
           </div>
         </div>
 
-        <label id="rememberProviderKeysRow" class="switch-row compact-switch">
-          <span>
-            <strong>下次自动填入密钥</strong>
-            <small>关闭时只在本次使用</small>
-          </span>
+        <label id="rememberProviderKeysRow" class="mini-check">
           <input id="rememberProviderKeys" type="checkbox" />
-        </label>
-      </section>
-
-      <section class="flow-section">
-        <div class="section-heading">
-          <div>
-            <p class="step-label">第三步</p>
-            <h2>补充判断线索</h2>
-          </div>
-        </div>
-
-        <label class="switch-row emphasis-toggle">
           <span>
-            <strong>参考页面短摘要</strong>
-            <small>标题不够明确时更准</small>
+            <strong>记住密钥</strong>
+            <small>否则只在本次使用</small>
           </span>
-          <input id="ackSampling" type="checkbox" />
         </label>
 
-        <div id="samplingRisk" class="risk" hidden>
-          <strong>会读取页面文字摘要</strong>
-          <p>只读取标题、描述、标题层级和一小段可见文字；不会读取密码、表单内容、Cookie、本地存储或完整 HTML。</p>
-        </div>
+        <details class="preferences-panel">
+          <summary>
+            <span>整理偏好</span>
+            <small>页面摘要、prompt</small>
+          </summary>
 
-        <div class="field prompt-field">
-          <label for="customPrompt">你的整理偏好</label>
-          <textarea
-            id="customPrompt"
-            rows="3"
-            spellcheck="true"
-            placeholder="例如：找工作、AI 论文、当前项目分开；拿不准的放到待确认。"
-          ></textarea>
-        </div>
+          <label class="switch-row emphasis-toggle">
+            <span>
+              <strong>参考页面短摘要</strong>
+              <small>标题不够明确时更准</small>
+            </span>
+            <input id="ackSampling" type="checkbox" />
+          </label>
+
+          <div id="samplingRisk" class="risk" hidden>
+            <strong>会读取页面文字摘要</strong>
+            <p>只读取标题、描述、标题层级和一小段可见文字；不会读取密码、表单内容、Cookie、本地存储或完整 HTML。</p>
+          </div>
+
+          <div class="field prompt-field">
+            <label for="customPrompt">自定义要求</label>
+            <textarea
+              id="customPrompt"
+              rows="3"
+              spellcheck="true"
+              placeholder="例如：找工作、AI 论文、当前项目分开；拿不准的放到待确认。"
+            ></textarea>
+          </div>
+        </details>
       </section>
 
       <details class="advanced-settings">
@@ -233,7 +228,7 @@
         <button id="undoBtn" type="button">撤销</button>
       </div>
 
-      <section class="preview" aria-live="polite">
+      <section id="previewSection" class="preview" aria-live="polite" hidden>
         <div class="section-heading">
           <div>
             <p class="step-label">整理预览</p>

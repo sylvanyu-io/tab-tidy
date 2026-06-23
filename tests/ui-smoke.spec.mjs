@@ -36,8 +36,10 @@ test("side panel renders settings and mock preview", async ({ page }) => {
   await page.goto(`${baseUrl}/src/sidepanel/index.html`);
 
   await expect(page.getByRole("heading", { name: "把标签页收拾成几组" })).toBeVisible();
+  await expect(page.locator("#previewSection")).toBeHidden();
   await expect(page.locator("#samplingRisk")).toBeHidden();
 
+  await page.getByText("整理偏好").click();
   await page.locator("#ackSampling").check();
   await expect(page.locator("#samplingRisk")).toBeVisible();
 
