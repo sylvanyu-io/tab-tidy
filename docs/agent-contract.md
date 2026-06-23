@@ -101,7 +101,7 @@ The implementation details for cross-window consolidation are captured in [multi
 
 See [permissions-research.md](permissions-research.md) for the Chrome permission model behind these modes.
 
-Any mode other than `off` requires a visible risk warning before the first sample is collected.
+Any mode other than `off` requires a visible risk warning before the first sample is collected. The main "page summary" opt-in should move from `off` to `ambiguous_with_permission` and request visible-site permission; `active_tab_only` is an advanced low-friction fallback, not the main opt-in path.
 
 ### Host Permission Request Mode
 
@@ -109,7 +109,7 @@ Any mode other than `off` requires a visible risk warning before the first sampl
 
 `ask_per_origin`: ask for one concrete origin at a time with a visible reason.
 
-`ask_for_all_visible_origins`: show a grouped origin list first, then request only selected origins. This is high-friction and should not be the default.
+`ask_for_all_visible_origins`: show a grouped origin list first, then request only selected origins. This is the default after the user explicitly turns on page summaries, but not the install-time default.
 
 ### Page Sampling Risk Consent
 

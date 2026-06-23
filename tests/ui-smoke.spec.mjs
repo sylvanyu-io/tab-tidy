@@ -45,6 +45,8 @@ test("floating window renders settings and mock preview", async ({ page }) => {
 
   await page.locator("#ackSampling").check();
   await expect(page.locator("#samplingRisk")).toBeVisible();
+  await expect(page.locator("#pageContextMode")).toHaveValue("ambiguous_with_permission");
+  await expect(page.locator("#hostPermissionRequestMode")).toHaveValue("ask_for_all_visible_origins");
 
   await page.getByText("更多选项").click();
   await expect(page.locator("#gatewayBaseUrl")).toHaveValue("");
@@ -225,6 +227,104 @@ test("default gateway does not request host permission from the floating window"
   await expect(page.locator(".preview").getByText("资料整理", { exact: true })).toBeVisible();
   await expect.poll(() => page.evaluate(() => window.__permissionRequests)).toBe(0);
   await expect.poll(() => page.evaluate(() => window.__analyzeWindowId)).toBe(77);
+});
+
+test("page summary main toggle requests scripting and page origins", async ({ page }) => {
+  await page.addInitScript(() => {
+    let settings = {
+      organizeMode: "current_window",
+      targetWindowMode: "current_window",
+      existingGroupMode: "preserve_existing_groups",
+      reviewGroupMode: "create_review_group",
+      undoTargetWindowMode: "leave_empty_target_window",
+      pageContextMode: "off",
+      hostPermissionRequestMode: "never",
+      pageSamplingConsentMode: "not_acknowledged",
+      urlPrivacyMode: "sanitized_url",
+      includePinnedTabs: false,
+      includeIncognitoTabs: false,
+      collapseGroupsAfterApply: true,
+      minConfidenceToApply: 0.65,
+      maxTabsPerGroup: 40,
+      promptPreset: "conservative",
+      plannerProvider: "gateway",
+      rememberProviderKeys: false,
+      gatewayBaseUrl: "",
+      gatewayModel: "gpt-5.5",
+      gatewayThinkingIntensity: "high",
+      gatewayApiKey: "",
+      customPrompt: ""
+    };
+    const activeJob = {
+      operationId: "job_page_origin_permissions",
+      status: "complete",
+      phase: "complete",
+      progress: 100,
+      message: "方案好了，可以先检查",
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+    const job = {
+      validation: { ok: true, warnings: [] },
+      preview: {
+        requiresConfirmation: false,
+        groups: [{ title: "需要授权", reason: "Mock plan.", tabCount: 1 }],
+        reviewTabsCount: 0,
+        excludedTabsCount: 0,
+        lockedGroupsCount: 0,
+        warnings: []
+      }
+    };
+    window.__permissionRequests = [];
+    window.__savedSettings = [];
+    window.chrome = {
+      permissions: {
+        contains: async () => false,
+        request: async (request) => {
+          window.__permissionRequests.push(request);
+          return true;
+        }
+      },
+      windows: {
+        get: async () => ({
+          id: 77,
+          type: "normal",
+          tabs: [
+            { id: 10, title: "Login", url: "https://example.com/signin", active: true },
+            { id: 11, title: "Specific documentation article with clear title", url: "https://docs.example.org/page" }
+          ]
+        })
+      },
+      runtime: {
+        sendMessage: async (message) => {
+          if (message.type === "settings:get") return { ok: true, result: settings };
+          if (message.type === "settings:save") {
+            settings = message.settings;
+            window.__savedSettings.push(settings);
+            return { ok: true, result: settings };
+          }
+          if (message.type === "tabs:getActiveJob") return { ok: true, result: activeJob };
+          if (message.type === "tabs:getLastJob") return { ok: true, result: job };
+          if (message.type === "tabs:startAnalyze") return { ok: true, result: { operationId: activeJob.operationId } };
+          return { ok: true, result: null };
+        }
+      }
+    };
+  });
+
+  await page.goto(`${baseUrl}/src/sidepanel/index.html?sourceWindowId=77`);
+  await page.locator("#ackSampling").check();
+  await expect.poll(() => page.evaluate(() => window.__savedSettings.at(-1)?.pageContextMode)).toBe("ambiguous_with_permission");
+  await expect.poll(() => page.evaluate(() => window.__savedSettings.at(-1)?.hostPermissionRequestMode)).toBe(
+    "ask_for_all_visible_origins"
+  );
+
+  await page.getByRole("button", { name: "生成方案" }).click();
+  await expect(page.locator(".preview").getByText("需要授权", { exact: true })).toBeVisible();
+  await expect.poll(() => page.evaluate(() => window.__permissionRequests)).toContainEqual({
+    permissions: ["scripting"],
+    origins: ["https://example.com/*"]
+  });
 });
 
 test("generation progress follows the background job after start", async ({ page }) => {

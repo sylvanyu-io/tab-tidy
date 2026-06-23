@@ -81,8 +81,20 @@ async function init() {
 
 function bindEvents() {
   for (const element of Object.values(fields)) {
+    if (element === fields.ackSampling) continue;
     element.addEventListener("change", persistSettings);
   }
+  fields.ackSampling.addEventListener("change", () => {
+    if (fields.ackSampling.checked) {
+      if (fields.pageContextMode.value === "off") {
+        fields.pageContextMode.value = "ambiguous_with_permission";
+      }
+      if (fields.pageContextMode.value !== "active_tab_only" && fields.hostPermissionRequestMode.value === "never") {
+        fields.hostPermissionRequestMode.value = "ask_for_all_visible_origins";
+      }
+    }
+    persistSettings();
+  });
   fields.customPrompt.addEventListener("input", debounce(persistSettings, 250));
   fields.pageContextMode.addEventListener("change", updateConditionalUi);
   fields.organizeMode.addEventListener("change", updateConditionalUi);
@@ -112,6 +124,12 @@ function bindChoiceGroups() {
 
 function readSettings() {
   const pageContextMode = fields.pageContextMode.value;
+  const effectivePageContextMode =
+    fields.ackSampling.checked
+      ? pageContextMode === "off"
+        ? "ambiguous_with_permission"
+        : pageContextMode
+      : "off";
   return {
     organizeMode: fields.organizeMode.value,
     existingGroupMode: fields.existingGroupMode.value,
@@ -120,13 +138,14 @@ function readSettings() {
     reviewGroupMode: fields.reviewGroupMode.value,
     undoTargetWindowMode: fields.undoTargetWindowMode.value,
     urlPrivacyMode: fields.urlPrivacyMode.value,
-    pageContextMode:
-      fields.ackSampling.checked && pageContextMode === "off"
-        ? "active_tab_only"
-        : fields.ackSampling.checked
-          ? pageContextMode
-          : "off",
-    hostPermissionRequestMode: fields.hostPermissionRequestMode.value,
+    pageContextMode: effectivePageContextMode,
+    hostPermissionRequestMode:
+      fields.ackSampling.checked &&
+      pageContextMode === "off" &&
+      effectivePageContextMode !== "active_tab_only" &&
+      fields.hostPermissionRequestMode.value === "never"
+        ? "ask_for_all_visible_origins"
+        : fields.hostPermissionRequestMode.value,
     pageSamplingConsentMode:
       fields.ackSampling.checked
         ? "acknowledged_for_session"
@@ -586,6 +605,9 @@ async function ensurePageSamplingPermissions(settings) {
 
   const shouldRequestHostOrigins =
     settings.pageContextMode !== "active_tab_only" && settings.hostPermissionRequestMode !== "never";
+  if (shouldRequestHostOrigins) {
+    await refreshPageSamplingOriginCache();
+  }
   const origins = shouldRequestHostOrigins ? pageSamplingOriginCache.origins : [];
   const missingPermissions = [];
   const hasScripting = await chrome.permissions.contains({ permissions: ["scripting"] });
