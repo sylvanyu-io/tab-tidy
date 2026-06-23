@@ -250,10 +250,12 @@ async function refineBucket(bucket, inventory, settings, fetchImpl, options = {}
 
   const refineSettings = {
     ...settings,
+    gatewayThinkingIntensity: resolveRefineThinkingIntensity(settings, options),
     customPrompt: [
       settings.customPrompt,
       `Refine this coarse bucket: ${bucket.title}.`,
       `Coarse reason: ${bucket.reason}`,
+      "This is a large-session refinement pass; use the configured refinement effort without overthinking obvious matches.",
       "Split it only when there are clearly different semantic tasks or topics.",
       "Keep uncertain or sensitive tabs in reviewTabs."
     ]
@@ -387,6 +389,13 @@ function shouldUseHierarchicalPlanner(inventory, options = {}) {
   if (options.hierarchical === true) return true;
   const minTabs = options.hierarchicalMinTabs || HIERARCHICAL_MIN_TABS;
   return (inventory.plannerTabs || []).length >= minTabs;
+}
+
+function resolveRefineThinkingIntensity(settings, options = {}) {
+  if (options.refineThinkingIntensity) return options.refineThinkingIntensity;
+  if (settings.gatewayThinkingIntensity === "ultra") return "high";
+  if (settings.gatewayThinkingIntensity === "high") return "medium";
+  return settings.gatewayThinkingIntensity;
 }
 
 function shouldRefineBucket(bucket, settings, options = {}) {

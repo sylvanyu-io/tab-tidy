@@ -27,6 +27,8 @@ Large AI gateway jobs automatically use a coarse-then-refine strategy: a fast
 low-effort pass creates broad semantic buckets, then only oversized or uncertain
 buckets are sent through the higher-effort planner before the local validator
 accepts the final plan.
+For 100+ tab jobs, refinement defaults to medium effort to keep latency down;
+selecting ultra-high thinking uses the gateway's high effort for refinement.
 Image models can exist on the same gateway, but they are not useful planner
 models for this workflow. The key is stored only when "remember key" is enabled.
 

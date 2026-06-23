@@ -307,7 +307,7 @@ test("AI gateway planner uses coarse then refine planning for large inventories"
 
   assert.equal(requests.length, 3);
   assert.equal(requests[0].reasoning_effort, "low");
-  assert.equal(requests[1].reasoning_effort, "high");
+  assert.equal(requests[1].reasoning_effort, "medium");
   assert.match(requests[0].messages[0].content, /fast first-pass/);
   assert.match(requests[1].messages[0].content, /JSON-only planner/);
   assert.equal(validation.ok, true, validation.errors.join(" "));
@@ -366,9 +366,64 @@ test("AI gateway planner splits oversized coarse buckets before refinement", asy
 
   assert.equal(requests.length, 4);
   assert.equal(requests[0].reasoning_effort, "low");
-  assert.equal(requests.slice(1).every((request) => request.reasoning_effort === "high"), true);
+  assert.equal(requests.slice(1).every((request) => request.reasoning_effort === "medium"), true);
   assert.equal(validation.ok, true, validation.errors.join(" "));
   assert.equal(plan.groups.length, 3);
+});
+
+test("AI gateway planner keeps high refinement when large jobs request ultra thinking", async () => {
+  const plannerTabs = [10, 11, 12].map((tabId) => ({
+    tabId,
+    windowId: 1,
+    title: `Large bucket tab ${tabId}`,
+    hostname: "example.com"
+  }));
+  const largeInventory = { ...inventory, plannerTabs, tabs: plannerTabs, pageSamples: [] };
+  const requests = [];
+  const responses = [
+    {
+      buckets: [
+        {
+          bucketKey: "large",
+          title: "Large Bucket",
+          color: "blue",
+          confidence: 0.95,
+          tabIds: [10, 11, 12],
+          reason: "Needs refinement."
+        }
+      ],
+      reviewTabIds: []
+    },
+    planForRefs([10, 11, 12], "Refined")
+  ];
+
+  const fetchImpl = async (_url, options) => {
+    requests.push(JSON.parse(options.body));
+    return {
+      ok: true,
+      async json() {
+        return { choices: [{ message: { content: JSON.stringify(responses[requests.length - 1]) } }] };
+      }
+    };
+  };
+  await createGatewayPlan(
+    largeInventory,
+    {
+      ...DEFAULT_SETTINGS,
+      plannerProvider: PLANNER_PROVIDERS.GATEWAY,
+      gatewayApiKey: "gateway-test-key",
+      gatewayThinkingIntensity: "ultra"
+    },
+    fetchImpl,
+    {
+      hierarchical: true,
+      refineBucketMinTabs: 2
+    }
+  );
+
+  assert.equal(requests.length, 2);
+  assert.equal(requests[0].reasoning_effort, "low");
+  assert.equal(requests[1].reasoning_effort, "high");
 });
 
 function planForRefs(tabIds, title) {
