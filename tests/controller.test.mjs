@@ -232,6 +232,54 @@ test("apply failure keeps a rollback snapshot so undo can restore", async () => 
   assert.equal((await chrome.tabs.get(11)).groupId, -1);
 });
 
+test("new-window apply failure after seed move can still undo", async () => {
+  const chrome = createFakeChrome({
+    windows: [
+      {
+        id: 1,
+        focused: true,
+        tabs: [{ id: 10, title: "GitHub issue", url: "https://github.com/acme/repo/issues/1", active: true }]
+      },
+      {
+        id: 2,
+        tabs: [{ id: 20, title: "OpenAI model docs", url: "https://platform.openai.com/docs/models" }]
+      }
+    ]
+  });
+  const settings = {
+    ...DEFAULT_SETTINGS,
+    plannerProvider: PLANNER_PROVIDERS.FAKE,
+    organizeMode: ORGANIZE_MODES.CONSOLIDATE_ONE_WINDOW,
+    targetWindowMode: TARGET_WINDOW_MODES.NEW_WINDOW,
+    existingGroupMode: EXISTING_GROUP_MODES.DISSOLVE,
+    undoTargetWindowMode: UNDO_TARGET_WINDOW_MODES.CLOSE_EMPTY_CREATED
+  };
+
+  const job = await analyzeTabs(chrome, settings, { windowId: 1 });
+  assert.equal(job.validation.ok, true);
+
+  const originalMove = chrome.tabs.move;
+  chrome.tabs.move = async (tabIds, moveProperties) => {
+    const ids = Array.isArray(tabIds) ? tabIds : [tabIds];
+    if (ids.includes(20)) {
+      throw new Error("simulated move failure");
+    }
+    return originalMove(tabIds, moveProperties);
+  };
+
+  await assert.rejects(() => applyLastPlan(chrome), /simulated move failure/);
+
+  chrome.tabs.move = originalMove;
+  const undo = await undoLastApply(chrome);
+  assert.equal(undo.restoredTabs, 2);
+  const restoredTab10 = await chrome.tabs.get(10);
+  const restoredTab20 = await chrome.tabs.get(20);
+  assert.notEqual(restoredTab10.windowId, restoredTab20.windowId);
+  assert.equal(restoredTab20.windowId, 2);
+  const windows = await chrome.windows.getAll({ populate: true, windowTypes: ["normal"] });
+  assert.equal(windows.length, 2);
+});
+
 test("undo can close an empty target window created by the operation", async () => {
   const chrome = createFakeChrome({
     windows: [
