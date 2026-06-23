@@ -57,8 +57,38 @@ test("floating window renders settings and mock preview", async ({ page }) => {
   await expect(page.locator("#gatewayThinkingIntensity")).toHaveValue("high");
   await expect(page.locator("#undoTargetWindowMode")).toHaveValue("leave_empty_target_window");
   await expect(page.locator("#hostPermissionRequestMode")).toContainText("一次授权可见站点");
+  await expect(page.locator("#existingGroupMode")).toBeHidden();
+  await expect(page.locator("#reviewGroupMode")).toBeHidden();
+  await expect(page.locator("#undoTargetWindowMode")).toBeHidden();
+  await expect(page.locator("#dissolveExistingGroupsToggle")).toBeVisible();
+  await expect(page.locator("#createReviewGroupToggle")).toBeVisible();
+  await expect(page.locator("#closeEmptyTargetWindowToggle")).toBeVisible();
+  await expect(page.locator("#dissolveExistingGroupsToggle")).not.toBeChecked();
+  await expect(page.locator("#createReviewGroupToggle")).toBeChecked();
+  await expect(page.locator("#closeEmptyTargetWindowToggle")).not.toBeChecked();
   await expect(page.getByText("整理后收起分组")).toBeVisible();
   await expect(page.locator("#collapseGroupsAfterApply")).toBeChecked();
+
+  await page.locator("#dissolveExistingGroupsToggle").check();
+  await expect(page.locator("#existingGroupMode")).toHaveValue("dissolve_existing_groups");
+  await page.locator("#createReviewGroupToggle").uncheck();
+  await expect(page.locator("#reviewGroupMode")).toHaveValue("leave_review_ungrouped");
+  await page.locator("#closeEmptyTargetWindowToggle").check();
+  await expect(page.locator("#undoTargetWindowMode")).toHaveValue("close_empty_created_target_window");
+  await page.getByRole("button", { name: "所有窗口" }).click();
+  await expect(page.locator("#targetWindowCurrentToggle")).toBeVisible();
+  await expect(page.locator("#targetWindowMode")).toBeHidden();
+  await page.locator("#targetWindowCurrentToggle").uncheck();
+  await expect(page.locator("#targetWindowMode")).toHaveValue("new_window");
+  await page.locator("#targetWindowCurrentToggle").check();
+  await expect(page.locator("#targetWindowMode")).toHaveValue("current_window");
+  await page.getByRole("button", { name: "当前窗口" }).click();
+  await page.locator("#dissolveExistingGroupsToggle").uncheck();
+  await expect(page.locator("#existingGroupMode")).toHaveValue("preserve_existing_groups");
+  await page.locator("#createReviewGroupToggle").check();
+  await expect(page.locator("#reviewGroupMode")).toHaveValue("create_review_group");
+  await page.locator("#closeEmptyTargetWindowToggle").uncheck();
+  await expect(page.locator("#undoTargetWindowMode")).toHaveValue("leave_empty_target_window");
 
   await page.getByRole("button", { name: "生成方案" }).click();
   await expect(page.locator(".preview").getByText("AI 研究", { exact: true })).toBeVisible();

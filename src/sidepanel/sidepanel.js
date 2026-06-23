@@ -22,6 +22,33 @@ const fields = {
   ackSampling: document.querySelector("#ackSampling")
 };
 
+const settingSwitches = [
+  {
+    field: "targetWindowMode",
+    input: document.querySelector("#targetWindowCurrentToggle"),
+    offValue: "new_window",
+    onValue: "current_window"
+  },
+  {
+    field: "existingGroupMode",
+    input: document.querySelector("#dissolveExistingGroupsToggle"),
+    offValue: "preserve_existing_groups",
+    onValue: "dissolve_existing_groups"
+  },
+  {
+    field: "reviewGroupMode",
+    input: document.querySelector("#createReviewGroupToggle"),
+    offValue: "leave_review_ungrouped",
+    onValue: "create_review_group"
+  },
+  {
+    field: "undoTargetWindowMode",
+    input: document.querySelector("#closeEmptyTargetWindowToggle"),
+    offValue: "leave_empty_target_window",
+    onValue: "close_empty_created_target_window"
+  }
+];
+
 const AI_WAIT_PHASES = new Set(["planning", "coarse_planning", "refining", "retrying"]);
 const AI_WAIT_RAMP_MS = 45000;
 const AI_WAIT_COPY_INTERVAL_SECONDS = 4;
@@ -69,6 +96,7 @@ init().catch((error) => setStatus(error.message, true));
 
 async function init() {
   bindEvents();
+  bindSettingSwitches();
   bindChoiceGroups();
 
   const settings = await sendMessage({ type: "settings:get" });
@@ -120,6 +148,17 @@ function bindChoiceGroups() {
       });
     });
   });
+}
+
+function bindSettingSwitches() {
+  for (const settingSwitch of settingSwitches) {
+    if (!settingSwitch.input || !fields[settingSwitch.field]) continue;
+    settingSwitch.input.addEventListener("change", () => {
+      const field = fields[settingSwitch.field];
+      field.value = settingSwitch.input.checked ? settingSwitch.onValue : settingSwitch.offValue;
+      field.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+  }
 }
 
 function readSettings() {
@@ -181,7 +220,16 @@ function writeSettings(settings) {
       element.value = displaySettings[key];
     }
   }
+  syncSettingSwitches();
   syncChoiceGroups();
+}
+
+function syncSettingSwitches() {
+  for (const settingSwitch of settingSwitches) {
+    const field = fields[settingSwitch.field];
+    if (!settingSwitch.input || !field) continue;
+    settingSwitch.input.checked = field.value === settingSwitch.onValue;
+  }
 }
 
 function normalizePanelPageContextMode(value) {
@@ -603,6 +651,8 @@ function syncActionState() {
   nodes.appShell.dataset.flowState = lastPreview ? "preview" : "setup";
   nodes.actions.dataset.state = lastPreview ? "preview" : "idle";
   nodes.actions.dataset.canUndo = canUndo ? "true" : "false";
+  nodes.applyBtn.hidden = !lastPreview;
+  nodes.undoBtn.hidden = !canUndo;
   setButtonLabel(nodes.analyzeBtn, lastPreview ? "重新生成" : "生成方案");
   nodes.applyBtn.dataset.role = lastPreview && lastCanApply ? "primary" : "";
 }

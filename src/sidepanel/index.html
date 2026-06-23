@@ -78,33 +78,57 @@
       <details class="advanced-settings">
         <summary>更多选项</summary>
 
-        <div id="targetWindowField" class="field" hidden>
-          <label for="targetWindowMode">合并后放到</label>
-          <select id="targetWindowMode">
+        <div id="targetWindowField" class="setting-toggle-field" hidden>
+          <label class="switch-row compact-switch">
+            <span>
+              <strong>合并到当前窗口</strong>
+              <small>关闭时会新开一个窗口</small>
+            </span>
+            <input id="targetWindowCurrentToggle" type="checkbox" />
+          </label>
+          <select id="targetWindowMode" class="setting-source" aria-hidden="true" tabindex="-1" hidden>
             <option value="new_window">新窗口</option>
             <option value="current_window">当前窗口</option>
           </select>
         </div>
 
-        <div class="field">
-          <label for="existingGroupMode">已有分组</label>
-          <select id="existingGroupMode">
+        <div class="setting-toggle-field">
+          <label class="switch-row compact-switch">
+            <span>
+              <strong>重新整理已有分组</strong>
+              <small>关闭时保留现有分组</small>
+            </span>
+            <input id="dissolveExistingGroupsToggle" type="checkbox" />
+          </label>
+          <select id="existingGroupMode" class="setting-source" aria-hidden="true" tabindex="-1" hidden>
             <option value="preserve_existing_groups">保留</option>
             <option value="dissolve_existing_groups">重新整理</option>
           </select>
         </div>
 
-        <div class="field">
-          <label for="reviewGroupMode">拿不准的标签页</label>
-          <select id="reviewGroupMode">
+        <div class="setting-toggle-field">
+          <label class="switch-row compact-switch">
+            <span>
+              <strong>拿不准的单独待分类</strong>
+              <small>关闭时保持不分组</small>
+            </span>
+            <input id="createReviewGroupToggle" type="checkbox" />
+          </label>
+          <select id="reviewGroupMode" class="setting-source" aria-hidden="true" tabindex="-1" hidden>
             <option value="create_review_group">单独放到待分类</option>
             <option value="leave_review_ungrouped">保持不分组</option>
           </select>
         </div>
 
-        <div class="field">
-          <label for="undoTargetWindowMode">撤销后目标窗口</label>
-          <select id="undoTargetWindowMode">
+        <div class="setting-toggle-field">
+          <label class="switch-row compact-switch">
+            <span>
+              <strong>撤销后关闭空窗口</strong>
+              <small>关闭时保留空窗口</small>
+            </span>
+            <input id="closeEmptyTargetWindowToggle" type="checkbox" />
+          </label>
+          <select id="undoTargetWindowMode" class="setting-source" aria-hidden="true" tabindex="-1" hidden>
             <option value="leave_empty_target_window">保留空窗口</option>
             <option value="close_empty_created_target_window">关闭本次创建的空窗口</option>
           </select>
@@ -177,17 +201,26 @@
         </div>
 
         <div class="toggles">
-          <label class="checkbox-row">
+          <label class="switch-row compact-switch">
+            <span>
+              <strong>包含固定标签页</strong>
+              <small>会参与移动和分组</small>
+            </span>
             <input id="includePinnedTabs" type="checkbox" />
-            <span>包含固定标签页</span>
           </label>
-          <label class="checkbox-row">
+          <label class="switch-row compact-switch">
+            <span>
+              <strong>包含无痕标签页</strong>
+              <small>只在浏览器允许时生效</small>
+            </span>
             <input id="includeIncognitoTabs" type="checkbox" />
-            <span>包含无痕标签页</span>
           </label>
-          <label class="checkbox-row">
+          <label class="switch-row compact-switch">
+            <span>
+              <strong>整理后收起分组</strong>
+              <small>新分组默认折叠</small>
+            </span>
             <input id="collapseGroupsAfterApply" type="checkbox" />
-            <span>整理后收起分组</span>
           </label>
         </div>
 
