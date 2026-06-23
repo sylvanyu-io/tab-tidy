@@ -7,6 +7,7 @@
   "scripts": {
     "test": "node --test",
     "test:ui": "playwright test tests/ui-smoke.spec.mjs",
+    "smoke:openai": "node scripts/live-smoke-openai.mjs",
     "smoke:deepseek": "node scripts/live-smoke-deepseek.mjs",
     "assets:icons": "node scripts/generate-icons.mjs",
     "scan:secrets": "node scripts/scan-secrets.mjs",

@@ -23,6 +23,17 @@ test("invalid selected target window ids normalize to null", () => {
   assert.equal(settings.selectedTargetWindowId, null);
 });
 
+test("OpenAI-compatible base URLs normalize safely", () => {
+  assert.equal(
+    normalizeSettings({ ...DEFAULT_SETTINGS, openaiBaseUrl: "http://127.0.0.1:8317/v1/" }).openaiBaseUrl,
+    "http://127.0.0.1:8317/v1"
+  );
+  assert.equal(
+    normalizeSettings({ ...DEFAULT_SETTINGS, openaiBaseUrl: "javascript:alert(1)" }).openaiBaseUrl,
+    DEFAULT_SETTINGS.openaiBaseUrl
+  );
+});
+
 test("provider keys are not persisted unless explicitly remembered", async () => {
   const chrome = createFakeChrome();
 

@@ -9,6 +9,7 @@ const fields = {
   promptPreset: document.querySelector("#promptPreset"),
   plannerProvider: document.querySelector("#plannerProvider"),
   rememberProviderKeys: document.querySelector("#rememberProviderKeys"),
+  openaiBaseUrl: document.querySelector("#openaiBaseUrl"),
   openaiModel: document.querySelector("#openaiModel"),
   openaiApiKey: document.querySelector("#openaiApiKey"),
   deepseekModel: document.querySelector("#deepseekModel"),
@@ -118,6 +119,7 @@ function readSettings() {
     promptPreset: fields.promptPreset.value,
     plannerProvider: fields.plannerProvider.value,
     rememberProviderKeys: fields.rememberProviderKeys.checked,
+    openaiBaseUrl: fields.openaiBaseUrl.value,
     openaiModel: fields.openaiModel.value,
     openaiApiKey: fields.openaiApiKey.value,
     deepseekModel: fields.deepseekModel.value,
@@ -167,8 +169,10 @@ function updateConditionalUi() {
 async function analyze() {
   setBusy(true, "正在思考怎么整理");
   try {
+    const settings = readSettings();
+    await ensurePlannerHostPermission(settings);
     const windowId = await resolveInvocationWindowId();
-    const job = await sendMessage({ type: "tabs:analyze", settings: readSettings(), windowId });
+    const job = await sendMessage({ type: "tabs:analyze", settings, windowId });
     lastPreview = job.preview;
     lastCanApply = Boolean(job.validation?.ok);
     isEditingSettings = false;
@@ -377,6 +381,32 @@ function providerLabel() {
   return "本地预览";
 }
 
+async function ensurePlannerHostPermission(settings) {
+  if (settings.plannerProvider !== "openai") return;
+  if (!globalThis.chrome?.permissions?.contains || !globalThis.chrome?.permissions?.request) return;
+
+  const pattern = providerPermissionPattern(settings.openaiBaseUrl);
+  if (!pattern || pattern === "https://api.openai.com/*") return;
+
+  const hasPermission = await chrome.permissions.contains({ origins: [pattern] });
+  if (hasPermission) return;
+
+  const granted = await chrome.permissions.request({ origins: [pattern] });
+  if (!granted) {
+    throw new Error("需要授权这个 AI 服务地址，才能发送整理请求。");
+  }
+}
+
+function providerPermissionPattern(baseUrl) {
+  try {
+    const url = new URL(baseUrl);
+    if (!["https:", "http:"].includes(url.protocol)) return "";
+    return `${url.protocol}//${url.hostname}/*`;
+  } catch {
+    return "";
+  }
+}
+
 async function sendMessage(message) {
   if (!globalThis.chrome?.runtime?.sendMessage) {
     return mockMessage(message);
@@ -418,6 +448,7 @@ async function mockMessage(message) {
       promptPreset: "conservative",
       plannerProvider: "deepseek",
       rememberProviderKeys: false,
+      openaiBaseUrl: "https://api.openai.com/v1",
       openaiModel: "gpt-5.5",
       openaiApiKey: "",
       deepseekModel: "deepseek-chat",

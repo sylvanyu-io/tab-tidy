@@ -1,8 +1,6 @@
 import { PROMPT_PRESET_TEXT, normalizeSettings } from "../shared/settings.js";
 import { ACTION_PLAN_JSON_SCHEMA } from "./plan-schema.js";
 
-const OPENAI_RESPONSES_URL = "https://api.openai.com/v1/responses";
-
 export async function createOpenAIPlan(inventory, rawSettings = {}, fetchImpl = globalThis.fetch) {
   const settings = normalizeSettings(rawSettings);
   if (!settings.openaiApiKey) {
@@ -12,7 +10,7 @@ export async function createOpenAIPlan(inventory, rawSettings = {}, fetchImpl = 
     throw new Error("Fetch is not available in this environment.");
   }
 
-  const response = await fetchImpl(OPENAI_RESPONSES_URL, {
+  const response = await fetchImpl(openAIResponsesUrl(settings), {
     method: "POST",
     headers: {
       "content-type": "application/json",
@@ -39,6 +37,10 @@ export async function createOpenAIPlan(inventory, rawSettings = {}, fetchImpl = 
   }
 
   return parsePlanFromResponse(data);
+}
+
+export function openAIResponsesUrl(settings) {
+  return `${settings.openaiBaseUrl.replace(/\/+$/, "")}/responses`;
 }
 
 export function buildPlannerSystemPrompt(settings) {

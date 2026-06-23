@@ -43,6 +43,9 @@ test("side panel renders settings and mock preview", async ({ page }) => {
   await page.locator("#ackSampling").check();
   await expect(page.locator("#samplingRisk")).toBeVisible();
 
+  await page.getByText("更多选项").click();
+  await expect(page.locator("#openaiBaseUrl")).toHaveValue("https://api.openai.com/v1");
+
   await page.getByRole("button", { name: "生成方案" }).click();
   await expect(page.locator(".preview").getByText("AI 研究", { exact: true })).toBeVisible();
   await expect(page.locator(".preview").getByText("当前项目", { exact: true })).toBeVisible();

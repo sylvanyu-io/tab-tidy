@@ -76,3 +76,47 @@ test("OpenAI planner requires an API key", async () => {
     /API key/
   );
 });
+
+test("OpenAI planner honors an OpenAI-compatible base URL", async () => {
+  const inventory = {
+    scope: { kind: "current_window", currentWindowId: 1, windowIds: [1] },
+    windows: [{ windowId: 1, tabCount: 1 }],
+    plannerTabs: [{ tabId: 10, windowId: 1, title: "Local model docs", hostname: "localhost" }],
+    excludedTabs: [],
+    lockedGroups: []
+  };
+
+  const expectedPlan = {
+    schemaVersion: 1,
+    mode: "current_window",
+    scope: { kind: "current_window", windowIds: [1] },
+    targetWindow: { kind: "current_window", windowId: 1, title: "Current Window" },
+    eligibleTabs: [{ tabId: 10, windowId: 1 }],
+    excludedTabs: [],
+    groups: [],
+    reviewTabs: [{ tabId: 10, windowId: 1, reason: "Insufficient context." }]
+  };
+
+  const fetchImpl = async (url) => {
+    assert.equal(url, "http://127.0.0.1:8317/v1/responses");
+    return {
+      ok: true,
+      async json() {
+        return { output_text: JSON.stringify(expectedPlan) };
+      }
+    };
+  };
+
+  const plan = await createOpenAIPlan(
+    inventory,
+    {
+      ...DEFAULT_SETTINGS,
+      plannerProvider: PLANNER_PROVIDERS.OPENAI,
+      openaiApiKey: "test-key",
+      openaiBaseUrl: "http://127.0.0.1:8317/v1/"
+    },
+    fetchImpl
+  );
+
+  assert.deepEqual(plan, expectedPlan);
+});

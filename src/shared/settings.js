@@ -57,6 +57,8 @@ export const PLANNER_PROVIDERS = Object.freeze({
   DEEPSEEK: "deepseek"
 });
 
+export const DEFAULT_OPENAI_BASE_URL = "https://api.openai.com/v1";
+
 export const PROMPT_PRESET_TEXT = Object.freeze({
   conservative:
     "Prefer fewer, clearer groups. Keep unknown or mixed pages in Review. Avoid merging tabs with weak semantic evidence.",
@@ -88,6 +90,7 @@ export const DEFAULT_SETTINGS = Object.freeze({
   selectedTargetWindowId: null,
   plannerProvider: PLANNER_PROVIDERS.DEEPSEEK,
   rememberProviderKeys: false,
+  openaiBaseUrl: DEFAULT_OPENAI_BASE_URL,
   openaiModel: "gpt-5.5",
   openaiApiKey: "",
   deepseekModel: "deepseek-chat",
@@ -123,6 +126,7 @@ export function normalizeSettings(input = {}) {
   merged.minConfidenceToApply = clampNumber(merged.minConfidenceToApply, 0, 1, DEFAULT_SETTINGS.minConfidenceToApply);
   merged.maxTabsPerGroup = Math.max(1, Number.parseInt(merged.maxTabsPerGroup, 10) || DEFAULT_SETTINGS.maxTabsPerGroup);
   merged.customPrompt = String(merged.customPrompt || "").slice(0, 4000);
+  merged.openaiBaseUrl = normalizeBaseUrl(merged.openaiBaseUrl, DEFAULT_SETTINGS.openaiBaseUrl);
   merged.openaiModel = String(merged.openaiModel || DEFAULT_SETTINGS.openaiModel).trim().slice(0, 100);
   merged.openaiApiKey = String(merged.openaiApiKey || "").trim();
   merged.deepseekModel = String(merged.deepseekModel || DEFAULT_SETTINGS.deepseekModel).trim().slice(0, 100);
@@ -140,4 +144,17 @@ function clampNumber(value, min, max, fallback) {
   const numeric = Number(value);
   if (!Number.isFinite(numeric)) return fallback;
   return Math.min(max, Math.max(min, numeric));
+}
+
+function normalizeBaseUrl(value, fallback) {
+  try {
+    const url = new URL(String(value || fallback).trim());
+    if (!["https:", "http:"].includes(url.protocol)) return fallback;
+    url.hash = "";
+    url.search = "";
+    url.pathname = url.pathname.replace(/\/+$/, "");
+    return url.toString().replace(/\/$/, "");
+  } catch {
+    return fallback;
+  }
 }
