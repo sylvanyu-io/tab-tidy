@@ -30,7 +30,7 @@ For multi-tab page sampling, the practical option is optional host permissions:
 
 ### LLM Provider Network Calls
 
-The extension service worker or popup can call remote LLM providers only if the extension has host permission for those provider endpoints. Provider endpoints should be narrow or requested as optional origins, for example:
+The extension service worker or floating window can call remote LLM providers only if the extension has host permission for those provider endpoints. Provider endpoints should be narrow or requested as optional origins, for example:
 
 - `https://api.anthropic.com/`
 - `https://generativelanguage.googleapis.com/`
@@ -48,7 +48,7 @@ MVP required permissions:
   "host_permissions": [],
   "optional_permissions": ["scripting"],
   "optional_host_permissions": ["https://*/*", "http://*/*"],
-  "action": {"default_popup": "src/sidepanel/index.html"}
+  "action": {"default_title": "Semantic Tab Agent"}
 }
 ```
 
@@ -58,6 +58,7 @@ Notes:
 - Keep `scripting` optional until page sampling is enabled.
 - Keep `optional_host_permissions` broad only as an optional declaration. Request concrete origins at runtime.
 - Do not ask for all site access during install.
+- The toolbar action launches a persistent `type: "popup"` extension window instead of `action.default_popup`, because Chrome action popups automatically close on focus loss and cannot be kept open while the user handles permission prompts.
 
 ## Page Sampling Modes
 

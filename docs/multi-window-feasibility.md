@@ -52,7 +52,7 @@ Avoid asking the model to reason about raw Chrome calls. The model returns group
 
 ### Current Window Ambiguity
 
-Chrome's "current window" can differ from the focused/topmost window, especially in service workers. Current-window mode should resolve the active scope from the popup/action invocation and pass an explicit `windowId` through the job. Do not depend on `WINDOW_ID_CURRENT` inside background code.
+Chrome's "current window" can differ from the focused/topmost window, especially in service workers. Current-window mode should resolve the active scope from the floating-window action invocation and pass an explicit `windowId` through the job. Do not depend on `WINDOW_ID_CURRENT` inside background code.
 
 ### Existing Groups Are Not Durable
 

@@ -42,6 +42,7 @@ const nodes = {
   progressFill: document.querySelector("#progressFill"),
   settingsSummaryBtn: document.querySelector("#settingsSummaryBtn"),
   settingsSummaryText: document.querySelector("#settingsSummaryText"),
+  closeWindowBtn: document.querySelector("#closeWindowBtn"),
   actions: document.querySelector(".actions"),
   analyzeBtn: document.querySelector("#analyzeBtn"),
   cancelBtn: document.querySelector("#cancelBtn"),
@@ -89,6 +90,7 @@ function bindEvents() {
   nodes.cancelBtn.addEventListener("click", cancelAnalyze);
   nodes.applyBtn.addEventListener("click", applyLastPlan);
   nodes.undoBtn.addEventListener("click", undoLastApply);
+  nodes.closeWindowBtn?.addEventListener("click", () => window.close());
   nodes.settingsSummaryBtn.addEventListener("click", () => {
     isEditingSettings = true;
     syncActionState();
@@ -381,7 +383,7 @@ async function hydrateActiveJob() {
     setBusy(true, job.message || "正在整理", { cancelable: true, progress: job.progress || 8 });
     startProgressPolling();
   } else if (job.status === "error" || job.status === "canceled") {
-    setStatus(job.message || "上次整理没有完成", job.status === "error");
+    setStatus(job.status === "error" ? "上次生成失败，请重新生成" : "上次整理已取消", job.status === "error");
   }
 }
 
@@ -525,9 +527,10 @@ function scopeLabel() {
 
 async function ensurePlannerHostPermission(settings) {
   if (settings.plannerProvider !== "gateway") return;
+  if (!settings.gatewayBaseUrl) return;
   if (!globalThis.chrome?.permissions?.contains || !globalThis.chrome?.permissions?.request) return;
 
-  const pattern = providerPermissionPattern(settings.gatewayBaseUrl || "http://127.0.0.1:8317/v1");
+  const pattern = providerPermissionPattern(settings.gatewayBaseUrl);
   if (!pattern) return;
 
   const hasPermission = await chrome.permissions.contains({ origins: [pattern] });
@@ -679,10 +682,26 @@ async function sendMessage(message) {
 }
 
 async function resolveInvocationWindowId() {
+  const sourceWindowId = sourceWindowIdFromUrl();
+  if (Number.isInteger(sourceWindowId)) return sourceWindowId;
+
   if (!globalThis.chrome?.windows?.getCurrent) return null;
   try {
+    if (globalThis.chrome?.windows?.getLastFocused) {
+      const focusedNormalWindow = await chrome.windows.getLastFocused({ windowTypes: ["normal"] });
+      if (Number.isInteger(focusedNormalWindow?.id)) return focusedNormalWindow.id;
+    }
     const currentWindow = await chrome.windows.getCurrent();
     return currentWindow?.id ?? null;
+  } catch {
+    return null;
+  }
+}
+
+function sourceWindowIdFromUrl() {
+  try {
+    const sourceWindowId = Number(new URL(globalThis.location.href).searchParams.get("sourceWindowId"));
+    return Number.isInteger(sourceWindowId) ? sourceWindowId : null;
   } catch {
     return null;
   }

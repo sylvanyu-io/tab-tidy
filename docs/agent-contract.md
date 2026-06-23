@@ -422,7 +422,7 @@ Required manifest surface and permissions:
 - `"tabs"` to read tab URLs, titles, pending URLs, and favicons;
 - `"tabGroups"` to create, update, move, and query native tab groups;
 - `"storage"` for settings, job state, prompt snapshots, and rollback snapshots;
-- action `default_popup` for the main floating control surface;
+- toolbar action launcher for the persistent floating control window;
 - provider-specific HTTPS `host_permissions` or optional host permissions for the configured LLM endpoint;
 - optional `"scripting"` only when page sampling is enabled;
 - optional host permissions for page origins only when bulk page sampling is enabled.

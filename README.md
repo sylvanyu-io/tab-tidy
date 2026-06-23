@@ -13,7 +13,7 @@ executor path as every other planner.
 2. Enable Developer mode.
 3. Choose "Load unpacked".
 4. Select this project directory: `/Users/yuyufeng/Projects/semantic-tab-agent`.
-5. Click the extension action icon to open the popup.
+5. Click the extension action icon to open the persistent floating window.
 
 Default behavior is current-window only. The "All windows to one window" scope is
 an explicit switch and moves all eligible normal-window tabs into one target
@@ -21,7 +21,7 @@ window only after preview and confirmation.
 
 The AI gateway address and key fields are blank by default. Leaving them blank
 uses the built-in service; filling the address switches to a custom
-chat-completions-compatible gateway. The popup exposes
+chat-completions-compatible gateway. The floating window exposes
 only `gpt-5.5`, `claude-opus-4-8`, and `claude-sonnet-4-6` for tab planning.
 Thinking intensity defaults to high and can be set to low, medium, high, or
 ultra-high from advanced settings.
@@ -49,14 +49,14 @@ The Node harness uses a fake Chrome adapter and covers inventory, validation,
 current-window grouping, consolidate-to-one-window, undo, URL sanitization,
 AI gateway request shaping, and page-sampling permission gates.
 
-After installing dev dependencies, run the popup smoke test:
+After installing dev dependencies, run the floating-window smoke test:
 
 ```bash
 npm install
 npm run test:ui
 ```
 
-The UI smoke test opens the popup HTML (`src/sidepanel/index.html`) in mock mode. It does not
+The UI smoke test opens the floating-window HTML (`src/sidepanel/index.html`) in mock mode. It does not
 need a loaded extension.
 
 Optional AI gateway live smoke:
@@ -75,9 +75,9 @@ npm run stress:extension
 This launches an isolated Chromium profile, opens hundreds of generated HTTP
 pages across multiple normal browser windows, then verifies current-window mode,
 all-windows-to-one-window mode, apply, undo, page-sampling permission gates, and
-page body sampling. The stress harness opens the popup document in a separate
-test-only window so Playwright can keep it alive; the installed extension entry
-is still the toolbar action popup. Optional gateway stress:
+page body sampling. The installed extension entry opens the same UI in a
+persistent popup window so permission prompts do not destroy the control
+surface. Optional gateway stress:
 
 ```bash
 GATEWAY_BASE_URL=http://127.0.0.1:8317/v1 STRESS_GATEWAY_TABS=60 npm run stress:extension

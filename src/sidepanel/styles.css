@@ -74,10 +74,9 @@
 
 body {
   margin: 0;
-  width: 360px;
+  width: 100%;
   min-width: 320px;
-  max-width: 360px;
-  max-height: 600px;
+  min-height: 100vh;
   overflow: auto;
   overscroll-behavior: contain;
   background:
@@ -117,6 +116,9 @@ h2,
 .app-shell {
   display: grid;
   gap: 10px;
+  width: 100%;
+  max-width: 390px;
+  margin: 0 auto;
   padding: 14px 14px 88px;
 }
 
@@ -127,7 +129,7 @@ h2,
 
 .topbar {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
+  grid-template-columns: auto minmax(0, 1fr) auto;
   gap: 10px;
   align-items: center;
   min-height: 36px;
@@ -206,6 +208,30 @@ h2 {
 
 #statusText[data-tone="error"] {
   color: var(--danger);
+}
+
+.window-close {
+  display: inline-grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  color: var(--muted);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  box-shadow: var(--shadow-sm);
+  cursor: pointer;
+}
+
+.window-close:hover {
+  color: var(--danger);
+  background: var(--coral-soft);
+}
+
+.window-close span {
+  line-height: 1;
+  transform: translateY(-0.5px);
 }
 
 .progress {
@@ -726,14 +752,15 @@ details[open] > summary::before {
   position: fixed;
   right: 0;
   bottom: 0;
-  left: 0;
+  left: 50%;
   z-index: 30;
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto auto;
   gap: 8px;
-  width: min(360px, 100vw);
-  max-width: 360px;
+  width: min(390px, 100vw);
+  max-width: 390px;
   padding: 10px 11px 11px;
+  transform: translateX(-50%);
   background:
     linear-gradient(to bottom, color-mix(in srgb, var(--canvas) 0%, transparent), var(--canvas) 24%),
     var(--canvas);

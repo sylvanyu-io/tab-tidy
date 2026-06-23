@@ -20,8 +20,7 @@ The core extension APIs are enough for a first version:
 - The `"tabs"` permission is needed to read sensitive tab properties such as `url`, `pendingUrl`, `title`, and `favIconUrl`.
 - `chrome.tabs.group()` can create/add tabs to groups; `chrome.tabGroups.update()` can set group title, color, and collapsed state.
 - `chrome.tabGroups.TabGroup.windowId` shows that browser tab groups belong to a single window. So a native Chrome tab group cannot literally span windows.
-- `action.default_popup` is the primary consumer-facing control surface: it opens
-  as a floating browser-extension panel from the toolbar icon.
+- The toolbar action opens a persistent floating extension window as the primary consumer-facing control surface.
 - `chrome.storage.local` / IndexedDB should hold job state, cached tab summaries, and undo snapshots because Manifest V3 service workers can be stopped.
 
 Important implication: native Chrome tab groups belong to one window, so the product should expose two clear MVP modes:
@@ -38,7 +37,7 @@ See [multi-window-feasibility.md](multi-window-feasibility.md) for the API-level
 Use an LLM as a planner, not as an unrestricted executor.
 
 ```text
-action popup UI
+persistent floating window UI
   -> job controller
   -> tab inventory collector
   -> optional page sampler
@@ -52,7 +51,7 @@ action popup UI
 ### Extension Parts
 
 - Service worker: handles Chrome events, tab inventory, grouping execution, and state persistence.
-- Action popup: review UI, long-running job progress, model settings, cancellation,
+- Floating window: review UI, long-running job progress, model settings, cancellation,
   and apply/undo controls.
 - Content script or programmatic injection: collects optional page evidence such as meta description, headings, canonical URL, and a short visible-text sample.
 - LLM adapter: chat-completions-compatible gateway first, later add Chrome built-in AI or a local native-messaging bridge.
@@ -191,7 +190,7 @@ The extension should feel like a tab operations console, not a chatbot-first pro
 
 Primary flow:
 
-1. Open the extension popup.
+1. Open the extension floating window.
 2. Choose Current Window or enable Consolidate All Windows Into One Window.
 3. Click Analyze.
 4. See proposed groups, excluded tabs, review tabs, and any cross-window move preview.
@@ -243,13 +242,13 @@ Default policy:
 - allow metadata-only mode;
 - allow domain denylist and workspace allowlist;
 - store custom gateway keys only locally, never in sync storage;
-- do not ship a hidden shared key in the extension package.
+- do not ship a privileged hidden shared key in the extension package.
 
-For a public release, a keyless local gateway is the simplest user experience. A hosted relay can improve UX, but it becomes a privacy and cost product, not just an extension.
+For a public release, the built-in gateway path may use a public client token, but real authorization, quota, and cost controls must live on the service side. A hosted relay can improve UX, but it becomes a privacy and cost product, not just an extension.
 
 ## Technical Risks
 
-1. Service worker lifetime: long LLM calls can exceed Manifest V3 service worker timing expectations. Prefer initiating jobs from the popup, persisting state after every step, and making calls resumable.
+1. Service worker lifetime: long LLM calls can exceed Manifest V3 service worker timing expectations. Prefer initiating jobs from the floating window, persisting state after every step, and making calls resumable.
 2. Token pressure: hundreds of tabs cannot be handled as one naive prompt. Use batching, compact descriptors, and context sampling.
 3. LLM instability: enforce JSON schema, validate all tab IDs, and show preview before applying.
 4. Native tab groups are window-scoped: cross-window native grouping only works by moving tabs or groups into one normal window.
@@ -262,7 +261,7 @@ For a public release, a keyless local gateway is the simplest user experience. A
 MVP should implement:
 
 - Chrome Manifest V3 extension.
-- Side panel UI.
+- Persistent floating window UI.
 - Analyze current normal window by default.
 - Analyze all eligible tabs across all normal windows only in consolidate-to-one-window mode.
 - Metadata-only grouping through a pluggable LLM adapter.
@@ -289,7 +288,7 @@ MVP should not implement:
 
 - Optional content sampling for ambiguous tabs.
 - Consolidate-to-topic-windows mode.
-- Virtual cross-window groups in the popup.
+- Virtual cross-window groups in the floating window.
 - User feedback memory: "these domains usually belong together".
 - Embedding cache for cheaper clustering before LLM labeling.
 - Local model or Chrome built-in AI adapter.
@@ -298,7 +297,7 @@ MVP should not implement:
 
 ## Initial Build Order
 
-1. Scaffold MV3 extension with an action popup and service worker.
+1. Scaffold MV3 extension with an action-launched floating window and service worker.
 2. Implement tab inventory and sanitized descriptors.
 3. Build a fake planner using local fixtures, so UI and executor can be tested without LLM cost.
 4. Implement preview and undo.

@@ -7,7 +7,7 @@ extension that can be published after the gates below are satisfied.
 
 Implemented:
 
-- Manifest V3 extension shell with an action popup UI.
+- Manifest V3 extension shell with an action-launched persistent floating window.
 - Current-window organization by default.
 - Explicit consolidate-to-one-window mode for all eligible normal-window tabs.
 - Metadata-only inventory and URL sanitization.
@@ -29,7 +29,7 @@ Implemented:
   undoable.
 - Fake Chrome harness, Playwright UI smoke test, and real-extension stress
   runner against an isolated Chromium profile.
-- Active analysis jobs expose coarse progress states in the popup and can be
+- Active analysis jobs expose coarse progress states in the floating window and can be
   canceled; cancellation aborts provider fetches when the request is still live.
 - Large AI gateway jobs use a coarse-then-refine planner: a low-effort coarse
   bucket pass, followed by high-effort refinement for oversized or uncertain
@@ -57,7 +57,7 @@ Blocking gates:
 - Page sampling active-tab mode cannot sample background tabs.
 - Bulk page sampling returns `permission_required` without host permission.
 - Bulk page sampling can request `scripting` plus visible-site host permissions
-  from the popup user gesture and sample page body text.
+  from the floating-window user gesture and sample page body text.
 - Low-confidence groups below the apply threshold fail validation.
 - Current-window and selected-window targets must match user settings, not model
   preference.
@@ -82,10 +82,11 @@ Recommended before public listing:
 
 ## Provider Policy
 
-The extension uses a chat-completions-compatible AI gateway. The default local
-gateway can be keyless; custom gateways may use an optional key. Runtime rules:
+The extension uses a chat-completions-compatible AI gateway. The built-in service
+path does not require a user-provided key; custom gateways may use an optional
+key. Runtime rules:
 
-- Never ship a shared custom gateway key.
+- Never ship a privileged shared custom gateway key.
 - Never commit custom gateway keys.
 - Redact custom keys from job snapshots and logs.
 - Request gateway host permission only for the configured gateway origin.
@@ -134,7 +135,7 @@ Consolidate-to-one-window mode:
 Provider behavior:
 
 - Fake planner works offline.
-- AI gateway keyless local gateway.
+- AI gateway built-in service.
 - AI gateway valid custom key.
 - AI gateway invalid custom key.
 - Provider returns invalid JSON or invalid plan.

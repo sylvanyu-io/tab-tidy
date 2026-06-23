@@ -32,7 +32,7 @@ test.afterAll(async () => {
   await new Promise((resolveClose) => server.close(resolveClose));
 });
 
-test("popup renders settings and mock preview", async ({ page }) => {
+test("floating window renders settings and mock preview", async ({ page }) => {
   await page.goto(`${baseUrl}/src/sidepanel/index.html`);
 
   await expect(page.getByRole("heading", { name: "Tab Tidy" })).toBeVisible();
@@ -63,7 +63,7 @@ test("popup renders settings and mock preview", async ({ page }) => {
   await expect(page.getByRole("button", { name: "撤销" })).toBeVisible();
 });
 
-test("popup shows optimistic progress while waiting for AI", async ({ page }) => {
+test("floating window shows optimistic progress while waiting for AI", async ({ page }) => {
   await page.addInitScript(() => {
     const settings = {
       organizeMode: "current_window",
@@ -117,6 +117,150 @@ test("popup shows optimistic progress while waiting for AI", async ({ page }) =>
   const displayedProgress = await page.locator("#progressFill").evaluate((element) => Number.parseFloat(element.style.width));
   expect(displayedProgress).toBeGreaterThan(45);
   await expect(page.getByRole("button", { name: "取消" })).toBeVisible();
+});
+
+test("default gateway does not request host permission from the floating window", async ({ page }) => {
+  await page.addInitScript(() => {
+    const settings = {
+      organizeMode: "current_window",
+      targetWindowMode: "current_window",
+      existingGroupMode: "preserve_existing_groups",
+      reviewGroupMode: "create_review_group",
+      undoTargetWindowMode: "leave_empty_target_window",
+      pageContextMode: "off",
+      hostPermissionRequestMode: "never",
+      pageSamplingConsentMode: "not_acknowledged",
+      urlPrivacyMode: "sanitized_url",
+      includePinnedTabs: false,
+      includeIncognitoTabs: false,
+      collapseGroupsAfterApply: false,
+      minConfidenceToApply: 0.65,
+      maxTabsPerGroup: 40,
+      promptPreset: "conservative",
+      plannerProvider: "gateway",
+      rememberProviderKeys: false,
+      gatewayBaseUrl: "",
+      gatewayModel: "gpt-5.5",
+      gatewayThinkingIntensity: "high",
+      gatewayApiKey: "",
+      customPrompt: ""
+    };
+    window.__permissionRequests = 0;
+    window.chrome = {
+      permissions: {
+        contains: async () => false,
+        request: async () => {
+          window.__permissionRequests += 1;
+          return false;
+        }
+      },
+      windows: {
+        getCurrent: async () => ({ id: 999, type: "popup" }),
+        getLastFocused: async () => ({ id: 999, type: "popup" })
+      },
+      runtime: {
+        sendMessage: async (message) => {
+          if (message.type === "settings:get") return { ok: true, result: settings };
+          if (message.type === "settings:save") return { ok: true, result: message.settings };
+          if (message.type === "tabs:getActiveJob") return { ok: true, result: null };
+          if (message.type === "tabs:analyze") {
+            window.__analyzeWindowId = message.windowId;
+            return {
+              ok: true,
+              result: {
+                validation: { ok: true, warnings: [] },
+                preview: {
+                  requiresConfirmation: false,
+                  groups: [{ title: "资料整理", reason: "Mock plan.", tabCount: 2 }],
+                  reviewTabsCount: 0,
+                  excludedTabsCount: 0,
+                  lockedGroupsCount: 0,
+                  warnings: []
+                }
+              }
+            };
+          }
+          return { ok: true, result: null };
+        }
+      }
+    };
+  });
+
+  await page.goto(`${baseUrl}/src/sidepanel/index.html?sourceWindowId=77`);
+  await page.getByRole("button", { name: "生成方案" }).click();
+  await expect(page.locator(".preview").getByText("资料整理", { exact: true })).toBeVisible();
+  await expect.poll(() => page.evaluate(() => window.__permissionRequests)).toBe(0);
+  await expect.poll(() => page.evaluate(() => window.__analyzeWindowId)).toBe(77);
+});
+
+test("page sampling permission request returns to the floating window flow", async ({ page }) => {
+  await page.addInitScript(() => {
+    const settings = {
+      organizeMode: "current_window",
+      targetWindowMode: "current_window",
+      existingGroupMode: "preserve_existing_groups",
+      reviewGroupMode: "create_review_group",
+      undoTargetWindowMode: "leave_empty_target_window",
+      pageContextMode: "active_tab_only",
+      hostPermissionRequestMode: "never",
+      pageSamplingConsentMode: "acknowledged_for_session",
+      urlPrivacyMode: "sanitized_url",
+      includePinnedTabs: false,
+      includeIncognitoTabs: false,
+      collapseGroupsAfterApply: false,
+      minConfidenceToApply: 0.65,
+      maxTabsPerGroup: 40,
+      promptPreset: "conservative",
+      plannerProvider: "gateway",
+      rememberProviderKeys: false,
+      gatewayBaseUrl: "",
+      gatewayModel: "gpt-5.5",
+      gatewayThinkingIntensity: "high",
+      gatewayApiKey: "",
+      customPrompt: ""
+    };
+    window.__permissionRequests = [];
+    window.chrome = {
+      permissions: {
+        contains: async () => false,
+        request: async (request) => {
+          window.__permissionRequests.push(request);
+          return true;
+        }
+      },
+      runtime: {
+        sendMessage: async (message) => {
+          if (message.type === "settings:get") return { ok: true, result: settings };
+          if (message.type === "settings:save") return { ok: true, result: message.settings };
+          if (message.type === "tabs:getActiveJob") return { ok: true, result: null };
+          if (message.type === "tabs:analyze") {
+            return {
+              ok: true,
+              result: {
+                validation: { ok: true, warnings: [] },
+                preview: {
+                  requiresConfirmation: false,
+                  groups: [{ title: "页面摘要辅助", reason: "Mock plan.", tabCount: 1 }],
+                  reviewTabsCount: 0,
+                  excludedTabsCount: 0,
+                  lockedGroupsCount: 0,
+                  warnings: []
+                }
+              }
+            };
+          }
+          return { ok: true, result: null };
+        }
+      }
+    };
+  });
+
+  await page.goto(`${baseUrl}/src/sidepanel/index.html`);
+  await page.getByRole("button", { name: "生成方案" }).click();
+  await expect(page.locator(".preview").getByText("页面摘要辅助", { exact: true })).toBeVisible();
+  await expect
+    .poll(() => page.evaluate(() => window.__permissionRequests.map((request) => request.permissions || [])))
+    .toEqual([["scripting"]]);
 });
 
 function contentType(filePath) {
