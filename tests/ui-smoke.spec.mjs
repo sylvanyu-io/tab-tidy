@@ -52,6 +52,8 @@ test("floating window renders settings and mock preview", async ({ page }) => {
   await expect(page.locator("#gatewayThinkingIntensity")).toHaveValue("high");
   await expect(page.locator("#undoTargetWindowMode")).toHaveValue("leave_empty_target_window");
   await expect(page.locator("#hostPermissionRequestMode")).toContainText("一次授权可见站点");
+  await expect(page.getByText("整理后收起分组")).toBeVisible();
+  await expect(page.locator("#collapseGroupsAfterApply")).toBeChecked();
 
   await page.getByRole("button", { name: "生成方案" }).click();
   await expect(page.locator(".preview").getByText("AI 研究", { exact: true })).toBeVisible();

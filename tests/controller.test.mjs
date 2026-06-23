@@ -56,13 +56,38 @@ test("analyze/apply/undo groups only the current window by default", async () =>
 
   const result = await applyLastPlan(chrome);
   assert.equal(result.groupedTabsCount, 2);
-  assert.notEqual((await chrome.tabs.get(10)).groupId, -1);
+  const groupedTab = await chrome.tabs.get(10);
+  assert.notEqual(groupedTab.groupId, -1);
+  assert.equal((await chrome.tabGroups.query({ windowId: 1 })).find((group) => group.id === groupedTab.groupId)?.collapsed, true);
   assert.equal((await chrome.tabs.get(20)).groupId, -1);
 
   const undo = await undoLastApply(chrome);
   assert.equal(undo.restoredTabs, 3);
   assert.equal((await chrome.tabs.get(10)).groupId, -1);
   assert.equal((await chrome.tabs.get(11)).groupId, -1);
+});
+
+test("collapse toggle can leave newly created groups expanded", async () => {
+  const chrome = createFakeChrome({
+    windows: [
+      {
+        id: 1,
+        focused: true,
+        tabs: [
+          { id: 10, title: "GitHub pull request", url: "https://github.com/acme/repo/pull/1", active: true },
+          { id: 11, title: "Chrome tabs API docs", url: "https://developer.chrome.com/docs/extensions/reference/api/tabs" }
+        ]
+      }
+    ]
+  });
+
+  const job = await analyzeTabs(chrome, { ...FAKE_PLANNER_SETTINGS, collapseGroupsAfterApply: false }, { windowId: 1 });
+  assert.equal(job.validation.ok, true);
+
+  await applyLastPlan(chrome);
+  const groupedTab = await chrome.tabs.get(10);
+  assert.notEqual(groupedTab.groupId, -1);
+  assert.equal((await chrome.tabGroups.query({ windowId: 1 })).find((group) => group.id === groupedTab.groupId)?.collapsed, false);
 });
 
 test("consolidate_one_window moves all eligible normal-window tabs into one target", async () => {

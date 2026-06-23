@@ -97,7 +97,7 @@ export const DEFAULT_SETTINGS = Object.freeze({
   urlPrivacyMode: URL_PRIVACY_MODES.SANITIZED_URL,
   includePinnedTabs: false,
   includeIncognitoTabs: false,
-  collapseGroupsAfterApply: false,
+  collapseGroupsAfterApply: true,
   minConfidenceToApply: 0.65,
   maxTabsPerGroup: 40,
   undoTargetWindowMode: UNDO_TARGET_WINDOW_MODES.LEAVE_EMPTY,

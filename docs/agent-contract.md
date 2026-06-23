@@ -58,7 +58,7 @@ Recommended settings:
   "urlPrivacyMode": "sanitized_url",
   "includePinnedTabs": false,
   "includeIncognitoTabs": false,
-  "collapseGroupsAfterApply": false,
+  "collapseGroupsAfterApply": true,
   "minConfidenceToApply": 0.65,
   "maxTabsPerGroup": 40,
   "undoTargetWindowMode": "leave_empty_target_window",
