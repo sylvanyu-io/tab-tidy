@@ -66,3 +66,4 @@ Design notes:
 - [Evaluation harness](docs/harness.md)
 - [Multi-window feasibility](docs/multi-window-feasibility.md)
 - [Permissions research](docs/permissions-research.md)
+- [Release readiness](docs/release-readiness.md)
