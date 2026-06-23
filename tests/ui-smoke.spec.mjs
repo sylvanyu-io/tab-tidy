@@ -123,7 +123,6 @@ test("floating window shows optimistic progress while waiting for AI", async ({ 
     /(理解标题线索|寻找相邻任务|避开域名硬分组|检查待确认页|整理分组边界) · \d+秒/
   );
   await expect(page.locator("#progressPercent")).toContainText("%");
-  await expect(page.locator("#progressBar")).toHaveAttribute("data-estimated", "true");
   const displayedProgress = await page.locator("#progressFill").evaluate((element) => Number.parseFloat(element.style.width));
   expect(displayedProgress).toBeGreaterThan(45);
   await expect(page.getByRole("button", { name: "取消" })).toBeVisible();

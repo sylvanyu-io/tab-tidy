@@ -359,7 +359,6 @@ function setBusy(isBusy, label = "", options = {}) {
   nodes.cancelBtn.disabled = false;
   nodes.actions.dataset.busy = isBusy ? "true" : "false";
   nodes.progressBar.hidden = !isBusy;
-  nodes.progressBar.dataset.estimated = "";
   showProgress(isBusy ? options.progress || 8 : 0);
   if (isBusy && label) {
     setStatus(label);
@@ -430,7 +429,6 @@ function updateProgressFromJob(job) {
   if (!job) return;
   if (typeof job.progress === "number") {
     nodes.progressBar.hidden = false;
-    nodes.progressBar.dataset.estimated = isLiveAiWait(job) ? "true" : "";
     showProgress(displayProgressForJob(job));
   }
   if (job.message) {
@@ -459,7 +457,6 @@ function setProgressLabel(text) {
 
 function updateLocalProgress(label, progress) {
   nodes.progressBar.hidden = false;
-  nodes.progressBar.dataset.estimated = "";
   showProgress(progress);
   setProgressLabel(label);
   setStatus(label);

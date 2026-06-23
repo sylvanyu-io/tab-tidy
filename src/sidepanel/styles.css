@@ -786,12 +786,6 @@ details[open] > summary::before {
   font-size: 12px;
 }
 
-.task-progress[data-estimated="true"] .task-progress-meta strong::after {
-  content: " 估";
-  color: var(--faint);
-  font-weight: 720;
-}
-
 .progress-track {
   height: 7px;
   overflow: hidden;
