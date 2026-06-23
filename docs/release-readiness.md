@@ -16,16 +16,17 @@ Implemented:
 - Fake, AI gateway, and DeepSeek planner providers.
 - Local schema validation before every browser mutation.
 - Preview before apply and best-effort undo snapshot.
-- Fake Chrome harness and Playwright UI smoke test.
+- Fake Chrome harness, Playwright UI smoke test, and real-extension stress
+  runner against an isolated Chromium profile.
+- Planner network calls have a timeout instead of hanging indefinitely.
 
 Not production-complete yet:
 
 - No Chrome Web Store assets or listing text.
 - No signed release package workflow.
-- No real-browser extension E2E run against a temporary Chrome profile.
 - No provider key management beyond local BYOK storage.
-- No chunking/reduce flow for thousands of tabs or very small provider context
-  windows.
+- No chunking/reduce flow for hundreds or thousands of tabs when the selected
+  provider is too slow for a single high-reasoning request.
 - No telemetry/diagnostics toggle.
 
 ## Release Gates
@@ -36,13 +37,13 @@ Blocking gates:
 - `npm run release:check` passes and produces a clean extension package.
 - DeepSeek live smoke passes with a disposable key.
 - AI gateway live smoke passes with a disposable key.
-- Manual Chrome run validates current-window apply and undo on a throwaway
-  profile.
-- Manual Chrome run validates consolidate-to-one-window and undo on a throwaway
-  profile with at least three normal windows.
+- `npm run stress:extension` validates current-window apply/undo and
+  consolidate-to-one-window apply/undo on a throwaway Chromium profile.
 - Page sampling cannot run without visible risk acknowledgement.
 - Page sampling active-tab mode cannot sample background tabs.
 - Bulk page sampling returns `permission_required` without host permission.
+- Bulk page sampling can request `scripting` plus visible-site host permissions
+  from the side panel user gesture and sample page body text.
 - No provider key appears in git history, screenshots, test output, or fixtures.
 - Extension package contains no `node_modules`, test outputs, or local secrets.
 
@@ -53,6 +54,8 @@ Recommended before public listing:
 - Add first-run privacy disclosure.
 - Add error recovery UI for provider rate limit, invalid key, and invalid plan.
 - Add per-operation progress and cancellation.
+- Add adaptive planning for very large tab sets when provider latency exceeds
+  the planner timeout.
 - Add release build script that zips only manifest, src, docs/licenses needed by
   the runtime, and static assets.
 

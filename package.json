@@ -9,6 +9,7 @@
     "test:ui": "playwright test tests/ui-smoke.spec.mjs",
     "smoke:gateway": "node scripts/live-smoke-gateway.mjs",
     "smoke:deepseek": "node scripts/live-smoke-deepseek.mjs",
+    "stress:extension": "node scripts/stress-extension.mjs",
     "assets:icons": "node scripts/generate-icons.mjs",
     "scan:secrets": "node scripts/scan-secrets.mjs",
     "build:extension": "node scripts/build-extension.mjs",

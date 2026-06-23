@@ -65,6 +65,22 @@ Optional AI gateway live smoke:
 GATEWAY_BASE_URL=http://127.0.0.1:8317/v1 GATEWAY_API_KEY=... GATEWAY_THINKING_INTENSITY=high npm run smoke:gateway
 ```
 
+Real extension stress test:
+
+```bash
+npm run build:extension
+npm run stress:extension
+```
+
+This launches an isolated Chromium profile, opens hundreds of generated HTTP
+pages across multiple normal browser windows, then verifies current-window mode,
+all-windows-to-one-window mode, apply, undo, page-sampling permission gates, and
+page body sampling. Optional gateway stress:
+
+```bash
+GATEWAY_BASE_URL=http://127.0.0.1:8317/v1 GATEWAY_API_KEY=... STRESS_GATEWAY_TABS=60 npm run stress:extension
+```
+
 Do not commit provider keys. Rotate any key that has appeared in chat, shell
 history, logs, screenshots, or test output.
 
