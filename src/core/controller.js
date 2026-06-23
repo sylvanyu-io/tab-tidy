@@ -1,6 +1,6 @@
 import { DEFAULT_SETTINGS, normalizeSettings } from "../shared/settings.js";
 import { applyValidatedPlan, undoFromRollback } from "./chrome-executor.js";
-import { createFakePlan } from "./fake-planner.js";
+import { createPlan } from "./planner.js";
 import { buildPreview } from "./preview.js";
 import { STORAGE_KEYS, getLocal, removeLocal, setLocal } from "./storage.js";
 import { collectTabInventory } from "./tab-inventory.js";
@@ -35,12 +35,13 @@ export async function saveSettings(chromeApi, nextSettings) {
 export async function analyzeTabs(chromeApi, rawSettings, invocation = {}) {
   const settings = await saveSettings(chromeApi, rawSettings);
   const inventory = await collectTabInventory(chromeApi, settings, invocation);
-  const plan = createFakePlan(inventory, settings);
+  const plan = await createPlan(inventory, settings);
   const validation = validatePlan(plan, inventory, settings);
   const preview = buildPreview(plan, inventory, validation, settings);
+  const jobSettings = redactSettingsForJob(settings);
   const job = {
     createdAt: new Date().toISOString(),
-    settings,
+    settings: jobSettings,
     invocation,
     inventory,
     plan,
@@ -76,4 +77,8 @@ export async function undoLastApply(chromeApi) {
   const result = await undoFromRollback(chromeApi, rollback);
   await removeLocal(chromeApi, STORAGE_KEYS.lastRollback);
   return result;
+}
+
+function redactSettingsForJob(settings) {
+  return { ...settings, openaiApiKey: "" };
 }

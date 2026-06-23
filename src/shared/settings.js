@@ -51,6 +51,11 @@ export const PROMPT_PRESETS = Object.freeze({
   AGGRESSIVE_CLEANUP: "aggressive_cleanup"
 });
 
+export const PLANNER_PROVIDERS = Object.freeze({
+  FAKE: "fake",
+  OPENAI: "openai"
+});
+
 export const PROMPT_PRESET_TEXT = Object.freeze({
   conservative:
     "Prefer fewer, clearer groups. Keep unknown or mixed pages in Review. Avoid merging tabs with weak semantic evidence.",
@@ -80,7 +85,9 @@ export const DEFAULT_SETTINGS = Object.freeze({
   promptPreset: PROMPT_PRESETS.CONSERVATIVE,
   customPrompt: "",
   selectedTargetWindowId: null,
-  plannerProvider: "fake"
+  plannerProvider: PLANNER_PROVIDERS.FAKE,
+  openaiModel: "gpt-5.5",
+  openaiApiKey: ""
 });
 
 const enumValues = {
@@ -92,7 +99,8 @@ const enumValues = {
   hostPermissionRequestMode: Object.values(HOST_PERMISSION_REQUEST_MODES),
   pageSamplingConsentMode: Object.values(PAGE_SAMPLING_CONSENT_MODES),
   urlPrivacyMode: Object.values(URL_PRIVACY_MODES),
-  promptPreset: Object.values(PROMPT_PRESETS)
+  promptPreset: Object.values(PROMPT_PRESETS),
+  plannerProvider: Object.values(PLANNER_PROVIDERS)
 };
 
 export function normalizeSettings(input = {}) {
@@ -110,6 +118,8 @@ export function normalizeSettings(input = {}) {
   merged.minConfidenceToApply = clampNumber(merged.minConfidenceToApply, 0, 1, DEFAULT_SETTINGS.minConfidenceToApply);
   merged.maxTabsPerGroup = Math.max(1, Number.parseInt(merged.maxTabsPerGroup, 10) || DEFAULT_SETTINGS.maxTabsPerGroup);
   merged.customPrompt = String(merged.customPrompt || "").slice(0, 4000);
+  merged.openaiModel = String(merged.openaiModel || DEFAULT_SETTINGS.openaiModel).trim().slice(0, 100);
+  merged.openaiApiKey = String(merged.openaiApiKey || "").trim();
   merged.selectedTargetWindowId =
     merged.selectedTargetWindowId === null || merged.selectedTargetWindowId === ""
       ? null

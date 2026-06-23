@@ -3,9 +3,9 @@
 AI-assisted Chrome extension for semantic tab grouping across many browser windows.
 
 Current status: runnable MV3 prototype with metadata-only planning, preview,
-apply, and best-effort undo. The current planner is deterministic and local;
-the OpenAI adapter is intentionally not wired until the core safety harness is
-stable.
+apply, and best-effort undo. The default planner is deterministic and local.
+An optional OpenAI planner is wired through the same schema validator and
+executor path.
 
 ## Local Use
 
@@ -19,6 +19,11 @@ Default behavior is current-window only. The "All windows to one window" scope i
 an explicit switch and moves all eligible normal-window tabs into one target
 window only after preview and confirmation.
 
+The OpenAI planner is optional. Select `OpenAI` in the side panel, enter a model
+and API key, then analyze. The key is stored in Chrome extension local storage
+for this local prototype. The generated plan still goes through local validation
+before any browser mutation.
+
 ## Tests
 
 ```bash
@@ -26,8 +31,8 @@ npm test
 ```
 
 The Node harness uses a fake Chrome adapter and covers inventory, validation,
-current-window grouping, consolidate-to-one-window, undo, URL sanitization, and
-page-sampling permission gates.
+current-window grouping, consolidate-to-one-window, undo, URL sanitization,
+OpenAI request shaping, and page-sampling permission gates.
 
 After installing dev dependencies, run the side panel smoke test:
 

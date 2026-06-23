@@ -82,6 +82,24 @@
         </div>
 
         <div class="field">
+          <label for="plannerProvider">Planner</label>
+          <select id="plannerProvider">
+            <option value="fake">Local fake planner</option>
+            <option value="openai">OpenAI</option>
+          </select>
+        </div>
+
+        <div class="field">
+          <label for="openaiModel">OpenAI model</label>
+          <input id="openaiModel" type="text" autocomplete="off" />
+        </div>
+
+        <div class="field">
+          <label for="openaiApiKey">OpenAI API key</label>
+          <input id="openaiApiKey" type="password" autocomplete="off" />
+        </div>
+
+        <div class="field">
           <label for="customPrompt">Custom prompt</label>
           <textarea id="customPrompt" rows="5" spellcheck="true"></textarea>
         </div>

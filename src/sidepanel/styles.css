@@ -104,7 +104,9 @@ label {
 }
 
 select,
-textarea {
+textarea,
+input[type="text"],
+input[type="password"] {
   width: 100%;
   color: var(--text);
   background: var(--panel);
