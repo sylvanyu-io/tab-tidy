@@ -9,9 +9,10 @@ const fields = {
   promptPreset: document.querySelector("#promptPreset"),
   plannerProvider: document.querySelector("#plannerProvider"),
   rememberProviderKeys: document.querySelector("#rememberProviderKeys"),
-  openaiBaseUrl: document.querySelector("#openaiBaseUrl"),
-  openaiModel: document.querySelector("#openaiModel"),
-  openaiApiKey: document.querySelector("#openaiApiKey"),
+  gatewayBaseUrl: document.querySelector("#gatewayBaseUrl"),
+  gatewayModel: document.querySelector("#gatewayModel"),
+  gatewayThinkingIntensity: document.querySelector("#gatewayThinkingIntensity"),
+  gatewayApiKey: document.querySelector("#gatewayApiKey"),
   deepseekModel: document.querySelector("#deepseekModel"),
   deepseekApiKey: document.querySelector("#deepseekApiKey"),
   customPrompt: document.querySelector("#customPrompt"),
@@ -29,7 +30,7 @@ const nodes = {
   samplingRisk: document.querySelector("#samplingRisk"),
   hostPermissionField: document.querySelector("#hostPermissionField"),
   targetWindowField: document.querySelector("#targetWindowField"),
-  openaiFields: document.querySelector("#openaiFields"),
+  gatewayFields: document.querySelector("#gatewayFields"),
   deepseekFields: document.querySelector("#deepseekFields"),
   rememberProviderKeysRow: document.querySelector("#rememberProviderKeysRow"),
   progressBar: document.querySelector("#progressBar"),
@@ -119,9 +120,10 @@ function readSettings() {
     promptPreset: fields.promptPreset.value,
     plannerProvider: fields.plannerProvider.value,
     rememberProviderKeys: fields.rememberProviderKeys.checked,
-    openaiBaseUrl: fields.openaiBaseUrl.value,
-    openaiModel: fields.openaiModel.value,
-    openaiApiKey: fields.openaiApiKey.value,
+    gatewayBaseUrl: fields.gatewayBaseUrl.value,
+    gatewayModel: fields.gatewayModel.value,
+    gatewayThinkingIntensity: fields.gatewayThinkingIntensity.value,
+    gatewayApiKey: fields.gatewayApiKey.value,
     deepseekModel: fields.deepseekModel.value,
     deepseekApiKey: fields.deepseekApiKey.value,
     customPrompt: fields.customPrompt.value,
@@ -160,7 +162,7 @@ function updateConditionalUi() {
   nodes.hostPermissionField.hidden =
     !samplingEnabled || fields.pageContextMode.value === "off" || fields.pageContextMode.value === "active_tab_only";
   nodes.targetWindowField.hidden = fields.organizeMode.value !== "consolidate_one_window";
-  nodes.openaiFields.hidden = fields.plannerProvider.value !== "openai";
+  nodes.gatewayFields.hidden = fields.plannerProvider.value !== "gateway";
   nodes.deepseekFields.hidden = fields.plannerProvider.value !== "deepseek";
   nodes.rememberProviderKeysRow.hidden = fields.plannerProvider.value === "fake";
   syncChoiceGroups();
@@ -314,7 +316,7 @@ function renderError(error) {
 }
 
 function replacerForDetails(key, value) {
-  if (key === "openaiApiKey" || key === "deepseekApiKey") return "";
+  if (key === "gatewayApiKey" || key === "deepseekApiKey") return "";
   if (key === "inventory" && value?.tabs) {
     return {
       ...value,
@@ -376,17 +378,17 @@ function scopeLabel() {
 }
 
 function providerLabel() {
-  if (fields.plannerProvider.value === "openai") return "OpenAI";
+  if (fields.plannerProvider.value === "gateway") return "AI 网关";
   if (fields.plannerProvider.value === "deepseek") return "DeepSeek";
   return "本地预览";
 }
 
 async function ensurePlannerHostPermission(settings) {
-  if (settings.plannerProvider !== "openai") return;
+  if (settings.plannerProvider !== "gateway") return;
   if (!globalThis.chrome?.permissions?.contains || !globalThis.chrome?.permissions?.request) return;
 
-  const pattern = providerPermissionPattern(settings.openaiBaseUrl);
-  if (!pattern || pattern === "https://api.openai.com/*") return;
+  const pattern = providerPermissionPattern(settings.gatewayBaseUrl);
+  if (!pattern) return;
 
   const hasPermission = await chrome.permissions.contains({ origins: [pattern] });
   if (hasPermission) return;
@@ -446,11 +448,12 @@ async function mockMessage(message) {
       minConfidenceToApply: 0.65,
       maxTabsPerGroup: 80,
       promptPreset: "conservative",
-      plannerProvider: "deepseek",
+      plannerProvider: "gateway",
       rememberProviderKeys: false,
-      openaiBaseUrl: "https://api.openai.com/v1",
-      openaiModel: "gpt-5.5",
-      openaiApiKey: "",
+      gatewayBaseUrl: "http://127.0.0.1:8317/v1",
+      gatewayModel: "gpt-5.5",
+      gatewayThinkingIntensity: "auto",
+      gatewayApiKey: "",
       deepseekModel: "deepseek-chat",
       deepseekApiKey: "",
       customPrompt: ""

@@ -1,5 +1,5 @@
 import { PROMPT_PRESET_TEXT, normalizeSettings } from "../shared/settings.js";
-import { buildPlannerPayload } from "./openai-planner.js";
+import { buildPlannerPayload } from "./gateway-planner.js";
 
 const DEEPSEEK_CHAT_COMPLETIONS_URL = "https://api.deepseek.com/chat/completions";
 

@@ -23,23 +23,35 @@ test("invalid selected target window ids normalize to null", () => {
   assert.equal(settings.selectedTargetWindowId, null);
 });
 
-test("OpenAI-compatible base URLs normalize safely", () => {
+test("AI gateway base URLs and legacy OpenAI fields normalize safely", () => {
   assert.equal(
-    normalizeSettings({ ...DEFAULT_SETTINGS, openaiBaseUrl: "http://127.0.0.1:8317/v1/" }).openaiBaseUrl,
+    normalizeSettings({ ...DEFAULT_SETTINGS, gatewayBaseUrl: "http://127.0.0.1:8317/v1/" }).gatewayBaseUrl,
     "http://127.0.0.1:8317/v1"
   );
   assert.equal(
-    normalizeSettings({ ...DEFAULT_SETTINGS, openaiBaseUrl: "javascript:alert(1)" }).openaiBaseUrl,
-    DEFAULT_SETTINGS.openaiBaseUrl
+    normalizeSettings({ ...DEFAULT_SETTINGS, gatewayBaseUrl: "javascript:alert(1)" }).gatewayBaseUrl,
+    DEFAULT_SETTINGS.gatewayBaseUrl
+  );
+  assert.equal(
+    normalizeSettings({ plannerProvider: "openai", openaiModel: "claude-opus-4-8" }).plannerProvider,
+    "gateway"
+  );
+  assert.equal(
+    normalizeSettings({ openaiModel: "claude-opus-4-8" }).gatewayModel,
+    "claude-opus-4-8"
   );
 });
 
 test("provider keys are not persisted unless explicitly remembered", async () => {
   const chrome = createFakeChrome();
 
-  await saveSettings(chrome, { ...DEFAULT_SETTINGS, deepseekApiKey: "deepseek-test-key", rememberProviderKeys: false });
-  assert.equal((await getSettings(chrome)).deepseekApiKey, "");
+  await saveSettings(chrome, { ...DEFAULT_SETTINGS, gatewayApiKey: "gateway-test-key", deepseekApiKey: "deepseek-test-key", rememberProviderKeys: false });
+  const transient = await getSettings(chrome);
+  assert.equal(transient.gatewayApiKey, "");
+  assert.equal(transient.deepseekApiKey, "");
 
-  await saveSettings(chrome, { ...DEFAULT_SETTINGS, deepseekApiKey: "deepseek-test-key", rememberProviderKeys: true });
-  assert.equal((await getSettings(chrome)).deepseekApiKey, "deepseek-test-key");
+  await saveSettings(chrome, { ...DEFAULT_SETTINGS, gatewayApiKey: "gateway-test-key", deepseekApiKey: "deepseek-test-key", rememberProviderKeys: true });
+  const persisted = await getSettings(chrome);
+  assert.equal(persisted.gatewayApiKey, "gateway-test-key");
+  assert.equal(persisted.deepseekApiKey, "deepseek-test-key");
 });

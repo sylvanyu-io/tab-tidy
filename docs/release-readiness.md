@@ -13,7 +13,7 @@ Implemented:
 - Metadata-only inventory and URL sanitization.
 - Existing native group preserve/dissolve switch.
 - Page sampling off by default with explicit consent and permission gates.
-- Fake, OpenAI, and DeepSeek planner providers.
+- Fake, AI gateway, and DeepSeek planner providers.
 - Local schema validation before every browser mutation.
 - Preview before apply and best-effort undo snapshot.
 - Fake Chrome harness and Playwright UI smoke test.
@@ -35,7 +35,7 @@ Blocking gates:
 - `npm run check` passes.
 - `npm run release:check` passes and produces a clean extension package.
 - DeepSeek live smoke passes with a disposable key.
-- OpenAI live smoke passes with a disposable key.
+- AI gateway live smoke passes with a disposable key.
 - Manual Chrome run validates current-window apply and undo on a throwaway
   profile.
 - Manual Chrome run validates consolidate-to-one-window and undo on a throwaway
@@ -66,9 +66,11 @@ The extension uses bring-your-own-key provider credentials. Runtime rules:
 - Use provider-specific host permissions only.
 - Keep provider output as planning intent only; validator/executor remain local.
 
-OpenAI:
+AI gateway:
 
-- Uses Responses API with strict JSON schema output.
+- Uses OpenAI-compatible `/chat/completions` with JSON object output.
+- Exposes only planner-suitable text models in the UI.
+- Adapts common `tabIds` grouping output, then still requires local validation.
 
 DeepSeek:
 
@@ -110,8 +112,8 @@ Consolidate-to-one-window mode:
 Provider behavior:
 
 - Fake planner works offline.
-- OpenAI valid key.
-- OpenAI invalid key.
+- AI gateway valid key.
+- AI gateway invalid key.
 - DeepSeek valid key.
 - DeepSeek invalid key.
 - Provider returns invalid JSON or invalid plan.
@@ -128,8 +130,6 @@ Page sampling:
 
 - Chrome APIs: `docs/permissions-research.md` and
   `docs/multi-window-feasibility.md`.
-- OpenAI structured output behavior:
-  https://developers.openai.com/api/docs/guides/structured-outputs
 - DeepSeek JSON Output:
   https://api-docs.deepseek.com/guides/json_mode
 - DeepSeek Chat Completions API:

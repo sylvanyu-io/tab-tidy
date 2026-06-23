@@ -82,7 +82,7 @@ export async function undoLastApply(chromeApi) {
 }
 
 function redactSettingsForJob(settings) {
-  return { ...settings, openaiApiKey: "", deepseekApiKey: "" };
+  return { ...settings, gatewayApiKey: "", deepseekApiKey: "" };
 }
 
 function settingsForPersistence(settings) {
@@ -91,7 +91,7 @@ function settingsForPersistence(settings) {
     persisted.pageSamplingConsentMode = "not_acknowledged";
   }
   if (!persisted.rememberProviderKeys) {
-    persisted.openaiApiKey = "";
+    persisted.gatewayApiKey = "";
     persisted.deepseekApiKey = "";
   }
   return persisted;

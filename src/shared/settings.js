@@ -53,11 +53,20 @@ export const PROMPT_PRESETS = Object.freeze({
 
 export const PLANNER_PROVIDERS = Object.freeze({
   FAKE: "fake",
-  OPENAI: "openai",
+  GATEWAY: "gateway",
   DEEPSEEK: "deepseek"
 });
 
-export const DEFAULT_OPENAI_BASE_URL = "https://api.openai.com/v1";
+export const DEFAULT_GATEWAY_BASE_URL = "http://127.0.0.1:8317/v1";
+
+export const GATEWAY_MODELS = Object.freeze(["gpt-5.5", "claude-opus-4-8", "claude-sonnet-4-6"]);
+
+export const THINKING_INTENSITIES = Object.freeze({
+  AUTO: "auto",
+  LOW: "low",
+  MEDIUM: "medium",
+  HIGH: "high"
+});
 
 export const PROMPT_PRESET_TEXT = Object.freeze({
   conservative:
@@ -88,11 +97,12 @@ export const DEFAULT_SETTINGS = Object.freeze({
   promptPreset: PROMPT_PRESETS.CONSERVATIVE,
   customPrompt: "",
   selectedTargetWindowId: null,
-  plannerProvider: PLANNER_PROVIDERS.DEEPSEEK,
+  plannerProvider: PLANNER_PROVIDERS.GATEWAY,
   rememberProviderKeys: false,
-  openaiBaseUrl: DEFAULT_OPENAI_BASE_URL,
-  openaiModel: "gpt-5.5",
-  openaiApiKey: "",
+  gatewayBaseUrl: DEFAULT_GATEWAY_BASE_URL,
+  gatewayModel: "gpt-5.5",
+  gatewayThinkingIntensity: THINKING_INTENSITIES.AUTO,
+  gatewayApiKey: "",
   deepseekModel: "deepseek-chat",
   deepseekApiKey: ""
 });
@@ -107,11 +117,13 @@ const enumValues = {
   pageSamplingConsentMode: Object.values(PAGE_SAMPLING_CONSENT_MODES),
   urlPrivacyMode: Object.values(URL_PRIVACY_MODES),
   promptPreset: Object.values(PROMPT_PRESETS),
-  plannerProvider: Object.values(PLANNER_PROVIDERS)
+  plannerProvider: Object.values(PLANNER_PROVIDERS),
+  gatewayThinkingIntensity: Object.values(THINKING_INTENSITIES)
 };
 
 export function normalizeSettings(input = {}) {
-  const merged = { ...DEFAULT_SETTINGS, ...(input || {}) };
+  const migrated = migrateLegacySettings(input || {});
+  const merged = { ...DEFAULT_SETTINGS, ...migrated };
 
   for (const [key, values] of Object.entries(enumValues)) {
     if (!values.includes(merged[key])) {
@@ -126,9 +138,9 @@ export function normalizeSettings(input = {}) {
   merged.minConfidenceToApply = clampNumber(merged.minConfidenceToApply, 0, 1, DEFAULT_SETTINGS.minConfidenceToApply);
   merged.maxTabsPerGroup = Math.max(1, Number.parseInt(merged.maxTabsPerGroup, 10) || DEFAULT_SETTINGS.maxTabsPerGroup);
   merged.customPrompt = String(merged.customPrompt || "").slice(0, 4000);
-  merged.openaiBaseUrl = normalizeBaseUrl(merged.openaiBaseUrl, DEFAULT_SETTINGS.openaiBaseUrl);
-  merged.openaiModel = String(merged.openaiModel || DEFAULT_SETTINGS.openaiModel).trim().slice(0, 100);
-  merged.openaiApiKey = String(merged.openaiApiKey || "").trim();
+  merged.gatewayBaseUrl = normalizeBaseUrl(merged.gatewayBaseUrl, DEFAULT_SETTINGS.gatewayBaseUrl);
+  merged.gatewayModel = normalizeGatewayModel(merged.gatewayModel);
+  merged.gatewayApiKey = String(merged.gatewayApiKey || "").trim();
   merged.deepseekModel = String(merged.deepseekModel || DEFAULT_SETTINGS.deepseekModel).trim().slice(0, 100);
   merged.deepseekApiKey = String(merged.deepseekApiKey || "").trim();
   const selectedTargetWindowId =
@@ -138,6 +150,21 @@ export function normalizeSettings(input = {}) {
   merged.selectedTargetWindowId = Number.isInteger(selectedTargetWindowId) ? selectedTargetWindowId : null;
 
   return merged;
+}
+
+function migrateLegacySettings(input) {
+  const migrated = { ...input };
+  if (migrated.plannerProvider === "openai") migrated.plannerProvider = PLANNER_PROVIDERS.GATEWAY;
+  if (migrated.gatewayBaseUrl === undefined && migrated.openaiBaseUrl !== undefined) {
+    migrated.gatewayBaseUrl = migrated.openaiBaseUrl;
+  }
+  if (migrated.gatewayModel === undefined && migrated.openaiModel !== undefined) {
+    migrated.gatewayModel = migrated.openaiModel;
+  }
+  if (migrated.gatewayApiKey === undefined && migrated.openaiApiKey !== undefined) {
+    migrated.gatewayApiKey = migrated.openaiApiKey;
+  }
+  return migrated;
 }
 
 function clampNumber(value, min, max, fallback) {
@@ -157,4 +184,9 @@ function normalizeBaseUrl(value, fallback) {
   } catch {
     return fallback;
   }
+}
+
+function normalizeGatewayModel(value) {
+  const model = String(value || "").trim();
+  return GATEWAY_MODELS.includes(model) ? model : DEFAULT_SETTINGS.gatewayModel;
 }

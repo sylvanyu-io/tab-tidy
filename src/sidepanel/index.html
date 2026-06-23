@@ -59,20 +59,20 @@
           <div class="segmented" data-choice-for="plannerProvider">
             <button type="button" data-value="fake"><span class="button-label">预览</span></button>
             <button type="button" data-value="deepseek"><span class="button-label">DeepSeek</span></button>
-            <button type="button" data-value="openai"><span class="button-label">OpenAI</span></button>
+            <button type="button" data-value="gateway"><span class="button-label">AI 网关</span></button>
           </div>
         </div>
 
         <select id="plannerProvider" class="native-select" aria-label="整理助手">
           <option value="fake">本地预览</option>
           <option value="deepseek">DeepSeek</option>
-          <option value="openai">OpenAI</option>
+          <option value="gateway">AI 网关</option>
         </select>
 
-        <div id="openaiFields" class="provider-fields">
+        <div id="gatewayFields" class="provider-fields">
           <div class="field inline-secret">
-            <label for="openaiApiKey">密钥</label>
-            <input id="openaiApiKey" type="password" autocomplete="off" placeholder="sk-..." />
+            <label for="gatewayApiKey">密钥</label>
+            <input id="gatewayApiKey" type="password" autocomplete="off" placeholder="sk-..." />
           </div>
         </div>
 
@@ -187,13 +187,27 @@
         </div>
 
         <div class="field">
-          <label for="openaiModel">OpenAI 模型</label>
-          <input id="openaiModel" type="text" autocomplete="off" />
+          <label for="gatewayModel">AI 模型</label>
+          <select id="gatewayModel">
+            <option value="gpt-5.5">gpt-5.5</option>
+            <option value="claude-opus-4-8">claude-opus-4-8</option>
+            <option value="claude-sonnet-4-6">claude-sonnet-4-6</option>
+          </select>
         </div>
 
         <div class="field">
-          <label for="openaiBaseUrl">OpenAI Base URL</label>
-          <input id="openaiBaseUrl" type="url" autocomplete="off" placeholder="https://api.openai.com/v1" />
+          <label for="gatewayThinkingIntensity">思考强度</label>
+          <select id="gatewayThinkingIntensity">
+            <option value="auto">自动</option>
+            <option value="low">快速</option>
+            <option value="medium">标准</option>
+            <option value="high">深入</option>
+          </select>
+        </div>
+
+        <div class="field">
+          <label for="gatewayBaseUrl">AI 网关地址</label>
+          <input id="gatewayBaseUrl" type="url" autocomplete="off" placeholder="http://127.0.0.1:8317/v1" />
         </div>
 
         <div class="field">
