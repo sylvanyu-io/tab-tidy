@@ -689,7 +689,7 @@ async function ensurePageSamplingPermissions(settings) {
 
   const shouldRequestHostOrigins =
     settings.pageContextMode !== "active_tab_only" && settings.hostPermissionRequestMode !== "never";
-  if (shouldRequestHostOrigins) {
+  if (shouldRequestHostOrigins && !pageSamplingOriginCache.origins.length) {
     await refreshPageSamplingOriginCache();
   }
   const origins = shouldRequestHostOrigins ? pageSamplingOriginCache.origins : [];
@@ -700,18 +700,18 @@ async function ensurePageSamplingPermissions(settings) {
 
   if (settings.hostPermissionRequestMode === "ask_per_origin" && missingOrigins.length > 1) {
     const [firstOrigin, ...remainingOrigins] = missingOrigins;
-    await requestOptionalPermission({
+    await requireOptionalPermission({
       permissions: missingPermissions,
       origins: firstOrigin ? [firstOrigin] : []
     });
     for (const origin of remainingOrigins) {
-      await requestOptionalPermission({ origins: [origin] });
+      await requireOptionalPermission({ origins: [origin] });
     }
     return;
   }
 
   if (missingPermissions.length || missingOrigins.length) {
-    await requestOptionalPermission({
+    await requireOptionalPermission({
       permissions: missingPermissions,
       origins: missingOrigins
     });
@@ -758,6 +758,13 @@ async function requestOptionalPermission(request) {
   const hasPermission = await chrome.permissions.contains({ permissions, origins });
   if (hasPermission) return true;
   return chrome.permissions.request({ permissions, origins });
+}
+
+async function requireOptionalPermission(request) {
+  const granted = await requestOptionalPermission(request);
+  if (!granted) {
+    throw new Error("需要授权页面摘要权限，才能读取网页文字摘要。");
+  }
 }
 
 async function collectPageSamplingOrigins(settings, windowId) {
@@ -827,7 +834,11 @@ async function sendMessage(message) {
 
 async function resolveInvocationWindowId() {
   const sourceWindowId = sourceWindowIdFromUrl();
-  if (Number.isInteger(sourceWindowId)) return sourceWindowId;
+  if (Number.isInteger(sourceWindowId)) {
+    if (!globalThis.chrome?.windows?.get) return sourceWindowId;
+    const sourceWindow = await chrome.windows.get(sourceWindowId).catch(() => null);
+    if (sourceWindow?.type === "normal") return sourceWindowId;
+  }
 
   if (!globalThis.chrome?.windows?.getCurrent) return null;
   try {
