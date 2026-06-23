@@ -25,6 +25,16 @@ const fields = {
   ackSampling: document.querySelector("#ackSampling")
 };
 
+const AI_WAIT_PHASES = new Set(["planning", "coarse_planning", "refining", "retrying"]);
+const AI_WAIT_RAMP_MS = 45000;
+const AI_WAIT_COPY_INTERVAL_SECONDS = 4;
+const AI_WAIT_COPY = Object.freeze({
+  planning: ["理解标题线索", "寻找相邻任务", "避开域名硬分组", "检查待确认页", "整理分组边界"],
+  coarse_planning: ["快速扫一遍", "寻找跨窗口主题", "切出候选大组", "标记模糊标签"],
+  refining: ["拆开过大的组", "复核模糊边界", "合并同一任务", "保留原始顺序"],
+  retrying: ["修正校验问题", "补齐遗漏标签", "移除重复分配", "重新检查结构"]
+});
+
 const nodes = {
   appShell: document.querySelector(".app-shell"),
   statusText: document.querySelector("#statusText"),
@@ -403,9 +413,9 @@ function updateProgressFromJob(job) {
   if (!job) return;
   if (typeof job.progress === "number") {
     nodes.progressBar.hidden = false;
-    showProgress(job.progress);
+    showProgress(displayProgressForJob(job));
   }
-  if (job.message) setStatus(job.message, job.status === "error");
+  if (job.message) setStatus(displayMessageForJob(job), job.status === "error");
   if (job.status === "canceling") {
     nodes.cancelBtn.hidden = false;
     nodes.cancelBtn.disabled = true;
@@ -418,6 +428,57 @@ function updateProgressFromJob(job) {
 function showProgress(value) {
   const progress = Number.isFinite(Number(value)) ? Math.max(0, Math.min(100, Number(value))) : 0;
   nodes.progressFill.style.width = `${progress}%`;
+}
+
+function displayProgressForJob(job) {
+  const baseProgress = clampProgress(job.progress);
+  if (!isLiveAiWait(job)) return baseProgress;
+
+  const cap = optimisticProgressCap(job, baseProgress);
+  const elapsedMs = elapsedSinceJobUpdate(job);
+  const ramp = 1 - Math.exp(-elapsedMs / AI_WAIT_RAMP_MS);
+  return Math.max(baseProgress, Math.min(cap, Math.round(baseProgress + (cap - baseProgress) * ramp)));
+}
+
+function displayMessageForJob(job) {
+  if (!isLiveAiWait(job)) return job.message;
+  const elapsedSeconds = Math.floor(elapsedSinceJobUpdate(job) / 1000);
+  if (elapsedSeconds < 3) return job.message;
+  return `${aiWaitCopy(job, elapsedSeconds)} · ${formatElapsedSeconds(elapsedSeconds)}`;
+}
+
+function optimisticProgressCap(job, baseProgress) {
+  if (job.phase === "coarse_planning") return Math.max(baseProgress, 54);
+  if (job.phase === "refining") return Math.max(baseProgress, Math.min(85, baseProgress + 12));
+  if (job.phase === "retrying") return Math.max(baseProgress, 93);
+  return Math.max(baseProgress, 80);
+}
+
+function elapsedSinceJobUpdate(job) {
+  const startedAt = Date.parse(job.updatedAt || job.createdAt || "");
+  if (!Number.isFinite(startedAt)) return 0;
+  return Math.max(0, Date.now() - startedAt);
+}
+
+function clampProgress(value) {
+  return Number.isFinite(Number(value)) ? Math.max(0, Math.min(100, Number(value))) : 0;
+}
+
+function isLiveAiWait(job) {
+  return isLiveJob(job) && AI_WAIT_PHASES.has(job.phase);
+}
+
+function aiWaitCopy(job, elapsedSeconds) {
+  const copies = AI_WAIT_COPY[job.phase] || AI_WAIT_COPY.planning;
+  const index = Math.floor(elapsedSeconds / AI_WAIT_COPY_INTERVAL_SECONDS) % copies.length;
+  return copies[index];
+}
+
+function formatElapsedSeconds(totalSeconds) {
+  if (totalSeconds < 60) return `${totalSeconds}秒`;
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  return seconds ? `${minutes}分${seconds}秒` : `${minutes}分`;
 }
 
 function isLiveJob(job) {

@@ -56,6 +56,64 @@ test("popup renders settings and mock preview", async ({ page }) => {
   await expect(page.getByRole("button", { name: "开始整理" })).toBeEnabled();
 });
 
+test("popup shows optimistic progress while waiting for AI", async ({ page }) => {
+  await page.addInitScript(() => {
+    const settings = {
+      organizeMode: "current_window",
+      targetWindowMode: "current_window",
+      existingGroupMode: "preserve_existing_groups",
+      reviewGroupMode: "create_review_group",
+      undoTargetWindowMode: "leave_empty_target_window",
+      pageContextMode: "off",
+      hostPermissionRequestMode: "never",
+      pageSamplingConsentMode: "not_acknowledged",
+      urlPrivacyMode: "sanitized_url",
+      includePinnedTabs: false,
+      includeIncognitoTabs: false,
+      collapseGroupsAfterApply: false,
+      minConfidenceToApply: 0.65,
+      maxTabsPerGroup: 40,
+      promptPreset: "conservative",
+      plannerProvider: "gateway",
+      rememberProviderKeys: false,
+      gatewayBaseUrl: "http://127.0.0.1:8317/v1",
+      gatewayModel: "gpt-5.5",
+      gatewayThinkingIntensity: "high",
+      gatewayApiKey: "",
+      deepseekModel: "deepseek-chat",
+      deepseekApiKey: "",
+      customPrompt: ""
+    };
+    const activeJob = {
+      operationId: "job_waiting",
+      status: "running",
+      phase: "planning",
+      progress: 45,
+      message: "正在请求 AI 规划",
+      createdAt: new Date(Date.now() - 12000).toISOString(),
+      updatedAt: new Date(Date.now() - 12000).toISOString()
+    };
+    window.chrome = {
+      runtime: {
+        sendMessage: async (message) => {
+          if (message.type === "settings:get") return { ok: true, result: settings };
+          if (message.type === "tabs:getActiveJob") return { ok: true, result: activeJob };
+          if (message.type === "settings:save") return { ok: true, result: message.settings };
+          return { ok: true, result: null };
+        }
+      }
+    };
+  });
+
+  await page.goto(`${baseUrl}/src/sidepanel/index.html`);
+  await expect(page.locator("#statusText")).toHaveText(
+    /(理解标题线索|寻找相邻任务|避开域名硬分组|检查待确认页|整理分组边界) · \d+秒/
+  );
+  const displayedProgress = await page.locator("#progressFill").evaluate((element) => Number.parseFloat(element.style.width));
+  expect(displayedProgress).toBeGreaterThan(45);
+  await expect(page.getByRole("button", { name: "取消" })).toBeVisible();
+});
+
 function contentType(filePath) {
   switch (extname(filePath)) {
     case ".html":
