@@ -1,4 +1,4 @@
-import { ORGANIZE_MODES, PROMPT_PRESET_TEXT, normalizeSettings } from "../shared/settings.js";
+import { ORGANIZE_MODES, PROMPT_PRESET_TEXT, TARGET_WINDOW_MODES, normalizeSettings } from "../shared/settings.js";
 
 const GROUP_COLORS = ["blue", "green", "purple", "cyan", "yellow", "pink", "grey"];
 
@@ -8,7 +8,7 @@ const TOPIC_RULES = [
     title: "Project Work",
     color: "blue",
     confidence: 0.82,
-    terms: ["github", "gitlab", "pull request", "pulls", "issue", "jira", "linear", "localhost", "vercel", "deploy"]
+    terms: ["project", "work", "workflow", "github", "gitlab", "pull request", "pulls", "issue", "jira", "linear", "localhost", "vercel", "deploy"]
   },
   {
     key: "ai-research",
@@ -29,14 +29,14 @@ const TOPIC_RULES = [
     title: "Reading",
     color: "green",
     confidence: 0.72,
-    terms: ["article", "blog", "news", "newsletter", "medium", "substack", "wikipedia"]
+    terms: ["reading", "notes", "article", "blog", "news", "newsletter", "medium", "substack", "wikipedia"]
   },
   {
     key: "media",
     title: "Media",
     color: "pink",
     confidence: 0.74,
-    terms: ["youtube", "bilibili", "video", "music", "podcast", "netflix"]
+    terms: ["media", "queue", "youtube", "bilibili", "video", "music", "podcast", "netflix"]
   },
   {
     key: "shopping-finance",
@@ -77,12 +77,12 @@ export function createFakePlan(inventory, rawSettings = {}) {
     groupsByKey.get(match.key).tabRefs.push({ tabId: tab.tabId, windowId: tab.windowId });
   }
 
-  const groups = [...groupsByKey.values()]
+  const groups = splitLargeGroups([...groupsByKey.values()], plannerTabs, settings)
     .map((group, index) => ({
       ...group,
       color: group.color || GROUP_COLORS[index % GROUP_COLORS.length]
     }))
-    .sort((left, right) => right.tabRefs.length - left.tabRefs.length || left.title.localeCompare(right.title));
+    .sort((left, right) => firstGroupOrder(left, plannerTabs) - firstGroupOrder(right, plannerTabs));
 
   return {
     schemaVersion: 1,
@@ -93,7 +93,7 @@ export function createFakePlan(inventory, rawSettings = {}) {
         : { kind: "current_window", windowIds: [inventory.scope.currentWindowId] },
     targetWindow:
       settings.organizeMode === ORGANIZE_MODES.CONSOLIDATE_ONE_WINDOW
-        ? { kind: settings.targetWindowMode, windowId: settings.selectedTargetWindowId, title: "AI Organized" }
+        ? buildTargetWindow(inventory, settings)
         : { kind: "current_window", windowId: inventory.scope.currentWindowId },
     eligibleTabs: plannerTabs.map((tab) => ({ tabId: tab.tabId, windowId: tab.windowId })),
     excludedTabs: (inventory.excludedTabs || []).map((tab) => ({
@@ -112,6 +112,57 @@ export function createFakePlan(inventory, rawSettings = {}) {
   };
 }
 
+function buildTargetWindow(inventory, settings) {
+  if (settings.targetWindowMode === TARGET_WINDOW_MODES.SELECTED_WINDOW) {
+    return { kind: settings.targetWindowMode, windowId: settings.selectedTargetWindowId, title: "Selected Window" };
+  }
+
+  if (settings.targetWindowMode === TARGET_WINDOW_MODES.CURRENT_WINDOW) {
+    return { kind: settings.targetWindowMode, windowId: resolveInvocationWindowId(inventory), title: "Current Window" };
+  }
+
+  return { kind: settings.targetWindowMode, windowId: null, title: "AI Organized" };
+}
+
+function resolveInvocationWindowId(inventory) {
+  if (Number.isInteger(inventory.scope?.invocationWindowId)) return inventory.scope.invocationWindowId;
+  const focusedWindow = (inventory.windows || []).find((window) => window.focused) || inventory.windows?.[0];
+  return focusedWindow?.windowId ?? null;
+}
+
+function splitLargeGroups(groups, plannerTabs, settings) {
+  return groups.flatMap((group) => {
+    const refs = sortRefsByOriginalOrder(group.tabRefs, plannerTabs);
+    if (refs.length <= settings.maxTabsPerGroup) return [{ ...group, tabRefs: refs }];
+
+    return chunk(refs, settings.maxTabsPerGroup).map((tabRefs, index) => ({
+      ...group,
+      groupKey: `${group.groupKey}-${index + 1}`,
+      title: `${group.title} ${index + 1}`.slice(0, 40),
+      tabRefs,
+      reason: `${group.reason} Split by original tab order to avoid an oversized group.`
+    }));
+  });
+}
+
+function sortRefsByOriginalOrder(refs, plannerTabs) {
+  const order = new Map(plannerTabs.map((tab, index) => [tab.tabId, Number.isInteger(tab.sequenceIndex) ? tab.sequenceIndex : index]));
+  return [...(refs || [])].sort((left, right) => (order.get(left.tabId) ?? Number.MAX_SAFE_INTEGER) - (order.get(right.tabId) ?? Number.MAX_SAFE_INTEGER));
+}
+
+function firstGroupOrder(group, plannerTabs) {
+  const order = new Map(plannerTabs.map((tab, index) => [tab.tabId, Number.isInteger(tab.sequenceIndex) ? tab.sequenceIndex : index]));
+  return Math.min(...(group.tabRefs || []).map((ref) => order.get(ref.tabId) ?? Number.MAX_SAFE_INTEGER));
+}
+
+function chunk(values, size) {
+  const result = [];
+  for (let index = 0; index < values.length; index += size) {
+    result.push(values.slice(index, index + size));
+  }
+  return result;
+}
+
 function classifyTab(tab, settings) {
   const haystack = `${tab.title || ""} ${tab.hostname || ""} ${tab.sanitizedUrl || ""}`.toLowerCase();
   if (!haystack.trim()) return null;
@@ -128,15 +179,7 @@ function classifyTab(tab, settings) {
     }
   }
 
-  if (looksGeneric(haystack)) return null;
-
-  return {
-    key: "general-workbench",
-    title: "General Workbench",
-    color: "grey",
-    confidence: 0.66,
-    reason: "Useful pages without a stronger shared topic."
-  };
+  return null;
 }
 
 function adjustConfidence(base, settings, haystack) {
@@ -145,8 +188,4 @@ function adjustConfidence(base, settings, haystack) {
   if (settings.promptPreset === "research" && /paper|arxiv|docs|model|api/.test(haystack)) confidence += 0.04;
   if (settings.promptPreset === "project_work" && /github|jira|linear|localhost/.test(haystack)) confidence += 0.04;
   return Math.min(0.95, confidence);
-}
-
-function looksGeneric(haystack) {
-  return ["new tab", "untitled", "home", "login", "sign in"].some((term) => haystack.includes(term));
 }

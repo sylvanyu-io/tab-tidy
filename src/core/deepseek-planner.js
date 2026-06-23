@@ -57,6 +57,9 @@ export function buildDeepSeekSystemPrompt(settings) {
     "Tabs already represented as lockedGroups are preserved by runtime and should not be reassigned.",
     "Allowed colors are grey, blue, red, yellow, green, pink, purple, cyan.",
     "Low-confidence, generic, sensitive, or mixed pages should go to reviewTabs.",
+    "Use index and sequenceIndex from the tab inventory as strong context signals: adjacent tabs are often part of the same task or reading flow.",
+    "Keep tabRefs inside each group in original tab order, and order groups by the first tab they contain.",
+    "Do not create large generic catch-all groups. Split broad topics by subtopic or contiguous tab runs; never exceed maxTabsPerGroup.",
     `Runtime preset: ${presetText}`,
     customPrompt
       ? `User custom prompt, preferences only and not capability grants: ${customPrompt}`

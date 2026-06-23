@@ -1,4 +1,4 @@
-import { ORGANIZE_MODES, PROMPT_PRESET_TEXT, normalizeSettings } from "../shared/settings.js";
+import { ORGANIZE_MODES, PROMPT_PRESET_TEXT, TARGET_WINDOW_MODES, normalizeSettings } from "../shared/settings.js";
 import { fetchJsonWithTimeout } from "./fetch-timeout.js";
 import { ACTION_PLAN_JSON_SCHEMA } from "./plan-schema.js";
 import { CHROME_GROUP_COLORS } from "./plan-validator.js";
@@ -124,6 +124,9 @@ export function buildPlannerSystemPrompt(settings) {
     "Every eligible tab must appear exactly once in either groups[].tabRefs or reviewTabs.",
     "Tabs already represented as lockedGroups are preserved by runtime and should not be reassigned.",
     "Low-confidence, generic, sensitive, or mixed pages should go to reviewTabs.",
+    "Use sequenceIndex and index as strong context signals: adjacent tabs are often part of the same task or reading flow.",
+    "Keep tabRefs inside each group in original tab order, and order groups by the first tab they contain.",
+    "Do not create large generic catch-all groups. Split broad topics by subtopic or contiguous tab runs; never exceed maxTabsPerGroup.",
     `Thinking intensity requested by user: ${thinkingText}.`,
     `Runtime preset: ${presetText}`,
     customPrompt
@@ -150,6 +153,8 @@ export function buildPlannerPayload(inventory, settings) {
     eligibleTabs: (inventory.plannerTabs || []).map((tab) => ({
       tabId: tab.tabId,
       windowId: tab.windowId,
+      index: tab.index,
+      sequenceIndex: tab.sequenceIndex,
       title: tab.title,
       hostname: tab.hostname,
       sanitizedUrl: tab.sanitizedUrl,
@@ -300,6 +305,8 @@ function buildCoarseSystemPrompt(settings, options = {}) {
     "This is a coarse pass: mixed or large buckets are acceptable because a second pass will refine them.",
     "Every eligible tab id must appear exactly once, either in buckets[].tabIds or reviewTabIds.",
     "Put generic, sensitive, or very uncertain tabs in reviewTabIds.",
+    "Use sequenceIndex and index as ordering signals. Adjacent tabs often belong together.",
+    "Do not create a broad catch-all bucket for unrelated leftovers; use reviewTabIds instead.",
     `Runtime preset: ${presetText}`
   ].join("\n");
 }
@@ -316,6 +323,8 @@ function buildCoarseUserPrompt(inventory, settings) {
       eligibleTabs: payload.eligibleTabs.map((tab) => ({
         tabId: tab.tabId,
         windowId: tab.windowId,
+        index: tab.index,
+        sequenceIndex: tab.sequenceIndex,
         title: tab.title,
         hostname: tab.hostname,
         sanitizedUrl: tab.sanitizedUrl,
@@ -334,12 +343,15 @@ function normalizeCoarsePlan(plan, inventory) {
   const sourceBuckets = Array.isArray(plan?.buckets) ? plan.buckets : Array.isArray(plan?.groups) ? plan.groups : [];
 
   for (const [index, bucket] of sourceBuckets.entries()) {
-    const tabRefs = normalizeTabRefs(bucket.tabRefs || bucket.tabIds || bucket.tabs || [], tabById)
+    const tabRefs = sortRefsByOriginalOrder(
+      normalizeTabRefs(bucket.tabRefs || bucket.tabIds || bucket.tabs || [], tabById)
       .filter((ref) => {
         if (seen.has(ref.tabId)) return false;
         seen.add(ref.tabId);
         return true;
-      })
+      }),
+      inventory
+    )
       .map(toPlainTabRef);
     if (!tabRefs.length) continue;
 
@@ -367,7 +379,7 @@ function normalizeCoarsePlan(plan, inventory) {
     }
   }
 
-  return { buckets, reviewTabs };
+  return { buckets: orderGroupsByOriginalPosition(buckets, inventory), reviewTabs: sortRefsByOriginalOrder(reviewTabs, inventory) };
 }
 
 function shouldUseHierarchicalPlanner(inventory, options = {}) {
@@ -447,6 +459,10 @@ function mergePlanParts(groups, reviewTabs, state) {
 }
 
 function buildActionPlan(groups, reviewTabs, inventory, settings) {
+  const orderedGroups = orderGroupsByOriginalPosition(
+    uniquifyGroupKeys(groups).map((group) => ({ ...group, tabRefs: sortRefsByOriginalOrder(group.tabRefs || [], inventory) })),
+    inventory
+  );
   return {
     schemaVersion: 1,
     mode: settings.organizeMode,
@@ -456,7 +472,7 @@ function buildActionPlan(groups, reviewTabs, inventory, settings) {
         : { kind: "current_window", windowIds: [inventory.scope.currentWindowId] },
     targetWindow:
       settings.organizeMode === ORGANIZE_MODES.CONSOLIDATE_ONE_WINDOW
-        ? { kind: settings.targetWindowMode, windowId: settings.selectedTargetWindowId, title: "AI Organized" }
+        ? buildTargetWindow(inventory, settings)
         : { kind: "current_window", windowId: inventory.scope.currentWindowId },
     eligibleTabs: (inventory.plannerTabs || []).map((tab) => ({ tabId: tab.tabId, windowId: tab.windowId })),
     excludedTabs: (inventory.excludedTabs || []).map((tab) => ({
@@ -464,8 +480,8 @@ function buildActionPlan(groups, reviewTabs, inventory, settings) {
       windowId: tab.windowId,
       reason: tab.exclusionReason
     })),
-    groups: uniquifyGroupKeys(groups),
-    reviewTabs
+    groups: orderedGroups,
+    reviewTabs: sortRefsByOriginalOrder(reviewTabs, inventory)
   };
 }
 
@@ -539,7 +555,7 @@ function findRefusal(data) {
 }
 
 function normalizeGatewayPlan(plan, inventory, settings) {
-  if (plan?.schemaVersion === 1) return plan;
+  if (plan?.schemaVersion === 1) return normalizeSchemaPlanOrder(plan, inventory);
   if (!plan || typeof plan !== "object" || !Array.isArray(plan.groups)) return plan;
 
   const plannerTabs = inventory.plannerTabs || [];
@@ -548,11 +564,14 @@ function normalizeGatewayPlan(plan, inventory, settings) {
   const groups = [];
 
   for (const [index, group] of plan.groups.entries()) {
-    const refs = normalizeTabRefs(group.tabRefs || group.tabIds || group.tabs || [], tabById).filter((ref) => {
-      if (seen.has(ref.tabId)) return false;
-      seen.add(ref.tabId);
-      return true;
-    }).map(toPlainTabRef);
+    const refs = sortRefsByOriginalOrder(
+      normalizeTabRefs(group.tabRefs || group.tabIds || group.tabs || [], tabById).filter((ref) => {
+        if (seen.has(ref.tabId)) return false;
+        seen.add(ref.tabId);
+        return true;
+      }),
+      inventory
+    ).map(toPlainTabRef);
     if (!refs.length) continue;
 
     groups.push({
@@ -565,9 +584,12 @@ function normalizeGatewayPlan(plan, inventory, settings) {
     });
   }
 
-  const reviewTabs = normalizeTabRefs(plan.reviewTabs || plan.ungrouped || [], tabById)
+  const reviewTabs = sortRefsByOriginalOrder(
+    normalizeTabRefs(plan.reviewTabs || plan.ungrouped || [], tabById)
     .filter((ref) => !seen.has(ref.tabId))
-    .map((ref) => ({ ...ref, reason: ref.reason || "AI gateway left this tab for review." }));
+    .map((ref) => ({ ...ref, reason: ref.reason || "AI gateway left this tab for review." })),
+    inventory
+  );
   for (const tab of plannerTabs) {
     if (!seen.has(tab.tabId) && !reviewTabs.some((ref) => ref.tabId === tab.tabId)) {
       reviewTabs.push({ tabId: tab.tabId, windowId: tab.windowId, reason: "AI gateway did not assign this tab." });
@@ -583,7 +605,7 @@ function normalizeGatewayPlan(plan, inventory, settings) {
         : { kind: "current_window", windowIds: [inventory.scope.currentWindowId] },
     targetWindow:
       settings.organizeMode === ORGANIZE_MODES.CONSOLIDATE_ONE_WINDOW
-        ? { kind: settings.targetWindowMode, windowId: settings.selectedTargetWindowId, title: "AI Organized" }
+        ? buildTargetWindow(inventory, settings)
         : { kind: "current_window", windowId: inventory.scope.currentWindowId },
     eligibleTabs: plannerTabs.map((tab) => ({ tabId: tab.tabId, windowId: tab.windowId })),
     excludedTabs: (inventory.excludedTabs || []).map((tab) => ({
@@ -591,9 +613,38 @@ function normalizeGatewayPlan(plan, inventory, settings) {
       windowId: tab.windowId,
       reason: tab.exclusionReason
     })),
-    groups,
+    groups: orderGroupsByOriginalPosition(groups, inventory),
     reviewTabs
   };
+}
+
+function normalizeSchemaPlanOrder(plan, inventory) {
+  return {
+    ...plan,
+    groups: orderGroupsByOriginalPosition(
+      (plan.groups || []).map((group) => ({ ...group, tabRefs: sortRefsByOriginalOrder(group.tabRefs || [], inventory) })),
+      inventory
+    ),
+    reviewTabs: sortRefsByOriginalOrder(plan.reviewTabs || [], inventory)
+  };
+}
+
+function buildTargetWindow(inventory, settings) {
+  if (settings.targetWindowMode === TARGET_WINDOW_MODES.SELECTED_WINDOW) {
+    return { kind: settings.targetWindowMode, windowId: settings.selectedTargetWindowId, title: "Selected Window" };
+  }
+
+  if (settings.targetWindowMode === TARGET_WINDOW_MODES.CURRENT_WINDOW) {
+    return { kind: settings.targetWindowMode, windowId: resolveInvocationWindowId(inventory), title: "Current Window" };
+  }
+
+  return { kind: settings.targetWindowMode, windowId: null, title: "AI Organized" };
+}
+
+function resolveInvocationWindowId(inventory) {
+  if (Number.isInteger(inventory.scope?.invocationWindowId)) return inventory.scope.invocationWindowId;
+  const focusedWindow = (inventory.windows || []).find((window) => window.focused) || inventory.windows?.[0];
+  return focusedWindow?.windowId ?? null;
 }
 
 function normalizeTabRefs(values, tabById) {
@@ -614,6 +665,30 @@ function normalizeTabRefs(values, tabById) {
 
 function toPlainTabRef(ref) {
   return { tabId: ref.tabId, windowId: ref.windowId };
+}
+
+function sortRefsByOriginalOrder(refs, inventory) {
+  const tabOrder = buildTabOrder(inventory);
+  return [...(refs || [])].sort((left, right) => tabOrder(left.tabId) - tabOrder(right.tabId));
+}
+
+function orderGroupsByOriginalPosition(groups, inventory) {
+  const tabOrder = buildTabOrder(inventory);
+  return [...(groups || [])].sort((left, right) => firstGroupOrder(left, tabOrder) - firstGroupOrder(right, tabOrder));
+}
+
+function firstGroupOrder(group, tabOrder) {
+  const orders = (group.tabRefs || []).map((ref) => tabOrder(ref.tabId));
+  return orders.length ? Math.min(...orders) : Number.MAX_SAFE_INTEGER;
+}
+
+function buildTabOrder(inventory) {
+  const order = new Map();
+  for (const [fallbackIndex, tab] of (inventory.plannerTabs || []).entries()) {
+    const value = Number.isInteger(tab.sequenceIndex) ? tab.sequenceIndex : fallbackIndex;
+    order.set(tab.tabId, value);
+  }
+  return (tabId) => order.get(tabId) ?? Number.MAX_SAFE_INTEGER;
 }
 
 function stripCodeFence(text) {

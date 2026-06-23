@@ -8,8 +8,8 @@ const inventory = {
   scope: { kind: "current_window", currentWindowId: 1, windowIds: [1] },
   windows: [{ windowId: 1, tabCount: 2 }],
   plannerTabs: [
-    { tabId: 10, windowId: 1, title: "Structured output docs", hostname: "docs.example" },
-    { tabId: 11, windowId: 1, title: "Chrome tabGroups API", hostname: "developer.chrome.com" }
+    { tabId: 10, windowId: 1, index: 0, sequenceIndex: 0, title: "Structured output docs", hostname: "docs.example" },
+    { tabId: 11, windowId: 1, index: 1, sequenceIndex: 1, title: "Chrome tabGroups API", hostname: "developer.chrome.com" }
   ],
   excludedTabs: [],
   lockedGroups: [],
@@ -60,9 +60,12 @@ test("AI gateway planner posts a chat-completions JSON request", async () => {
     assert.equal(body.reasoning_effort, "high");
     assert.match(body.messages[0].content, /JSON-only planner/);
     assert.match(body.messages[0].content, /tabRefs and reviewTabs/);
+    assert.match(body.messages[0].content, /sequenceIndex and index/);
     assert.match(body.messages[1].content, /Structured output docs/);
     assert.match(body.messages[1].content, /Software engineering task input/);
     const payload = JSON.parse(body.messages[1].content.slice(body.messages[1].content.indexOf("{")));
+    assert.equal(payload.eligibleTabs[0].sequenceIndex, 0);
+    assert.equal(payload.eligibleTabs[1].index, 1);
     assert.equal(payload.eligibleTabs[0].pageSample.status, "ok");
     assert.equal(payload.pageSampleResults[0].status, "ok");
     return {

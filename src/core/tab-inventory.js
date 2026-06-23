@@ -18,10 +18,12 @@ export async function collectTabInventory(chromeApi, rawSettings, invocation = {
   const groupsById = await collectGroupsById(chromeApi, normalWindows);
   const tabs = [];
   const excludedTabs = [];
+  let sequenceIndex = 0;
 
   for (const window of normalWindows) {
     for (const tab of window.tabs || []) {
-      const descriptor = buildTabDescriptor(tab, window, groupsById, settings);
+      const descriptor = buildTabDescriptor(tab, window, groupsById, settings, sequenceIndex);
+      sequenceIndex += 1;
       const exclusionReason = getExclusionReason(tab, window, settings);
       if (exclusionReason) {
         excludedTabs.push({ ...descriptor, exclusionReason });
@@ -86,7 +88,7 @@ async function collectGroupsById(chromeApi, windows) {
   return new Map(groups.map((group) => [group.id, group]));
 }
 
-function buildTabDescriptor(tab, window, groupsById, settings) {
+function buildTabDescriptor(tab, window, groupsById, settings, sequenceIndex) {
   const rawUrl = getTabUrl(tab);
   const urlInfo = sanitizeTabUrl(rawUrl, settings.urlPrivacyMode);
   const group = tab.groupId !== undefined && tab.groupId !== NO_GROUP_ID ? groupsById.get(tab.groupId) : null;
@@ -95,6 +97,7 @@ function buildTabDescriptor(tab, window, groupsById, settings) {
     tabId: tab.id,
     windowId: window.id,
     index: tab.index,
+    sequenceIndex,
     title: tab.title || "",
     audible: Boolean(tab.audible),
     discarded: Boolean(tab.discarded),
