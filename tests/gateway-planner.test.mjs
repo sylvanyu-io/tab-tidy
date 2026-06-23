@@ -181,3 +181,18 @@ test("AI gateway planner requires an API key", async () => {
     /API key/
   );
 });
+
+test("AI gateway planner times out hanging requests", async () => {
+  const fetchImpl = async () => new Promise(() => {});
+
+  await assert.rejects(
+    () =>
+      createGatewayPlan(
+        inventory,
+        { ...DEFAULT_SETTINGS, plannerProvider: PLANNER_PROVIDERS.GATEWAY, gatewayApiKey: "gateway-test-key" },
+        fetchImpl,
+        { timeoutMs: 5 }
+      ),
+    /timed out after/
+  );
+});

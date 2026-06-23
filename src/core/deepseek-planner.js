@@ -1,9 +1,10 @@
 import { PROMPT_PRESET_TEXT, normalizeSettings } from "../shared/settings.js";
+import { fetchJsonWithTimeout } from "./fetch-timeout.js";
 import { buildPlannerPayload } from "./gateway-planner.js";
 
 const DEEPSEEK_CHAT_COMPLETIONS_URL = "https://api.deepseek.com/chat/completions";
 
-export async function createDeepSeekPlan(inventory, rawSettings = {}, fetchImpl = globalThis.fetch) {
+export async function createDeepSeekPlan(inventory, rawSettings = {}, fetchImpl = globalThis.fetch, options = {}) {
   const settings = normalizeSettings(rawSettings);
   if (!settings.deepseekApiKey) {
     throw new Error("DeepSeek planner requires an API key in settings.");
@@ -12,25 +13,29 @@ export async function createDeepSeekPlan(inventory, rawSettings = {}, fetchImpl 
     throw new Error("Fetch is not available in this environment.");
   }
 
-  const response = await fetchImpl(DEEPSEEK_CHAT_COMPLETIONS_URL, {
-    method: "POST",
-    headers: {
-      "content-type": "application/json",
-      authorization: `Bearer ${settings.deepseekApiKey}`
+  const { response, data } = await fetchJsonWithTimeout(
+    fetchImpl,
+    DEEPSEEK_CHAT_COMPLETIONS_URL,
+    {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        authorization: `Bearer ${settings.deepseekApiKey}`
+      },
+      body: JSON.stringify({
+        model: settings.deepseekModel,
+        messages: [
+          { role: "system", content: buildDeepSeekSystemPrompt(settings) },
+          { role: "user", content: JSON.stringify(buildPlannerPayload(inventory, settings)) }
+        ],
+        response_format: { type: "json_object" },
+        temperature: 0.1,
+        max_tokens: 8192
+      })
     },
-    body: JSON.stringify({
-      model: settings.deepseekModel,
-      messages: [
-        { role: "system", content: buildDeepSeekSystemPrompt(settings) },
-        { role: "user", content: JSON.stringify(buildPlannerPayload(inventory, settings)) }
-      ],
-      response_format: { type: "json_object" },
-      temperature: 0.1,
-      max_tokens: 8192
-    })
-  });
-
-  const data = await response.json();
+    "DeepSeek planner",
+    options.timeoutMs
+  );
   if (!response.ok) {
     throw new Error(data?.error?.message || `DeepSeek planner failed with status ${response.status}.`);
   }

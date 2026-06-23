@@ -1,8 +1,9 @@
 import { ORGANIZE_MODES, PROMPT_PRESET_TEXT, normalizeSettings } from "../shared/settings.js";
+import { fetchJsonWithTimeout } from "./fetch-timeout.js";
 import { ACTION_PLAN_JSON_SCHEMA } from "./plan-schema.js";
 import { CHROME_GROUP_COLORS } from "./plan-validator.js";
 
-export async function createGatewayPlan(inventory, rawSettings = {}, fetchImpl = globalThis.fetch) {
+export async function createGatewayPlan(inventory, rawSettings = {}, fetchImpl = globalThis.fetch, options = {}) {
   const settings = normalizeSettings(rawSettings);
   if (!settings.gatewayApiKey) {
     throw new Error("AI gateway planner requires an API key in settings.");
@@ -22,16 +23,20 @@ export async function createGatewayPlan(inventory, rawSettings = {}, fetchImpl =
   };
   applyThinkingIntensity(body, settings);
 
-  const response = await fetchImpl(gatewayChatCompletionsUrl(settings), {
-    method: "POST",
-    headers: {
-      "content-type": "application/json",
-      authorization: `Bearer ${settings.gatewayApiKey}`
+  const { response, data } = await fetchJsonWithTimeout(
+    fetchImpl,
+    gatewayChatCompletionsUrl(settings),
+    {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        authorization: `Bearer ${settings.gatewayApiKey}`
+      },
+      body: JSON.stringify(body)
     },
-    body: JSON.stringify(body)
-  });
-
-  const data = await response.json();
+    "AI gateway planner",
+    options.timeoutMs
+  );
   if (!response.ok) {
     throw new Error(data?.error?.message || `AI gateway planner failed with status ${response.status}.`);
   }
