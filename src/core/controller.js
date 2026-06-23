@@ -29,7 +29,8 @@ export async function getSettings(chromeApi) {
 
 export async function saveSettings(chromeApi, nextSettings) {
   const settings = normalizeSettings(nextSettings);
-  return setLocal(chromeApi, STORAGE_KEYS.settings, settings);
+  await setLocal(chromeApi, STORAGE_KEYS.settings, settingsForPersistence(settings));
+  return settings;
 }
 
 export async function analyzeTabs(chromeApi, rawSettings, invocation = {}) {
@@ -81,4 +82,9 @@ export async function undoLastApply(chromeApi) {
 
 function redactSettingsForJob(settings) {
   return { ...settings, openaiApiKey: "" };
+}
+
+function settingsForPersistence(settings) {
+  if (settings.pageSamplingConsentMode !== "acknowledged_for_session") return settings;
+  return { ...settings, pageSamplingConsentMode: "not_acknowledged" };
 }

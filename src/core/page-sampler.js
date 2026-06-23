@@ -23,6 +23,25 @@ export async function requestPageSample(chromeApi, tab, rawSettings, reason = ""
     return { status: "blocked", reason: "The scripting permission is not available." };
   }
 
+  if (settings.pageContextMode === PAGE_CONTEXT_MODES.ACTIVE_TAB_ONLY) {
+    if (!tab.active) {
+      return { status: "blocked", reason: "activeTab sampling is limited to the active tab." };
+    }
+    try {
+      return {
+        status: "ok",
+        origin: new URL(rawUrl).origin + "/*",
+        sample: await executePageSample(chromeApi, tab, reason)
+      };
+    } catch {
+      return {
+        status: "permission_required",
+        origin: new URL(rawUrl).origin + "/*",
+        reason: "Temporary activeTab access is not available for this tab."
+      };
+    }
+  }
+
   const origin = new URL(rawUrl).origin + "/*";
   const hasPermission = await chromeApi.permissions.contains({ origins: [origin] });
   if (!hasPermission && settings.hostPermissionRequestMode === HOST_PERMISSION_REQUEST_MODES.NEVER) {
@@ -35,13 +54,17 @@ export async function requestPageSample(chromeApi, tab, rawSettings, reason = ""
     }
   }
 
+  return { status: "ok", origin, sample: await executePageSample(chromeApi, tab, reason) };
+}
+
+async function executePageSample(chromeApi, tab, reason) {
   const [result] = await chromeApi.scripting.executeScript({
     target: { tabId: tab.id || tab.tabId },
     func: samplePage,
     args: [reason]
   });
 
-  return { status: "ok", origin, sample: result?.result || null };
+  return result?.result || null;
 }
 
 function samplePage(reason) {

@@ -24,6 +24,9 @@ and API key, then analyze. The key is stored in Chrome extension local storage
 for this local prototype. The generated plan still goes through local validation
 before any browser mutation.
 
+Page content sampling is off by default. Session-only acknowledgement is not
+persisted; persistent acknowledgement is reserved for a later settings flow.
+
 ## Tests
 
 ```bash
