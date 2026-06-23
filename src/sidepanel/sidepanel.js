@@ -25,6 +25,7 @@ const fields = {
 const AI_WAIT_PHASES = new Set(["planning", "coarse_planning", "refining", "retrying"]);
 const AI_WAIT_RAMP_MS = 45000;
 const AI_WAIT_COPY_INTERVAL_SECONDS = 4;
+const ACTIVE_JOB_POLL_MS = 600;
 const AI_WAIT_COPY = Object.freeze({
   planning: ["理解标题线索", "寻找相邻任务", "避开域名硬分组", "检查待确认页", "整理分组边界"],
   coarse_planning: ["快速扫一遍", "寻找跨窗口主题", "切出候选大组", "标记模糊标签"],
@@ -64,6 +65,8 @@ let isEditingSettings = false;
 let pageSamplingOriginCache = { origins: [], refreshedAt: 0 };
 let pageSamplingOriginRefreshTimer = null;
 let progressPollTimer = null;
+let mockActiveJob = null;
+let mockLastJob = null;
 
 init().catch((error) => setStatus(error.message, true));
 
@@ -190,7 +193,6 @@ function updateConditionalUi() {
 
 async function analyze() {
   setBusy(true, "正在准备整理", { cancelable: true, progress: 4 });
-  startProgressPolling();
   try {
     const settings = readSettings();
     updateLocalProgress("正在检查权限", 8);
@@ -201,8 +203,9 @@ async function analyze() {
     await ensurePageSamplingPermissions(settings);
     updateLocalProgress("正在确认当前窗口", 14);
     const windowId = await resolveInvocationWindowId();
-    updateLocalProgress("正在提交给后台整理", 16);
-    const job = await sendMessage({ type: "tabs:analyze", settings, windowId });
+    updateLocalProgress("正在启动后台整理", 16);
+    const started = await sendMessage({ type: "tabs:startAnalyze", settings, windowId });
+    const job = await waitForAnalysisCompletion(started?.operationId);
     lastPreview = job.preview;
     lastCanApply = Boolean(job.validation?.ok);
     isEditingSettings = false;
@@ -380,7 +383,7 @@ async function hydrateActiveJob() {
 function startProgressPolling() {
   stopProgressPolling();
   pollActiveJob();
-  progressPollTimer = setInterval(pollActiveJob, 600);
+  progressPollTimer = setInterval(pollActiveJob, ACTIVE_JOB_POLL_MS);
 }
 
 function stopProgressPolling() {
@@ -396,6 +399,30 @@ async function pollActiveJob() {
     if (!isLiveJob(job)) stopProgressPolling();
   } catch {
     stopProgressPolling();
+  }
+}
+
+async function waitForAnalysisCompletion(operationId) {
+  while (true) {
+    const activeJob = await sendMessage({ type: "tabs:getActiveJob" });
+    updateProgressFromJob(activeJob);
+
+    if (!activeJob) {
+      throw new Error("后台整理任务没有启动，请重试。");
+    }
+    if (operationId && activeJob.operationId && activeJob.operationId !== operationId) {
+      throw new Error("后台已有另一个整理任务，请先取消或等待它完成。");
+    }
+    if (activeJob.status === "complete") {
+      const job = await sendMessage({ type: "tabs:getLastJob" });
+      if (!job?.preview) throw new Error("方案已生成，但预览数据没有保存成功。");
+      return job;
+    }
+    if (activeJob.status === "error" || activeJob.status === "canceled") {
+      throw new Error(activeJob.message || "整理没有完成。");
+    }
+
+    await delay(ACTIVE_JOB_POLL_MS);
   }
 }
 
@@ -745,8 +772,33 @@ async function mockMessage(message) {
   if (message.type === "settings:save") {
     return message.settings || {};
   }
+  if (message.type === "tabs:startAnalyze") {
+    mockLastJob = mockAnalysisJob();
+    mockActiveJob = {
+      operationId: "mock_job",
+      status: "complete",
+      phase: "complete",
+      progress: 100,
+      message: "方案好了，可以先检查",
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      finishedAt: new Date().toISOString()
+    };
+    return { operationId: mockActiveJob.operationId };
+  }
   if (message.type === "tabs:analyze") {
-    return {
+    return mockAnalysisJob();
+  }
+  if (message.type === "tabs:getLastJob") return mockLastJob || mockAnalysisJob();
+  if (message.type === "tabs:applyLastPlan") return { createdGroupIds: [1, 2] };
+  if (message.type === "tabs:undoLastApply") return { restoredTabs: 20 };
+  if (message.type === "tabs:getActiveJob") return mockActiveJob;
+  if (message.type === "tabs:cancelActiveJob") return { canceled: false, job: mockActiveJob };
+  throw new Error(`Mock does not implement ${message.type}`);
+}
+
+function mockAnalysisJob() {
+  return {
       validation: { ok: true, warnings: [] },
       preview: {
         requiresConfirmation: false,
@@ -759,13 +811,7 @@ async function mockMessage(message) {
         lockedGroupsCount: 0,
         warnings: []
       }
-    };
-  }
-  if (message.type === "tabs:applyLastPlan") return { createdGroupIds: [1, 2] };
-  if (message.type === "tabs:undoLastApply") return { restoredTabs: 20 };
-  if (message.type === "tabs:getActiveJob") return null;
-  if (message.type === "tabs:cancelActiveJob") return { canceled: false, job: null };
-  throw new Error(`Mock does not implement ${message.type}`);
+  };
 }
 
 function debounce(fn, delay) {
@@ -774,4 +820,8 @@ function debounce(fn, delay) {
     clearTimeout(timer);
     timer = setTimeout(() => fn(...args), delay);
   };
+}
+
+function delay(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }

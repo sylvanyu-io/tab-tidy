@@ -17,10 +17,14 @@ export async function handleRuntimeMessage(chromeApi, message) {
       return getSettings(chromeApi);
     case "settings:save":
       return saveSettings(chromeApi, message.settings);
+    case "tabs:startAnalyze":
+      return startAnalyzeTabs(chromeApi, message.settings, { windowId: message.windowId });
     case "tabs:analyze":
       return analyzeTabs(chromeApi, message.settings, { windowId: message.windowId });
     case "tabs:getActiveJob":
       return getActiveJob(chromeApi);
+    case "tabs:getLastJob":
+      return getLastJob(chromeApi);
     case "tabs:cancelActiveJob":
       return cancelActiveJob(chromeApi);
     case "tabs:applyLastPlan":
@@ -43,8 +47,18 @@ export async function saveSettings(chromeApi, nextSettings) {
 }
 
 export async function analyzeTabs(chromeApi, rawSettings, invocation = {}) {
-  await assertNoRunningAnalysis(chromeApi);
+  const { operationId, abortController } = await createActiveAnalysis(chromeApi, rawSettings, invocation);
+  return runActiveAnalysis(chromeApi, rawSettings, invocation, operationId, abortController);
+}
 
+export async function startAnalyzeTabs(chromeApi, rawSettings, invocation = {}) {
+  const { operationId, abortController } = await createActiveAnalysis(chromeApi, rawSettings, invocation);
+  runActiveAnalysis(chromeApi, rawSettings, invocation, operationId, abortController).catch(() => {});
+  return { operationId };
+}
+
+async function createActiveAnalysis(chromeApi, rawSettings, invocation = {}) {
+  await assertNoRunningAnalysis(chromeApi);
   const operationId = createOperationId();
   const abortController = new AbortController();
   activeAnalyses.set(operationId, abortController);
@@ -60,6 +74,10 @@ export async function analyzeTabs(chromeApi, rawSettings, invocation = {}) {
     invocation
   });
 
+  return { operationId, abortController };
+}
+
+async function runActiveAnalysis(chromeApi, rawSettings, invocation, operationId, abortController) {
   const reportProgress = (patch) => updateActiveJob(chromeApi, operationId, patch);
 
   try {
@@ -128,6 +146,10 @@ export async function analyzeTabs(chromeApi, rawSettings, invocation = {}) {
   } finally {
     activeAnalyses.delete(operationId);
   }
+}
+
+export async function getLastJob(chromeApi) {
+  return getLocal(chromeApi, STORAGE_KEYS.lastJob);
 }
 
 export async function getActiveJob(chromeApi) {

@@ -1,6 +1,14 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { analyzeTabs, applyLastPlan, cancelActiveJob, getActiveJob, undoLastApply } from "../src/core/controller.js";
+import {
+  analyzeTabs,
+  applyLastPlan,
+  cancelActiveJob,
+  getActiveJob,
+  getLastJob,
+  startAnalyzeTabs,
+  undoLastApply
+} from "../src/core/controller.js";
 import { undoFromRollback } from "../src/core/chrome-executor.js";
 import {
   DEFAULT_SETTINGS,
@@ -406,6 +414,29 @@ test("active analysis exposes progress and can be canceled", async () => {
   } finally {
     globalThis.fetch = originalFetch;
   }
+});
+
+test("startAnalyzeTabs returns immediately while the background job writes final preview", async () => {
+  const chrome = createFakeChrome({
+    windows: [
+      {
+        id: 1,
+        focused: true,
+        tabs: [{ id: 10, title: "Chrome tabGroups API docs", url: "https://developer.chrome.com/docs/extensions/reference/api/tabGroups", active: true }]
+      }
+    ]
+  });
+
+  const started = await startAnalyzeTabs(chrome, FAKE_PLANNER_SETTINGS, { windowId: 1 });
+  assert.match(started.operationId, /^job_/);
+
+  const completeJob = await waitForActiveJob(chrome, (job) => job?.operationId === started.operationId && job.status === "complete");
+  assert.equal(completeJob.progress, 100);
+
+  const lastJob = await getLastJob(chrome);
+  assert.equal(lastJob.operationId, started.operationId);
+  assert.equal(lastJob.validation.ok, true);
+  assert.equal(lastJob.preview.groups.length > 0, true);
 });
 
 async function waitForActiveJob(chrome, predicate) {

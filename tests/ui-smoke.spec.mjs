@@ -154,6 +154,26 @@ test("default gateway does not request host permission from the floating window"
       customPrompt: ""
     };
     window.__permissionRequests = 0;
+    const activeJob = {
+      operationId: "job_default_gateway",
+      status: "complete",
+      phase: "complete",
+      progress: 100,
+      message: "方案好了，可以先检查",
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+    const job = {
+      validation: { ok: true, warnings: [] },
+      preview: {
+        requiresConfirmation: false,
+        groups: [{ title: "资料整理", reason: "Mock plan.", tabCount: 2 }],
+        reviewTabsCount: 0,
+        excludedTabsCount: 0,
+        lockedGroupsCount: 0,
+        warnings: []
+      }
+    };
     window.chrome = {
       permissions: {
         contains: async () => false,
@@ -170,23 +190,11 @@ test("default gateway does not request host permission from the floating window"
         sendMessage: async (message) => {
           if (message.type === "settings:get") return { ok: true, result: settings };
           if (message.type === "settings:save") return { ok: true, result: message.settings };
-          if (message.type === "tabs:getActiveJob") return { ok: true, result: null };
-          if (message.type === "tabs:analyze") {
+          if (message.type === "tabs:getActiveJob") return { ok: true, result: activeJob };
+          if (message.type === "tabs:getLastJob") return { ok: true, result: job };
+          if (message.type === "tabs:startAnalyze") {
             window.__analyzeWindowId = message.windowId;
-            return {
-              ok: true,
-              result: {
-                validation: { ok: true, warnings: [] },
-                preview: {
-                  requiresConfirmation: false,
-                  groups: [{ title: "资料整理", reason: "Mock plan.", tabCount: 2 }],
-                  reviewTabsCount: 0,
-                  excludedTabsCount: 0,
-                  lockedGroupsCount: 0,
-                  warnings: []
-                }
-              }
-            };
+            return { ok: true, result: { operationId: activeJob.operationId } };
           }
           return { ok: true, result: null };
         }
@@ -199,6 +207,92 @@ test("default gateway does not request host permission from the floating window"
   await expect(page.locator(".preview").getByText("资料整理", { exact: true })).toBeVisible();
   await expect.poll(() => page.evaluate(() => window.__permissionRequests)).toBe(0);
   await expect.poll(() => page.evaluate(() => window.__analyzeWindowId)).toBe(77);
+});
+
+test("generation progress follows the background job after start", async ({ page }) => {
+  await page.addInitScript(() => {
+    const settings = {
+      organizeMode: "current_window",
+      targetWindowMode: "current_window",
+      existingGroupMode: "preserve_existing_groups",
+      reviewGroupMode: "create_review_group",
+      undoTargetWindowMode: "leave_empty_target_window",
+      pageContextMode: "off",
+      hostPermissionRequestMode: "never",
+      pageSamplingConsentMode: "not_acknowledged",
+      urlPrivacyMode: "sanitized_url",
+      includePinnedTabs: false,
+      includeIncognitoTabs: false,
+      collapseGroupsAfterApply: false,
+      minConfidenceToApply: 0.65,
+      maxTabsPerGroup: 40,
+      promptPreset: "conservative",
+      plannerProvider: "gateway",
+      rememberProviderKeys: false,
+      gatewayBaseUrl: "",
+      gatewayModel: "gpt-5.5",
+      gatewayThinkingIntensity: "high",
+      gatewayApiKey: "",
+      customPrompt: ""
+    };
+    const runningJob = {
+      operationId: "job_background_progress",
+      status: "running",
+      phase: "planning",
+      progress: 40,
+      message: "正在生成 AI 方案",
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+    const completeJob = {
+      ...runningJob,
+      status: "complete",
+      phase: "complete",
+      progress: 100,
+      message: "方案好了，可以先检查"
+    };
+    const finalJob = {
+      validation: { ok: true, warnings: [] },
+      preview: {
+        requiresConfirmation: false,
+        groups: [{ title: "后台进度", reason: "Mock plan.", tabCount: 2 }],
+        reviewTabsCount: 0,
+        excludedTabsCount: 0,
+        lockedGroupsCount: 0,
+        warnings: []
+      }
+    };
+    window.__messageTypes = [];
+    window.__activeJobPolls = 0;
+    window.__started = false;
+    window.chrome = {
+      runtime: {
+        sendMessage: async (message) => {
+          window.__messageTypes.push(message.type);
+          if (message.type === "settings:get") return { ok: true, result: settings };
+          if (message.type === "settings:save") return { ok: true, result: message.settings };
+          if (message.type === "tabs:startAnalyze") {
+            window.__started = true;
+            return { ok: true, result: { operationId: runningJob.operationId } };
+          }
+          if (message.type === "tabs:getActiveJob") {
+            if (!window.__started) return { ok: true, result: null };
+            window.__activeJobPolls += 1;
+            return { ok: true, result: window.__activeJobPolls < 2 ? runningJob : completeJob };
+          }
+          if (message.type === "tabs:getLastJob") return { ok: true, result: finalJob };
+          return { ok: true, result: null };
+        }
+      }
+    };
+  });
+
+  await page.goto(`${baseUrl}/src/sidepanel/index.html`);
+  await page.getByRole("button", { name: "生成方案" }).click();
+  await expect(page.locator("#progressLabel")).toContainText("正在生成 AI 方案");
+  await expect(page.locator("#progressPercent")).not.toHaveText("16%");
+  await expect(page.locator(".preview").getByText("后台进度", { exact: true })).toBeVisible();
+  await expect.poll(() => page.evaluate(() => window.__messageTypes.includes("tabs:analyze"))).toBe(false);
 });
 
 test("page sampling permission request returns to the floating window flow", async ({ page }) => {
@@ -228,6 +322,26 @@ test("page sampling permission request returns to the floating window flow", asy
       customPrompt: ""
     };
     window.__permissionRequests = [];
+    const activeJob = {
+      operationId: "job_page_sampling",
+      status: "complete",
+      phase: "complete",
+      progress: 100,
+      message: "方案好了，可以先检查",
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+    const job = {
+      validation: { ok: true, warnings: [] },
+      preview: {
+        requiresConfirmation: false,
+        groups: [{ title: "页面摘要辅助", reason: "Mock plan.", tabCount: 1 }],
+        reviewTabsCount: 0,
+        excludedTabsCount: 0,
+        lockedGroupsCount: 0,
+        warnings: []
+      }
+    };
     window.chrome = {
       permissions: {
         contains: async () => false,
@@ -240,23 +354,9 @@ test("page sampling permission request returns to the floating window flow", asy
         sendMessage: async (message) => {
           if (message.type === "settings:get") return { ok: true, result: settings };
           if (message.type === "settings:save") return { ok: true, result: message.settings };
-          if (message.type === "tabs:getActiveJob") return { ok: true, result: null };
-          if (message.type === "tabs:analyze") {
-            return {
-              ok: true,
-              result: {
-                validation: { ok: true, warnings: [] },
-                preview: {
-                  requiresConfirmation: false,
-                  groups: [{ title: "页面摘要辅助", reason: "Mock plan.", tabCount: 1 }],
-                  reviewTabsCount: 0,
-                  excludedTabsCount: 0,
-                  lockedGroupsCount: 0,
-                  warnings: []
-                }
-              }
-            };
-          }
+          if (message.type === "tabs:getActiveJob") return { ok: true, result: activeJob };
+          if (message.type === "tabs:getLastJob") return { ok: true, result: job };
+          if (message.type === "tabs:startAnalyze") return { ok: true, result: { operationId: activeJob.operationId } };
           return { ok: true, result: null };
         }
       }
