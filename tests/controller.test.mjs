@@ -5,6 +5,7 @@ import {
   DEFAULT_SETTINGS,
   EXISTING_GROUP_MODES,
   ORGANIZE_MODES,
+  PLANNER_PROVIDERS,
   TARGET_WINDOW_MODES
 } from "../src/shared/settings.js";
 import { createFakeChrome } from "./helpers/fake-chrome.mjs";
@@ -85,4 +86,71 @@ test("consolidate_one_window moves all eligible normal-window tabs into one targ
   assert.equal(undo.restoredTabs, 2);
   const windows = await chrome.windows.getAll({ populate: true, windowTypes: ["normal"] });
   assert.equal(windows.reduce((sum, window) => sum + window.tabs.length, 0), 2);
+});
+
+test("non-fake planners retry once with validation feedback", async () => {
+  const chrome = createFakeChrome({
+    windows: [
+      {
+        id: 1,
+        focused: true,
+        tabs: [{ id: 10, title: "DeepSeek JSON docs", url: "https://api-docs.deepseek.com/guides/json_mode", active: true }]
+      }
+    ]
+  });
+  const validPlan = {
+    schemaVersion: 1,
+    mode: "current_window",
+    scope: { kind: "current_window", windowIds: [1] },
+    targetWindow: { kind: "current_window", windowId: 1, title: "Current Window" },
+    eligibleTabs: [{ tabId: 10, windowId: 1 }],
+    excludedTabs: [],
+    groups: [
+      {
+        groupKey: "api-docs",
+        title: "API Docs",
+        color: "blue",
+        confidence: 0.9,
+        tabRefs: [{ tabId: 10, windowId: 1 }],
+        reason: "DeepSeek API documentation."
+      }
+    ],
+    reviewTabs: []
+  };
+  let calls = 0;
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (_url, options) => {
+    calls += 1;
+    const body = JSON.parse(options.body);
+    if (calls === 2) {
+      assert.match(body.messages[0].content, /Previous planner output failed local validation/);
+    }
+    return {
+      ok: true,
+      async json() {
+        return {
+          choices: [
+            {
+              message: {
+                content: JSON.stringify(calls === 1 ? { ...validPlan, groups: [], reviewTabs: [] } : validPlan)
+              }
+            }
+          ]
+        };
+      }
+    };
+  };
+
+  try {
+    const job = await analyzeTabs(
+      chrome,
+      { ...DEFAULT_SETTINGS, plannerProvider: PLANNER_PROVIDERS.DEEPSEEK, deepseekApiKey: "test-key" },
+      { windowId: 1 }
+    );
+    assert.equal(calls, 2);
+    assert.equal(job.validation.ok, true);
+    assert.equal(job.plan.groups.length, 1);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
 });

@@ -53,7 +53,8 @@ export const PROMPT_PRESETS = Object.freeze({
 
 export const PLANNER_PROVIDERS = Object.freeze({
   FAKE: "fake",
-  OPENAI: "openai"
+  OPENAI: "openai",
+  DEEPSEEK: "deepseek"
 });
 
 export const PROMPT_PRESET_TEXT = Object.freeze({
@@ -87,7 +88,9 @@ export const DEFAULT_SETTINGS = Object.freeze({
   selectedTargetWindowId: null,
   plannerProvider: PLANNER_PROVIDERS.FAKE,
   openaiModel: "gpt-5.5",
-  openaiApiKey: ""
+  openaiApiKey: "",
+  deepseekModel: "deepseek-chat",
+  deepseekApiKey: ""
 });
 
 const enumValues = {
@@ -120,6 +123,8 @@ export function normalizeSettings(input = {}) {
   merged.customPrompt = String(merged.customPrompt || "").slice(0, 4000);
   merged.openaiModel = String(merged.openaiModel || DEFAULT_SETTINGS.openaiModel).trim().slice(0, 100);
   merged.openaiApiKey = String(merged.openaiApiKey || "").trim();
+  merged.deepseekModel = String(merged.deepseekModel || DEFAULT_SETTINGS.deepseekModel).trim().slice(0, 100);
+  merged.deepseekApiKey = String(merged.deepseekApiKey || "").trim();
   const selectedTargetWindowId =
     merged.selectedTargetWindowId === null || merged.selectedTargetWindowId === ""
       ? null

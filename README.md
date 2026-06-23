@@ -24,6 +24,10 @@ and API key, then analyze. The key is stored in Chrome extension local storage
 for this local prototype. The generated plan still goes through local validation
 before any browser mutation.
 
+DeepSeek is also supported. It uses DeepSeek's OpenAI-compatible
+`/chat/completions` API with JSON Output, then the same local validator and
+executor as every other planner.
+
 Page content sampling is off by default. Session-only acknowledgement is not
 persisted; persistent acknowledgement is reserved for a later settings flow.
 
@@ -46,6 +50,15 @@ npm run test:ui
 
 The UI smoke test opens `src/sidepanel/index.html` in mock mode. It does not
 need a loaded extension.
+
+Optional DeepSeek live smoke:
+
+```bash
+DEEPSEEK_API_KEY=... npm run smoke:deepseek
+```
+
+Do not commit provider keys. Rotate any key that has appeared in chat, shell
+history, logs, screenshots, or test output.
 
 Design notes:
 

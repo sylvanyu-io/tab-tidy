@@ -5,7 +5,7 @@
   "description": "AI-assisted semantic organization for large sets of browser tabs.",
   "minimum_chrome_version": "116",
   "permissions": ["tabs", "tabGroups", "storage", "sidePanel", "activeTab"],
-  "host_permissions": ["https://api.openai.com/*"],
+  "host_permissions": ["https://api.openai.com/*", "https://api.deepseek.com/*"],
   "optional_permissions": ["scripting"],
   "optional_host_permissions": ["https://*/*", "http://*/*"],
   "background": {

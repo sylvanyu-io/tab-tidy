@@ -1,4 +1,4 @@
-import { DEFAULT_SETTINGS, normalizeSettings } from "../shared/settings.js";
+import { DEFAULT_SETTINGS, PLANNER_PROVIDERS, normalizeSettings } from "../shared/settings.js";
 import { applyValidatedPlan, undoFromRollback } from "./chrome-executor.js";
 import { createPlan } from "./planner.js";
 import { buildPreview } from "./preview.js";
@@ -36,8 +36,7 @@ export async function saveSettings(chromeApi, nextSettings) {
 export async function analyzeTabs(chromeApi, rawSettings, invocation = {}) {
   const settings = await saveSettings(chromeApi, rawSettings);
   const inventory = await collectTabInventory(chromeApi, settings, invocation);
-  const plan = await createPlan(inventory, settings);
-  const validation = validatePlan(plan, inventory, settings);
+  const { plan, validation } = await createValidatedPlan(inventory, settings);
   const preview = buildPreview(plan, inventory, validation, settings);
   const jobSettings = redactSettingsForJob(settings);
   const job = {
@@ -81,10 +80,33 @@ export async function undoLastApply(chromeApi) {
 }
 
 function redactSettingsForJob(settings) {
-  return { ...settings, openaiApiKey: "" };
+  return { ...settings, openaiApiKey: "", deepseekApiKey: "" };
 }
 
 function settingsForPersistence(settings) {
   if (settings.pageSamplingConsentMode !== "acknowledged_for_session") return settings;
   return { ...settings, pageSamplingConsentMode: "not_acknowledged" };
+}
+
+async function createValidatedPlan(inventory, settings) {
+  const plan = await createPlan(inventory, settings);
+  let validation = validatePlan(plan, inventory, settings);
+  if (validation.ok || settings.plannerProvider === PLANNER_PROVIDERS.FAKE) {
+    return { plan, validation };
+  }
+
+  const retrySettings = {
+    ...settings,
+    customPrompt: [
+      settings.customPrompt,
+      "Previous planner output failed local validation. Return a corrected JSON plan only.",
+      `Validation errors: ${validation.errors.join(" ")}`
+    ]
+      .filter(Boolean)
+      .join("\n")
+      .slice(0, 4000)
+  };
+  const retryPlan = await createPlan(inventory, retrySettings);
+  validation = validatePlan(retryPlan, inventory, settings);
+  return { plan: retryPlan, validation };
 }
