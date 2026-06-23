@@ -63,6 +63,9 @@ test("floating window renders settings and mock preview", async ({ page }) => {
   await page.getByRole("button", { name: "生成方案" }).click();
   await expect(page.locator(".preview").getByText("AI 研究", { exact: true })).toBeVisible();
   await expect(page.locator(".preview").getByText("当前项目", { exact: true })).toBeVisible();
+  await expect(page.locator(".preview").getByText("待分类", { exact: true })).toBeVisible();
+  await expect(page.locator(".preview").getByText("另有 3 个标签页会单独放入「待分类」")).toBeVisible();
+  await expect(page.getByText("待确认")).toHaveCount(0);
   await expect(page.locator(".preview-stats")).toHaveCount(0);
   await expect(page.locator(".stat-chip")).toHaveCount(0);
   await expect(page.getByRole("button", { name: "开始整理" })).toBeEnabled();
@@ -136,11 +139,11 @@ test("floating window shows optimistic progress while waiting for AI", async ({ 
 
   await page.goto(`${baseUrl}/src/sidepanel/index.html`);
   await expect(page.locator("#statusText")).toHaveText(
-    /(理解标题线索|寻找相邻任务|避开域名硬分组|检查待确认页|整理分组边界) · \d+秒/
+    /(理解标题线索|寻找相邻任务|避开域名硬分组|检查不确定页|整理分组边界) · \d+秒/
   );
   await expect(page.locator(".actions #progressBar")).toBeVisible();
   await expect(page.locator("#progressLabel")).toHaveText(
-    /(理解标题线索|寻找相邻任务|避开域名硬分组|检查待确认页|整理分组边界) · \d+秒/
+    /(理解标题线索|寻找相邻任务|避开域名硬分组|检查不确定页|整理分组边界) · \d+秒/
   );
   await expect(page.locator("#progressPercent")).toContainText("%");
   const displayedProgress = await page.locator("#progressFill").evaluate((element) => Number.parseFloat(element.style.width));
@@ -228,6 +231,77 @@ test("default gateway does not request host permission from the floating window"
   await expect(page.locator(".preview").getByText("资料整理", { exact: true })).toBeVisible();
   await expect.poll(() => page.evaluate(() => window.__permissionRequests)).toBe(0);
   await expect.poll(() => page.evaluate(() => window.__analyzeWindowId)).toBe(77);
+});
+
+test("review-only previews are shown as a pending classification group", async ({ page }) => {
+  await page.addInitScript(() => {
+    const settings = {
+      organizeMode: "current_window",
+      targetWindowMode: "current_window",
+      existingGroupMode: "preserve_existing_groups",
+      reviewGroupMode: "create_review_group",
+      undoTargetWindowMode: "leave_empty_target_window",
+      pageContextMode: "off",
+      hostPermissionRequestMode: "never",
+      pageSamplingConsentMode: "not_acknowledged",
+      urlPrivacyMode: "sanitized_url",
+      includePinnedTabs: false,
+      includeIncognitoTabs: false,
+      collapseGroupsAfterApply: true,
+      minConfidenceToApply: 0.65,
+      maxTabsPerGroup: 40,
+      promptPreset: "conservative",
+      plannerProvider: "gateway",
+      rememberProviderKeys: false,
+      gatewayBaseUrl: "",
+      gatewayModel: "gpt-5.5",
+      gatewayThinkingIntensity: "high",
+      gatewayApiKey: "",
+      customPrompt: ""
+    };
+    const activeJob = {
+      operationId: "job_review_only",
+      status: "complete",
+      phase: "complete",
+      progress: 100,
+      message: "方案好了，可以先检查",
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+    const job = {
+      validation: { ok: true, warnings: [] },
+      preview: {
+        requiresConfirmation: false,
+        groups: [],
+        reviewTabsCount: 3,
+        reviewGroupWillBeCreated: true,
+        excludedTabsCount: 0,
+        lockedGroupsCount: 0,
+        warnings: []
+      }
+    };
+    window.chrome = {
+      runtime: {
+        sendMessage: async (message) => {
+          if (message.type === "settings:get") return { ok: true, result: settings };
+          if (message.type === "settings:save") return { ok: true, result: message.settings };
+          if (message.type === "tabs:getActiveJob") return { ok: true, result: activeJob };
+          if (message.type === "tabs:getLastJob") return { ok: true, result: job };
+          if (message.type === "tabs:startAnalyze") return { ok: true, result: { operationId: activeJob.operationId } };
+          return { ok: true, result: null };
+        }
+      }
+    };
+  });
+
+  await page.goto(`${baseUrl}/src/sidepanel/index.html`);
+  await page.getByRole("button", { name: "生成方案" }).click();
+  await expect(page.locator("#previewCount")).toHaveText("1 组");
+  await expect(page.locator(".preview").getByText("AI 还没找到清晰主题；3 个标签页会单独放入「待分类」。")).toBeVisible();
+  await expect(page.locator(".preview").getByText("待分类", { exact: true })).toBeVisible();
+  await expect(page.locator(".preview").getByText("AI 暂时拿不准这些页面的共同主题，不会硬塞进其他分组。")).toBeVisible();
+  await expect(page.getByText("不会创建新分组")).toHaveCount(0);
+  await expect(page.getByText("待确认")).toHaveCount(0);
 });
 
 test("page summary main toggle requests scripting and page origins", async ({ page }) => {

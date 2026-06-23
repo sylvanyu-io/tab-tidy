@@ -118,14 +118,14 @@ async function createHierarchicalGatewayPlan(inventory, settings, fetchImpl, opt
     await emitProgress(options, {
       phase: "refining",
       progress: refinementProgress(refinementDone, refinementTotal),
-      message: "正在精分待确认标签页"
+      message: "正在细分不确定标签页"
     });
     const refined = await refineBucket(reviewBucket, inventory, settings, fetchImpl, options);
     refinementDone += countBucketRefinementRequests(reviewBucket, settings, options);
     await emitProgress(options, {
       phase: "refining",
       progress: refinementProgress(refinementDone, refinementTotal),
-      message: "待确认标签页已精分"
+      message: "不确定标签页已细分"
     });
     mergePlanParts(refined.groups, refined.reviewTabs, { finalGroups, finalReviewTabs, seen });
   }

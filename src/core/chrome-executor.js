@@ -94,7 +94,7 @@ export async function applyValidatedPlan(chromeApi, plan, inventory, rawSettings
       chromeApi,
       reviewTabIds,
       targetWindowId,
-      { title: "Review", color: "grey", collapsed: settings.collapseGroupsAfterApply },
+      { title: "待分类", color: "grey", collapsed: settings.collapseGroupsAfterApply },
       settings
     );
     if (groupId !== null) {

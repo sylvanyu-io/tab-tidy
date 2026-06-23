@@ -27,7 +27,7 @@ const AI_WAIT_RAMP_MS = 45000;
 const AI_WAIT_COPY_INTERVAL_SECONDS = 4;
 const ACTIVE_JOB_POLL_MS = 600;
 const AI_WAIT_COPY = Object.freeze({
-  planning: ["理解标题线索", "寻找相邻任务", "避开域名硬分组", "检查待确认页", "整理分组边界"],
+  planning: ["理解标题线索", "寻找相邻任务", "避开域名硬分组", "检查不确定页", "整理分组边界"],
   coarse_planning: ["快速扫一遍", "寻找跨窗口主题", "切出候选大组", "标记模糊标签"],
   refining: ["拆开过大的组", "复核模糊边界", "合并同一任务", "保留原始顺序"],
   retrying: ["修正校验问题", "补齐遗漏标签", "移除重复分配", "重新检查结构"]
@@ -298,6 +298,8 @@ function renderPreview(job) {
   const preview = job.preview;
   const groups = preview.groups || [];
   const reviewTabsCount = preview.reviewTabsCount || 0;
+  const reviewGroupWillBeCreated = Boolean(preview.reviewGroupWillBeCreated && reviewTabsCount);
+  const visibleGroupCount = groups.length + (reviewGroupWillBeCreated ? 1 : 0);
 
   if (!groups.length && !reviewTabsCount && !preview.lockedGroupsCount) {
     nodes.previewRoot.className = "empty";
@@ -307,43 +309,69 @@ function renderPreview(job) {
   }
 
   nodes.previewRoot.className = "preview-list";
-  nodes.previewCount.textContent = `${groups.length} 组`;
+  nodes.previewCount.textContent = `${visibleGroupCount} 组`;
   nodes.previewRoot.replaceChildren(
-    previewSummary(groups.length, reviewTabsCount),
-    ...groups.map((group, index) => {
-      const row = document.createElement("div");
-      row.className = "group-row";
-      row.style.setProperty("--swatch", swatchForIndex(index));
-
-      const swatch = document.createElement("div");
-      swatch.className = "group-swatch";
-
-      const body = document.createElement("div");
-      const title = document.createElement("div");
-      title.className = "group-title";
-      title.textContent = group.title;
-      const meta = document.createElement("div");
-      meta.className = "group-meta";
-      meta.textContent = group.reason || group.groupKey;
-      body.append(title, meta);
-
-      const badge = document.createElement("div");
-      badge.className = "badge";
-      badge.textContent = `${group.tabCount} 个`;
-
-      row.append(swatch, body, badge);
-      return row;
-    })
+    previewSummary(groups.length, reviewTabsCount, reviewGroupWillBeCreated),
+    ...groups.map((group, index) => groupRow(group, swatchForIndex(index))),
+    ...(reviewGroupWillBeCreated ? [reviewGroupRow(reviewTabsCount)] : [])
   );
 }
 
-function previewSummary(groupCount, reviewTabsCount) {
+function previewSummary(groupCount, reviewTabsCount, reviewGroupWillBeCreated) {
   const summary = document.createElement("div");
   summary.className = "preview-summary";
-  const groupText = groupCount ? `将创建 ${groupCount} 个分组` : "不会创建新分组";
-  const reviewText = reviewTabsCount ? `，${reviewTabsCount} 个放到待确认` : "";
-  summary.textContent = `${groupText}${reviewText}。`;
+  if (!groupCount && reviewTabsCount) {
+    summary.textContent = reviewGroupWillBeCreated
+      ? `AI 还没找到清晰主题；${reviewTabsCount} 个标签页会单独放入「待分类」。`
+      : `AI 还没找到清晰主题；${reviewTabsCount} 个标签页暂不归类。`;
+    return summary;
+  }
+
+  if (reviewTabsCount) {
+    summary.textContent = reviewGroupWillBeCreated
+      ? `将创建 ${groupCount} 个主题分组；另有 ${reviewTabsCount} 个标签页会单独放入「待分类」。`
+      : `将创建 ${groupCount} 个主题分组；另有 ${reviewTabsCount} 个标签页暂不归类。`;
+    return summary;
+  }
+
+  summary.textContent = groupCount ? `将创建 ${groupCount} 个主题分组。` : "没有可整理的标签页。";
   return summary;
+}
+
+function groupRow(group, swatchColor) {
+  const row = document.createElement("div");
+  row.className = "group-row";
+  row.style.setProperty("--swatch", swatchColor);
+
+  const swatch = document.createElement("div");
+  swatch.className = "group-swatch";
+
+  const body = document.createElement("div");
+  const title = document.createElement("div");
+  title.className = "group-title";
+  title.textContent = group.title;
+  const meta = document.createElement("div");
+  meta.className = "group-meta";
+  meta.textContent = group.reason || group.groupKey;
+  body.append(title, meta);
+
+  const badge = document.createElement("div");
+  badge.className = "badge";
+  badge.textContent = `${group.tabCount} 个`;
+
+  row.append(swatch, body, badge);
+  return row;
+}
+
+function reviewGroupRow(tabCount) {
+  return groupRow(
+    {
+      title: "待分类",
+      reason: "AI 暂时拿不准这些页面的共同主题，不会硬塞进其他分组。",
+      tabCount
+    },
+    "var(--muted)"
+  );
 }
 
 function swatchForIndex(index) {
@@ -838,6 +866,7 @@ function mockAnalysisJob() {
           { title: "当前项目", reason: "Issue、PR 和本地应用", tabCount: 8 }
         ],
         reviewTabsCount: 3,
+        reviewGroupWillBeCreated: true,
         excludedTabsCount: 1,
         lockedGroupsCount: 0,
         warnings: []
