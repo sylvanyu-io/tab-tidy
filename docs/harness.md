@@ -128,6 +128,7 @@ Required scenarios:
 - metadata-only mode needs no page host permission;
 - page sampling is blocked until the risk warning is acknowledged;
 - the main page-summary opt-in requests `scripting` and visible-site origins before analysis starts;
+- the consumer UI does not expose `active_tab_only`; it should sample as many eligible authorized pages as possible;
 - session-only acknowledgement expires after the job/session boundary;
 - persistent acknowledgement can be revoked in settings;
 - `active_tab_only` samples only the user-invoked active tab;

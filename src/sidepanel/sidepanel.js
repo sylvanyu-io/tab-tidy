@@ -86,10 +86,10 @@ function bindEvents() {
   }
   fields.ackSampling.addEventListener("change", () => {
     if (fields.ackSampling.checked) {
-      if (fields.pageContextMode.value === "off") {
-        fields.pageContextMode.value = "ambiguous_with_permission";
+      if (fields.pageContextMode.value === "off" || fields.pageContextMode.value === "active_tab_only") {
+        fields.pageContextMode.value = "all_granted_origins";
       }
-      if (fields.pageContextMode.value !== "active_tab_only" && fields.hostPermissionRequestMode.value === "never") {
+      if (fields.hostPermissionRequestMode.value === "never") {
         fields.hostPermissionRequestMode.value = "ask_for_all_visible_origins";
       }
     }
@@ -123,11 +123,11 @@ function bindChoiceGroups() {
 }
 
 function readSettings() {
-  const pageContextMode = fields.pageContextMode.value;
+  const pageContextMode = normalizePanelPageContextMode(fields.pageContextMode.value);
   const effectivePageContextMode =
     fields.ackSampling.checked
       ? pageContextMode === "off"
-        ? "ambiguous_with_permission"
+        ? "all_granted_origins"
         : pageContextMode
       : "off";
   return {
@@ -141,8 +141,6 @@ function readSettings() {
     pageContextMode: effectivePageContextMode,
     hostPermissionRequestMode:
       fields.ackSampling.checked &&
-      pageContextMode === "off" &&
-      effectivePageContextMode !== "active_tab_only" &&
       fields.hostPermissionRequestMode.value === "never"
         ? "ask_for_all_visible_origins"
         : fields.hostPermissionRequestMode.value,
@@ -167,19 +165,27 @@ function readSettings() {
 }
 
 function writeSettings(settings) {
+  const displaySettings = {
+    ...settings,
+    pageContextMode: normalizePanelPageContextMode(settings.pageContextMode)
+  };
   for (const [key, element] of Object.entries(fields)) {
     if (key === "ackSampling") {
       element.checked =
-        settings.pageSamplingConsentMode === "acknowledged_for_session" || settings.pageContextMode !== "off";
+        displaySettings.pageSamplingConsentMode === "acknowledged_for_session" || displaySettings.pageContextMode !== "off";
     } else if (key === "plannerProvider") {
-      element.value = allowInternalFakeProvider() && settings[key] === "fake" ? "fake" : "gateway";
+      element.value = allowInternalFakeProvider() && displaySettings[key] === "fake" ? "fake" : "gateway";
     } else if (element.type === "checkbox") {
-      element.checked = Boolean(settings[key]);
-    } else if (settings[key] !== undefined) {
-      element.value = settings[key];
+      element.checked = Boolean(displaySettings[key]);
+    } else if (displaySettings[key] !== undefined) {
+      element.value = displaySettings[key];
     }
   }
   syncChoiceGroups();
+}
+
+function normalizePanelPageContextMode(value) {
+  return value === "active_tab_only" ? "all_granted_origins" : value;
 }
 
 function allowInternalFakeProvider() {
@@ -197,7 +203,7 @@ function updateConditionalUi() {
   const samplingEnabled = fields.ackSampling.checked || fields.pageContextMode.value !== "off";
   nodes.samplingRisk.hidden = !samplingEnabled;
   nodes.hostPermissionField.hidden =
-    !samplingEnabled || fields.pageContextMode.value === "off" || fields.pageContextMode.value === "active_tab_only";
+    !samplingEnabled || fields.pageContextMode.value === "off";
   nodes.targetWindowField.hidden = fields.organizeMode.value !== "consolidate_one_window";
   syncChoiceGroups();
   schedulePageSamplingOriginRefresh();

@@ -45,8 +45,9 @@ test("floating window renders settings and mock preview", async ({ page }) => {
 
   await page.locator("#ackSampling").check();
   await expect(page.locator("#samplingRisk")).toBeVisible();
-  await expect(page.locator("#pageContextMode")).toHaveValue("ambiguous_with_permission");
+  await expect(page.locator("#pageContextMode")).toHaveValue("all_granted_origins");
   await expect(page.locator("#hostPermissionRequestMode")).toHaveValue("ask_for_all_visible_origins");
+  await expect(page.locator("#pageContextMode option[value='active_tab_only']")).toHaveCount(0);
 
   await page.getByText("更多选项").click();
   await expect(page.locator("#gatewayBaseUrl")).toHaveValue("");
@@ -314,7 +315,7 @@ test("page summary main toggle requests scripting and page origins", async ({ pa
 
   await page.goto(`${baseUrl}/src/sidepanel/index.html?sourceWindowId=77`);
   await page.locator("#ackSampling").check();
-  await expect.poll(() => page.evaluate(() => window.__savedSettings.at(-1)?.pageContextMode)).toBe("ambiguous_with_permission");
+  await expect.poll(() => page.evaluate(() => window.__savedSettings.at(-1)?.pageContextMode)).toBe("all_granted_origins");
   await expect.poll(() => page.evaluate(() => window.__savedSettings.at(-1)?.hostPermissionRequestMode)).toBe(
     "ask_for_all_visible_origins"
   );
@@ -323,7 +324,7 @@ test("page summary main toggle requests scripting and page origins", async ({ pa
   await expect(page.locator(".preview").getByText("需要授权", { exact: true })).toBeVisible();
   await expect.poll(() => page.evaluate(() => window.__permissionRequests)).toContainEqual({
     permissions: ["scripting"],
-    origins: ["https://example.com/*"]
+    origins: ["https://example.com/*", "https://docs.example.org/*"]
   });
 });
 
@@ -421,8 +422,8 @@ test("page sampling permission request returns to the floating window flow", asy
       existingGroupMode: "preserve_existing_groups",
       reviewGroupMode: "create_review_group",
       undoTargetWindowMode: "leave_empty_target_window",
-      pageContextMode: "active_tab_only",
-      hostPermissionRequestMode: "never",
+      pageContextMode: "all_granted_origins",
+      hostPermissionRequestMode: "ask_for_all_visible_origins",
       pageSamplingConsentMode: "acknowledged_for_session",
       urlPrivacyMode: "sanitized_url",
       includePinnedTabs: false,

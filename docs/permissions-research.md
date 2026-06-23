@@ -69,11 +69,11 @@ type HostPermissionRequestMode = "never" | "ask_per_origin" | "ask_for_all_visib
 
 `off`: metadata-only. No scripting permission needed.
 
-`active_tab_only`: can use `activeTab` + `scripting` for the invoked active tab. This is useful for debugging and "explain this tab", not for bulk organization.
+`active_tab_only`: can use `activeTab` + `scripting` for the invoked active tab. This is useful for internal compatibility tests, but not for the consumer-facing tab organization flow.
 
-`ambiguous_with_permission`: default mode after the user turns on page summaries. The planner can request page samples for ambiguous tabs, but the runtime samples only tabs whose origins already have host permission or whose origins the user grants.
+`ambiguous_with_permission`: narrower mode for ambiguous tabs only. The runtime samples only tabs whose origins already have host permission or whose origins the user grants.
 
-`all_granted_origins`: sample all eligible tabs only where host permission is already granted. Never silently request all origins.
+`all_granted_origins`: consumer default after the user turns on page summaries. The runtime should request visible-site origins first, then sample as many eligible granted tabs as possible.
 
 `ask_per_origin`: prompt for one origin at a time with a clear reason.
 

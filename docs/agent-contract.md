@@ -93,15 +93,15 @@ The implementation details for cross-window consolidation are captured in [multi
 
 `off`: send only tab metadata.
 
-`active_tab_only`: sample only the active tab that received temporary `activeTab` access from the user's gesture. This does not support bulk background-tab sampling.
+`active_tab_only`: compatibility-only mode for legacy/internal callers. It samples only the active tab that received temporary `activeTab` access from the user's gesture and must not be exposed as the normal consumer opt-in path.
 
 `ambiguous_with_permission`: send page samples only for ambiguous tabs whose origins already have host permission, or whose origins the user grants through an optional host permission prompt.
 
-`all_granted_origins`: sample all eligible tabs whose origins already have host permission. Tabs without host permission fall back to metadata-only.
+`all_granted_origins`: sample all eligible tabs whose origins have host permission. With a host permission request mode, missing visible origins are requested before analysis starts; denied origins fall back to metadata-only.
 
 See [permissions-research.md](permissions-research.md) for the Chrome permission model behind these modes.
 
-Any mode other than `off` requires a visible risk warning before the first sample is collected. The main "page summary" opt-in should move from `off` to `ambiguous_with_permission` and request visible-site permission; `active_tab_only` is an advanced low-friction fallback, not the main opt-in path.
+Any mode other than `off` requires a visible risk warning before the first sample is collected. The main "page summary" opt-in should move from `off` to `all_granted_origins` and request visible-site permission so the agent can read as many eligible pages as the user allows.
 
 ### Host Permission Request Mode
 
