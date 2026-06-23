@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { createGatewayPlan } from "../src/core/gateway-planner.js";
 import { validatePlan } from "../src/core/plan-validator.js";
-import { DEFAULT_SETTINGS, PLANNER_PROVIDERS } from "../src/shared/settings.js";
+import { BUILTIN_GATEWAY_PUBLIC_TOKEN, DEFAULT_SETTINGS, PLANNER_PROVIDERS } from "../src/shared/settings.js";
 
 const inventory = {
   scope: { kind: "current_window", currentWindowId: 1, windowIds: [1] },
@@ -51,7 +51,7 @@ test("AI gateway planner posts a chat-completions JSON request", async () => {
   };
 
   const fetchImpl = async (url, options) => {
-    assert.equal(url, "http://127.0.0.1:8317/v1/chat/completions");
+    assert.equal(url, "http://localhost:8317/v1/chat/completions");
     assert.equal(options.method, "POST");
     assert.equal(options.headers.authorization, "Bearer gateway-test-key");
     const body = JSON.parse(options.body);
@@ -78,7 +78,12 @@ test("AI gateway planner posts a chat-completions JSON request", async () => {
 
   const plan = await createGatewayPlan(
     inventory,
-    { ...DEFAULT_SETTINGS, plannerProvider: PLANNER_PROVIDERS.GATEWAY, gatewayApiKey: "gateway-test-key" },
+    {
+      ...DEFAULT_SETTINGS,
+      plannerProvider: PLANNER_PROVIDERS.GATEWAY,
+      gatewayBaseUrl: "http://localhost:8317/v1",
+      gatewayApiKey: "gateway-test-key"
+    },
     fetchImpl
   );
 
@@ -179,10 +184,57 @@ test("AI gateway planner adapts common tabIds output and strips markdown fences"
   assert.deepEqual(plan.reviewTabs, []);
 });
 
-test("AI gateway planner can call a free gateway without an API key", async () => {
+test("AI gateway planner can call a custom free gateway without an API key", async () => {
   const fetchImpl = async (_url, options) => {
     assert.equal(options.headers.authorization, undefined);
     assert.equal(options.headers["content-type"], "application/json");
+    return {
+      ok: true,
+      async json() {
+        return {
+          choices: [
+            {
+              message: {
+                content: JSON.stringify({
+                  schemaVersion: 1,
+                  mode: "current_window",
+                  scope: { kind: "current_window", windowIds: [1] },
+                  targetWindow: { kind: "current_window", windowId: 1, title: "Current Window" },
+                  eligibleTabs: [
+                    { tabId: 10, windowId: 1 },
+                    { tabId: 11, windowId: 1 }
+                  ],
+                  excludedTabs: [],
+                  groups: [],
+                  reviewTabs: [
+                    { tabId: 10, windowId: 1, reason: "Review." },
+                    { tabId: 11, windowId: 1, reason: "Review." }
+                  ]
+                })
+              }
+            }
+          ]
+        };
+      }
+    };
+  };
+
+  const plan = await createGatewayPlan(
+    inventory,
+    {
+      ...DEFAULT_SETTINGS,
+      plannerProvider: PLANNER_PROVIDERS.GATEWAY,
+      gatewayBaseUrl: "http://localhost:8317/v1",
+      gatewayApiKey: ""
+    },
+    fetchImpl
+  );
+  assert.equal(plan.reviewTabs.length, 2);
+});
+
+test("AI gateway planner uses the built-in public token for the default service", async () => {
+  const fetchImpl = async (_url, options) => {
+    assert.equal(options.headers.authorization, `Bearer ${BUILTIN_GATEWAY_PUBLIC_TOKEN}`);
     return {
       ok: true,
       async json() {
@@ -220,6 +272,73 @@ test("AI gateway planner can call a free gateway without an API key", async () =
     fetchImpl
   );
   assert.equal(plan.reviewTabs.length, 2);
+});
+
+test("AI gateway planner ignores stale user keys for the built-in free gateway", async () => {
+  const fetchImpl = async (_url, options) => {
+    assert.equal(options.headers.authorization, `Bearer ${BUILTIN_GATEWAY_PUBLIC_TOKEN}`);
+    return {
+      ok: true,
+      async json() {
+        return {
+          choices: [
+            {
+              message: {
+                content: JSON.stringify({
+                  schemaVersion: 1,
+                  mode: "current_window",
+                  scope: { kind: "current_window", windowIds: [1] },
+                  targetWindow: { kind: "current_window", windowId: 1, title: "Current Window" },
+                  eligibleTabs: [
+                    { tabId: 10, windowId: 1 },
+                    { tabId: 11, windowId: 1 }
+                  ],
+                  excludedTabs: [],
+                  groups: [],
+                  reviewTabs: [
+                    { tabId: 10, windowId: 1, reason: "Review." },
+                    { tabId: 11, windowId: 1, reason: "Review." }
+                  ]
+                })
+              }
+            }
+          ]
+        };
+      }
+    };
+  };
+
+  const plan = await createGatewayPlan(
+    inventory,
+    { ...DEFAULT_SETTINGS, plannerProvider: PLANNER_PROVIDERS.GATEWAY, gatewayApiKey: "stale-key" },
+    fetchImpl
+  );
+  assert.equal(plan.reviewTabs.length, 2);
+});
+
+test("AI gateway planner surfaces auth failures as product copy", async () => {
+  const fetchImpl = async () => ({
+    ok: false,
+    status: 401,
+    async json() {
+      return { error: { message: "Unauthorized" } };
+    }
+  });
+
+  await assert.rejects(
+    () =>
+      createGatewayPlan(
+        inventory,
+        {
+          ...DEFAULT_SETTINGS,
+          plannerProvider: PLANNER_PROVIDERS.GATEWAY,
+          gatewayBaseUrl: "http://localhost:8317/v1",
+          gatewayApiKey: "bad-key"
+        },
+        fetchImpl
+      ),
+    /请检查自定义网关地址和密钥/
+  );
 });
 
 test("AI gateway planner honors an explicit timeout", async () => {

@@ -1,4 +1,11 @@
-import { BUILTIN_GATEWAY_BASE_URL, ORGANIZE_MODES, PROMPT_PRESET_TEXT, TARGET_WINDOW_MODES, normalizeSettings } from "../shared/settings.js";
+import {
+  BUILTIN_GATEWAY_BASE_URL,
+  BUILTIN_GATEWAY_PUBLIC_TOKEN,
+  ORGANIZE_MODES,
+  PROMPT_PRESET_TEXT,
+  TARGET_WINDOW_MODES,
+  normalizeSettings
+} from "../shared/settings.js";
 import { fetchJsonWithTimeout } from "./fetch-timeout.js";
 import { ACTION_PLAN_JSON_SCHEMA } from "./plan-schema.js";
 import { CHROME_GROUP_COLORS } from "./plan-validator.js";
@@ -50,7 +57,7 @@ async function createSingleGatewayPlan(inventory, settings, fetchImpl, options =
     options.signal
   );
   if (!response.ok) {
-    throw new Error(data?.error?.message || `AI gateway planner failed with status ${response.status}.`);
+    throw new Error(gatewayErrorMessage(response, data, settings));
   }
 
   if (!options.suppressSingleRequestProgress) {
@@ -144,10 +151,21 @@ export function effectiveGatewayBaseUrl(settings) {
 
 function gatewayHeaders(settings) {
   const headers = { "content-type": "application/json" };
-  if (settings.gatewayApiKey) {
-    headers.authorization = `Bearer ${settings.gatewayApiKey}`;
+  const apiKey = settings.gatewayBaseUrl ? settings.gatewayApiKey : BUILTIN_GATEWAY_PUBLIC_TOKEN;
+  if (apiKey) {
+    headers.authorization = `Bearer ${apiKey}`;
   }
   return headers;
+}
+
+function gatewayErrorMessage(response, data, settings) {
+  const providerMessage = String(data?.error?.message || "").trim();
+  if (response.status === 401 || response.status === 403) {
+    return settings.gatewayBaseUrl
+      ? "AI 服务拒绝访问。请检查自定义网关地址和密钥。"
+      : "默认 AI 服务拒绝访问。请稍后重试，或在更多选项里切换自定义网关。";
+  }
+  return providerMessage || `AI gateway planner failed with status ${response.status}.`;
 }
 
 export function buildPlannerSystemPrompt(settings) {
@@ -258,7 +276,7 @@ async function createCoarseGatewayBuckets(inventory, settings, fetchImpl, option
     options.signal
   );
   if (!response.ok) {
-    throw new Error(data?.error?.message || `AI gateway coarse planner failed with status ${response.status}.`);
+    throw new Error(gatewayErrorMessage(response, data, settings));
   }
   return normalizeCoarsePlan(parseGatewayJson(data), inventory);
 }

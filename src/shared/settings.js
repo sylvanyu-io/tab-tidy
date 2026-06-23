@@ -62,7 +62,9 @@ export const PLANNER_PROVIDERS = Object.freeze({
 });
 
 export const BUILTIN_GATEWAY_BASE_URL = "http://127.0.0.1:8317/v1";
+export const BUILTIN_GATEWAY_PUBLIC_TOKEN = "7f1262f810e1074eaa51a1adc430cfae4c5a1b21d8807a78114658317bc1f91e";
 export const DEFAULT_GATEWAY_BASE_URL = "";
+const LEGACY_DEFAULT_GATEWAY_BASE_URLS = new Set([BUILTIN_GATEWAY_BASE_URL, "https://api.openai.com/v1"]);
 
 export const GATEWAY_MODELS = Object.freeze(["gpt-5.5", "claude-opus-4-8", "claude-sonnet-4-6"]);
 
@@ -144,6 +146,10 @@ export function normalizeSettings(input = {}) {
   merged.gatewayBaseUrl = normalizeOptionalBaseUrl(merged.gatewayBaseUrl);
   merged.gatewayModel = normalizeGatewayModel(merged.gatewayModel);
   merged.gatewayApiKey = String(merged.gatewayApiKey || "").trim();
+  if (!merged.gatewayBaseUrl) {
+    merged.gatewayApiKey = "";
+    merged.rememberProviderKeys = false;
+  }
   const selectedTargetWindowId =
     merged.selectedTargetWindowId === null || merged.selectedTargetWindowId === ""
       ? null
@@ -169,7 +175,8 @@ function normalizeOptionalBaseUrl(value) {
     url.hash = "";
     url.search = "";
     url.pathname = url.pathname.replace(/\/+$/, "");
-    return url.toString().replace(/\/$/, "");
+    const normalized = url.toString().replace(/\/$/, "");
+    return LEGACY_DEFAULT_GATEWAY_BASE_URLS.has(normalized) ? "" : normalized;
   } catch {
     return "";
   }

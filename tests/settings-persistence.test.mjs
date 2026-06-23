@@ -31,11 +31,25 @@ test("invalid undo target window mode falls back to conservative default", () =>
 test("AI gateway settings normalize safely", () => {
   assert.equal(
     normalizeSettings({ ...DEFAULT_SETTINGS, gatewayBaseUrl: "http://127.0.0.1:8317/v1/" }).gatewayBaseUrl,
-    "http://127.0.0.1:8317/v1"
+    ""
+  );
+  assert.equal(
+    normalizeSettings({ ...DEFAULT_SETTINGS, gatewayBaseUrl: "https://api.openai.com/v1" }).gatewayBaseUrl,
+    ""
   );
   assert.equal(
     normalizeSettings({ ...DEFAULT_SETTINGS, gatewayBaseUrl: "javascript:alert(1)" }).gatewayBaseUrl,
     ""
+  );
+  assert.equal(
+    normalizeSettings({ ...DEFAULT_SETTINGS, gatewayBaseUrl: "", gatewayApiKey: "old-key", rememberProviderKeys: true })
+      .gatewayApiKey,
+    ""
+  );
+  assert.equal(
+    normalizeSettings({ ...DEFAULT_SETTINGS, gatewayBaseUrl: "", gatewayApiKey: "old-key", rememberProviderKeys: true })
+      .rememberProviderKeys,
+    false
   );
   assert.equal(
     normalizeSettings({ ...DEFAULT_SETTINGS, gatewayThinkingIntensity: "nope" }).gatewayThinkingIntensity,
@@ -50,11 +64,21 @@ test("AI gateway settings normalize safely", () => {
 test("gateway key is not persisted unless explicitly remembered", async () => {
   const chrome = createFakeChrome();
 
-  await saveSettings(chrome, { ...DEFAULT_SETTINGS, gatewayApiKey: "gateway-test-key", rememberProviderKeys: false });
+  await saveSettings(chrome, {
+    ...DEFAULT_SETTINGS,
+    gatewayBaseUrl: "http://localhost:8317/v1",
+    gatewayApiKey: "gateway-test-key",
+    rememberProviderKeys: false
+  });
   const transient = await getSettings(chrome);
   assert.equal(transient.gatewayApiKey, "");
 
-  await saveSettings(chrome, { ...DEFAULT_SETTINGS, gatewayApiKey: "gateway-test-key", rememberProviderKeys: true });
+  await saveSettings(chrome, {
+    ...DEFAULT_SETTINGS,
+    gatewayBaseUrl: "http://localhost:8317/v1",
+    gatewayApiKey: "gateway-test-key",
+    rememberProviderKeys: true
+  });
   const persisted = await getSettings(chrome);
   assert.equal(persisted.gatewayApiKey, "gateway-test-key");
 });
