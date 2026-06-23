@@ -7,7 +7,7 @@ extension that can be published after the gates below are satisfied.
 
 Implemented:
 
-- Manifest V3 extension shell with side panel UI.
+- Manifest V3 extension shell with an action popup UI.
 - Current-window organization by default.
 - Explicit consolidate-to-one-window mode for all eligible normal-window tabs.
 - Metadata-only inventory and URL sanitization.
@@ -15,7 +15,18 @@ Implemented:
 - Page sampling off by default with explicit consent and permission gates.
 - Fake, AI gateway, and DeepSeek planner providers.
 - Local schema validation before every browser mutation.
-- Preview before apply and best-effort undo snapshot.
+- Low-confidence groups below the apply threshold are rejected; the planner must
+  put uncertain tabs in Review.
+- Groups above `maxTabsPerGroup` are rejected instead of applied as oversized
+  catch-all groups.
+- Tab inventory includes original `sequenceIndex` plus per-window `index`, and
+  planner prompts treat nearby tabs as semantic context.
+- Target-window selection is validated against user settings; planner output
+  cannot redirect apply to an arbitrary window.
+- Preview before apply and rollback snapshot persisted before the first browser
+  mutation.
+- Rollback snapshots are refreshed during apply, so partial failures remain
+  undoable.
 - Fake Chrome harness, Playwright UI smoke test, and real-extension stress
   runner against an isolated Chromium profile.
 - Planner network calls have a timeout instead of hanging indefinitely.
@@ -47,7 +58,15 @@ Blocking gates:
 - Page sampling active-tab mode cannot sample background tabs.
 - Bulk page sampling returns `permission_required` without host permission.
 - Bulk page sampling can request `scripting` plus visible-site host permissions
-  from the side panel user gesture and sample page body text.
+  from the popup user gesture and sample page body text.
+- Low-confidence groups below the apply threshold fail validation.
+- Current-window and selected-window targets must match user settings, not model
+  preference.
+- Empty consolidate jobs do not create target windows.
+- Partial apply failure keeps a rollback snapshot and undo can restore surviving
+  tabs.
+- If a tab disappears mid-apply, the executor fails rather than silently grouping
+  a partial tab set.
 - No provider key appears in git history, screenshots, test output, or fixtures.
 - Extension package contains no `node_modules`, test outputs, or local secrets.
 
@@ -58,8 +77,8 @@ Recommended before public listing:
 - Add first-run privacy disclosure.
 - Add error recovery UI for provider rate limit, invalid key, and invalid plan.
 - Add per-operation progress and cancellation.
-- Add adaptive planning for very large tab sets when provider latency exceeds
-  the planner timeout.
+- Expand adaptive planning beyond the AI gateway path if other providers become
+  first-class large-session targets.
 - Add release build script that zips only manifest, src, docs/licenses needed by
   the runtime, and static assets.
 
@@ -91,6 +110,9 @@ DeepSeek:
 - Do not close, discard, reload, or navigate tabs.
 - Do not execute model-supplied JavaScript.
 - Do not perform browser mutations without a rollback snapshot.
+- Do not let planner-supplied `targetWindow` override the user-selected target.
+- Do not apply groups below the configured confidence threshold.
+- Do not silently apply a group if any tab in that group disappeared mid-apply.
 - Do not move tabs across windows unless consolidate-to-one-window is selected.
 - Keep pinned and incognito tabs excluded by default.
 - Treat `chrome://`, `chrome-extension://`, and `file://` as unsupported for

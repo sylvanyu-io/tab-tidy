@@ -30,7 +30,7 @@ For multi-tab page sampling, the practical option is optional host permissions:
 
 ### LLM Provider Network Calls
 
-The extension service worker or side panel can call remote LLM providers only if the extension has host permission for those provider endpoints. Provider endpoints should be narrow or requested as optional origins, for example:
+The extension service worker or popup can call remote LLM providers only if the extension has host permission for those provider endpoints. Provider endpoints should be narrow or requested as optional origins, for example:
 
 - `https://api.anthropic.com/`
 - `https://generativelanguage.googleapis.com/`
@@ -44,10 +44,11 @@ MVP required permissions:
 
 ```json
 {
-  "permissions": ["tabs", "tabGroups", "storage", "sidePanel"],
+  "permissions": ["tabs", "tabGroups", "storage", "activeTab"],
   "host_permissions": [],
   "optional_permissions": ["scripting"],
-  "optional_host_permissions": ["https://*/*", "http://*/*"]
+  "optional_host_permissions": ["https://*/*", "http://*/*"],
+  "action": {"default_popup": "src/sidepanel/index.html"}
 }
 ```
 

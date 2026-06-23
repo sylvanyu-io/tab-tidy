@@ -60,7 +60,7 @@ Recommended settings:
   "includeIncognitoTabs": false,
   "collapseGroupsAfterApply": false,
   "minConfidenceToApply": 0.65,
-  "maxTabsPerGroup": 80,
+  "maxTabsPerGroup": 40,
   "undoTargetWindowMode": "leave_empty_target_window",
   "promptPreset": "conservative",
   "customPrompt": ""
@@ -138,7 +138,9 @@ Tabs without permission will stay metadata-only.
 
 ### Group Size Limit
 
-`maxTabsPerGroup` is a planner hint and validator warning threshold. Plans above the limit are allowed only if the group reason explicitly says why the group should remain broad; otherwise the preview flags the group for split/review rather than rejecting the whole plan.
+`maxTabsPerGroup` is a planner hint and validator hard threshold. Plans above
+the limit are rejected before apply; the planner must split broad topics by
+subtopic or contiguous original tab order, or place uncertain tabs in Review.
 
 ### Undo Target Window Mode
 
@@ -323,8 +325,11 @@ Validator rules:
 - no tab may appear in both a group and `reviewTabs`;
 - group titles must be short enough for native tab group labels;
 - color must be one of Chrome's supported group colors;
-- tabs below confidence threshold go to preview as "Review" unless user overrides;
-- groups above `maxTabsPerGroup` produce a split/review warning unless the plan includes a specific reason to keep the group broad;
+- tabs below confidence threshold must go to `reviewTabs`; if the planner puts
+  them in a generated group, the validator rejects the plan;
+- groups above `maxTabsPerGroup` are rejected;
+- group and tab order should follow the original tab order: `sequenceIndex`
+  across the active scope and `index` inside each window;
 - cross-window moves are rejected unless `organizeMode` is `consolidate_one_window`;
 - pinned tabs are rejected unless `includePinnedTabs` is enabled;
 - incognito tabs are rejected unless enabled and visible to the extension.
@@ -412,12 +417,12 @@ Required modules:
 
 The key design rule: the same validator and executor path should be used for real LLM output, fake planner output, and test fixtures.
 
-Required extension permissions:
+Required manifest surface and permissions:
 
 - `"tabs"` to read tab URLs, titles, pending URLs, and favicons;
 - `"tabGroups"` to create, update, move, and query native tab groups;
 - `"storage"` for settings, job state, prompt snapshots, and rollback snapshots;
-- `"sidePanel"` for the main control surface;
+- action `default_popup` for the main floating control surface;
 - provider-specific HTTPS `host_permissions` or optional host permissions for the configured LLM endpoint;
 - optional `"scripting"` only when page sampling is enabled;
 - optional host permissions for page origins only when bulk page sampling is enabled.

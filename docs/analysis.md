@@ -20,7 +20,8 @@ The core extension APIs are enough for a first version:
 - The `"tabs"` permission is needed to read sensitive tab properties such as `url`, `pendingUrl`, `title`, and `favIconUrl`.
 - `chrome.tabs.group()` can create/add tabs to groups; `chrome.tabGroups.update()` can set group title, color, and collapsed state.
 - `chrome.tabGroups.TabGroup.windowId` shows that browser tab groups belong to a single window. So a native Chrome tab group cannot literally span windows.
-- `chrome.sidePanel` is a good fit for a persistent control surface while the user moves between tabs.
+- `action.default_popup` is the primary consumer-facing control surface: it opens
+  as a floating browser-extension panel from the toolbar icon.
 - `chrome.storage.local` / IndexedDB should hold job state, cached tab summaries, and undo snapshots because Manifest V3 service workers can be stopped.
 
 Important implication: native Chrome tab groups belong to one window, so the product should expose two clear MVP modes:
@@ -37,7 +38,7 @@ See [multi-window-feasibility.md](multi-window-feasibility.md) for the API-level
 Use an LLM as a planner, not as an unrestricted executor.
 
 ```text
-side panel UI
+action popup UI
   -> job controller
   -> tab inventory collector
   -> optional page sampler
@@ -189,7 +190,7 @@ The extension should feel like a tab operations console, not a chatbot-first pro
 
 Primary flow:
 
-1. Open side panel.
+1. Open the extension popup.
 2. Choose Current Window or enable Consolidate All Windows Into One Window.
 3. Click Analyze.
 4. See proposed groups, excluded tabs, review tabs, and any cross-window move preview.
@@ -247,11 +248,11 @@ For a public release, BYOK is the simplest honest model. A hosted relay can impr
 
 ## Technical Risks
 
-1. Service worker lifetime: long LLM calls can exceed Manifest V3 service worker timing expectations. Prefer initiating jobs from the side panel, persisting state after every step, and making calls resumable.
+1. Service worker lifetime: long LLM calls can exceed Manifest V3 service worker timing expectations. Prefer initiating jobs from the popup, persisting state after every step, and making calls resumable.
 2. Token pressure: hundreds of tabs cannot be handled as one naive prompt. Use batching, compact descriptors, and context sampling.
 3. LLM instability: enforce JSON schema, validate all tab IDs, and show preview before applying.
 4. Native tab groups are window-scoped: cross-window native grouping only works by moving tabs or groups into one normal window.
-5. Permission fatigue: broad host permissions will scare users. Start with `"tabs"`, `"tabGroups"`, `"storage"`, `"sidePanel"`, and provider-specific HTTPS permissions for the configured LLM endpoint. Page sampling needs optional `"scripting"` plus granted host permission for sampled origins; `activeTab` only covers the user-invoked active tab, not bulk background tabs.
+5. Permission fatigue: broad host permissions will scare users. Start with `"tabs"`, `"tabGroups"`, `"storage"`, `"activeTab"`, and provider-specific HTTPS permissions for the configured LLM endpoint. Page sampling needs optional `"scripting"` plus granted host permission for sampled origins; `activeTab` only covers the user-invoked active tab, not bulk background tabs.
 6. Sensitive content: a more powerful model may make better groups, but cloud inference means sending browsing metadata away. This must be explicit.
 7. Scale and latency: grouping 500 tabs should feel incremental while planning, but apply should use one validated plan that covers the active scope.
 
@@ -287,7 +288,7 @@ MVP should not implement:
 
 - Optional content sampling for ambiguous tabs.
 - Consolidate-to-topic-windows mode.
-- Virtual cross-window groups in the side panel.
+- Virtual cross-window groups in the popup.
 - User feedback memory: "these domains usually belong together".
 - Embedding cache for cheaper clustering before LLM labeling.
 - Local model or Chrome built-in AI adapter.
@@ -296,7 +297,7 @@ MVP should not implement:
 
 ## Initial Build Order
 
-1. Scaffold MV3 extension with side panel and service worker.
+1. Scaffold MV3 extension with an action popup and service worker.
 2. Implement tab inventory and sanitized descriptors.
 3. Build a fake planner using local fixtures, so UI and executor can be tested without LLM cost.
 4. Implement preview and undo.

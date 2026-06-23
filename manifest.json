@@ -4,7 +4,7 @@
   "version": "0.1.0",
   "description": "AI-assisted semantic organization for large sets of browser tabs.",
   "minimum_chrome_version": "116",
-  "permissions": ["tabs", "tabGroups", "storage", "sidePanel", "activeTab"],
+  "permissions": ["tabs", "tabGroups", "storage", "activeTab"],
   "host_permissions": ["https://api.deepseek.com/*"],
   "optional_permissions": ["scripting"],
   "optional_host_permissions": ["https://*/*", "http://*/*"],
@@ -18,11 +18,9 @@
     "48": "icons/icon48.png",
     "128": "icons/icon128.png"
   },
-  "side_panel": {
-    "default_path": "src/sidepanel/index.html"
-  },
   "action": {
     "default_title": "Semantic Tab Agent",
+    "default_popup": "src/sidepanel/index.html",
     "default_icon": {
       "16": "icons/icon16.png",
       "32": "icons/icon32.png",

@@ -1,6 +1,6 @@
 import { chromium } from "playwright";
 import { createServer } from "node:http";
-import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
+import { cp, mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
@@ -37,13 +37,14 @@ await new Promise((resolveListen) => server.listen(0, "127.0.0.1", resolveListen
 const baseUrl = `http://127.0.0.1:${server.address().port}`;
 const urls = pages.map((page) => `${baseUrl}/page/${page.id}`);
 const userDataDir = await mkdtemp(join(tmpdir(), "semantic-tab-agent-stress-"));
+const runtimeExtensionDir = await prepareStressExtension(extensionDir, baseUrl);
 
 const results = [];
 
 try {
   const context = await chromium.launchPersistentContext(userDataDir, {
     headless: false,
-    args: [`--disable-extensions-except=${extensionDir}`, `--load-extension=${extensionDir}`, "--no-first-run"]
+    args: [`--disable-extensions-except=${runtimeExtensionDir}`, `--load-extension=${runtimeExtensionDir}`, "--no-first-run"]
   });
   context.setDefaultTimeout(300000);
 
@@ -209,13 +210,14 @@ try {
   console.log(JSON.stringify(summary, null, 2));
 } finally {
   await new Promise((resolveClose) => server.close(resolveClose));
+  await rm(runtimeExtensionDir, { recursive: true, force: true });
   await rm(userDataDir, { recursive: true, force: true });
 }
 
 function buildPages(count, id) {
   const topics = [
     ["ai", "AI Research", "OpenAI model prompt agent paper benchmark embeddings"],
-    ["chrome", "Chrome Extension Docs", "Chrome tabs tabGroups sidePanel scripting permissions API"],
+    ["chrome", "Chrome Extension Docs", "Chrome tabs tabGroups action popup scripting permissions API"],
     ["project", "Project Work", "GitHub pull request issue CI deploy localhost workflow"],
     ["reading", "Reading Notes", "article blog newsletter wikipedia essay reference"],
     ["media", "Media Queue", "YouTube podcast video playlist music transcript"],
@@ -259,6 +261,8 @@ function renderPage(page) {
 async function openExtensionControl(context) {
   const worker = context.serviceWorkers()[0] || (await context.waitForEvent("serviceworker", { timeout: 10000 }));
   const pagePromise = context.waitForEvent("page");
+  // Test harness entrypoint: load the popup document as a page so Playwright can
+  // keep it open while exercising the same runtime code as the toolbar popup.
   await worker.evaluate(async () =>
     chrome.windows.create({
       url: chrome.runtime.getURL("src/sidepanel/index.html"),
@@ -271,6 +275,20 @@ async function openExtensionControl(context) {
   const page = await pagePromise;
   await page.waitForLoadState("domcontentloaded");
   return page;
+}
+
+async function prepareStressExtension(sourceDir, baseUrl) {
+  const targetDir = await mkdtemp(join(tmpdir(), "semantic-tab-agent-extension-"));
+  await cp(sourceDir, targetDir, { recursive: true });
+
+  const manifestPath = join(targetDir, "manifest.json");
+  const manifest = JSON.parse(await readFile(manifestPath, "utf8"));
+  const originPattern = `${new URL(baseUrl).origin}/*`;
+  manifest.permissions = [...new Set([...(manifest.permissions || []), "scripting"])];
+  manifest.host_permissions = [...new Set([...(manifest.host_permissions || []), originPattern])];
+  await writeFile(manifestPath, JSON.stringify(manifest, null, 2));
+
+  return targetDir;
 }
 
 async function createTestWindows(page, urlChunks, base) {

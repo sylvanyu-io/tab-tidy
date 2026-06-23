@@ -78,7 +78,11 @@
 
 body {
   margin: 0;
+  width: 360px;
   min-width: 320px;
+  max-width: 360px;
+  max-height: 600px;
+  overflow: auto;
   background: var(--canvas);
   color: var(--text);
   font: 14px/1.48 -apple-system, BlinkMacSystemFont, "Avenir Next", "Segoe UI", sans-serif;

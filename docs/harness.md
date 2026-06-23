@@ -205,8 +205,14 @@ These should hold in every automated test:
 - in consolidate-to-one-window mode, every eligible tab from every normal window is moved to the target window and either assigned to one group or placed in Review;
 - every ineligible tab is listed in `excludedTabs` with a policy reason;
 - no tab appears in two groups;
+- low-confidence tabs are either placed in Review or rejected by validation;
+- oversized generated groups are rejected before apply;
+- original tab order is included in planner payloads and preserved inside group
+  references;
+- planner-supplied target windows cannot override user settings;
 - execution never runs on unvalidated model output;
 - an undo snapshot exists before the first mutating operation;
+- partial apply failure leaves an undoable rollback snapshot;
 - privacy settings affect both prompt payload and page sampler behavior;
 - custom prompt can affect classification but cannot affect allowed actions;
 - fake planner, live LLM planner, and imported JSON fixtures use the same schema.

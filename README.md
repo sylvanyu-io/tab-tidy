@@ -13,13 +13,13 @@ executor path as every other planner.
 2. Enable Developer mode.
 3. Choose "Load unpacked".
 4. Select this project directory: `/Users/yuyufeng/Projects/semantic-tab-agent`.
-5. Click the extension action to open the side panel.
+5. Click the extension action icon to open the popup.
 
 Default behavior is current-window only. The "All windows to one window" scope is
 an explicit switch and moves all eligible normal-window tabs into one target
 window only after preview and confirmation.
 
-The AI gateway defaults to `http://127.0.0.1:8317/v1`. The side panel exposes
+The AI gateway defaults to `http://127.0.0.1:8317/v1`. The popup exposes
 only `gpt-5.5`, `claude-opus-4-8`, and `claude-sonnet-4-6` for tab planning.
 Thinking intensity defaults to high and can be set to low, medium, high, or
 ultra-high from advanced settings.
@@ -47,14 +47,14 @@ The Node harness uses a fake Chrome adapter and covers inventory, validation,
 current-window grouping, consolidate-to-one-window, undo, URL sanitization,
 AI gateway request shaping, and page-sampling permission gates.
 
-After installing dev dependencies, run the side panel smoke test:
+After installing dev dependencies, run the popup smoke test:
 
 ```bash
 npm install
 npm run test:ui
 ```
 
-The UI smoke test opens `src/sidepanel/index.html` in mock mode. It does not
+The UI smoke test opens the popup HTML (`src/sidepanel/index.html`) in mock mode. It does not
 need a loaded extension.
 
 Optional DeepSeek live smoke:

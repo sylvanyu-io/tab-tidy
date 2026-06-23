@@ -32,7 +32,7 @@ test.afterAll(async () => {
   await new Promise((resolveClose) => server.close(resolveClose));
 });
 
-test("side panel renders settings and mock preview", async ({ page }) => {
+test("popup renders settings and mock preview", async ({ page }) => {
   await page.goto(`${baseUrl}/src/sidepanel/index.html`);
 
   await expect(page.getByRole("heading", { name: "Tab Tidy" })).toBeVisible();
@@ -47,6 +47,7 @@ test("side panel renders settings and mock preview", async ({ page }) => {
   await expect(page.locator("#gatewayBaseUrl")).toHaveValue("http://127.0.0.1:8317/v1");
   await expect(page.locator("#gatewayModel")).toHaveValue("gpt-5.5");
   await expect(page.locator("#gatewayThinkingIntensity")).toHaveValue("high");
+  await expect(page.locator("#undoTargetWindowMode")).toHaveValue("leave_empty_target_window");
   await expect(page.locator("#hostPermissionRequestMode")).toContainText("一次授权可见站点");
 
   await page.getByRole("button", { name: "生成方案" }).click();
