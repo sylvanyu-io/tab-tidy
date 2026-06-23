@@ -21,6 +21,7 @@ const nodes = {
 };
 
 let lastPreview = null;
+let lastCanApply = false;
 
 init().catch((error) => setStatus(error.message, true));
 
@@ -86,10 +87,12 @@ function updateRiskVisibility() {
 async function analyze() {
   setBusy(true);
   try {
-    const job = await sendMessage({ type: "tabs:analyze", settings: readSettings() });
+    const windowId = await resolveInvocationWindowId();
+    const job = await sendMessage({ type: "tabs:analyze", settings: readSettings(), windowId });
     lastPreview = job.preview;
+    lastCanApply = Boolean(job.validation?.ok);
     renderPreview(job);
-    nodes.applyBtn.disabled = !job.validation?.ok;
+    nodes.applyBtn.disabled = !lastCanApply;
     setStatus(job.validation?.ok ? "Plan ready" : "Plan has validation errors", !job.validation?.ok);
   } catch (error) {
     setStatus(error.message, true);
@@ -130,7 +133,7 @@ async function undoLastApply() {
 function renderPreview(job) {
   const preview = job.preview;
   const groups = preview.groups || [];
-  const warnings = [...(preview.warnings || []), ...(job.validation?.warnings || [])];
+  const warnings = preview.warnings || [];
 
   if (!groups.length && !preview.reviewTabsCount && !preview.lockedGroupsCount) {
     nodes.previewRoot.className = "empty";
@@ -183,7 +186,7 @@ function summaryRow(label, count) {
 function setBusy(isBusy) {
   nodes.analyzeBtn.disabled = isBusy;
   nodes.undoBtn.disabled = isBusy;
-  nodes.applyBtn.disabled = isBusy || !lastPreview;
+  nodes.applyBtn.disabled = isBusy || !lastPreview || !lastCanApply;
 }
 
 function setStatus(text, isError = false) {
@@ -201,6 +204,16 @@ async function sendMessage(message) {
     throw new Error(response?.error || "Extension request failed.");
   }
   return response.result;
+}
+
+async function resolveInvocationWindowId() {
+  if (!globalThis.chrome?.windows?.getCurrent) return null;
+  try {
+    const currentWindow = await chrome.windows.getCurrent();
+    return currentWindow?.id ?? null;
+  } catch {
+    return null;
+  }
 }
 
 async function mockMessage(message) {

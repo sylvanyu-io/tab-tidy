@@ -1,0 +1,65 @@
+import {
+  HOST_PERMISSION_REQUEST_MODES,
+  PAGE_CONTEXT_MODES,
+  PAGE_SAMPLING_CONSENT_MODES,
+  normalizeSettings
+} from "../shared/settings.js";
+import { canSampleUrl, getTabUrl } from "./url-sanitizer.js";
+
+export async function requestPageSample(chromeApi, tab, rawSettings, reason = "") {
+  const settings = normalizeSettings(rawSettings);
+  const rawUrl = getTabUrl(tab);
+
+  if (settings.pageContextMode === PAGE_CONTEXT_MODES.OFF) {
+    return { status: "disabled", reason: "Page context is off." };
+  }
+  if (settings.pageSamplingConsentMode === PAGE_SAMPLING_CONSENT_MODES.NOT_ACKNOWLEDGED) {
+    return { status: "blocked", reason: "Page sampling risk has not been acknowledged." };
+  }
+  if (!canSampleUrl(rawUrl)) {
+    return { status: "unsupported_url", reason: "This URL scheme cannot be sampled." };
+  }
+  if (!chromeApi.scripting?.executeScript) {
+    return { status: "blocked", reason: "The scripting permission is not available." };
+  }
+
+  const origin = new URL(rawUrl).origin + "/*";
+  const hasPermission = await chromeApi.permissions.contains({ origins: [origin] });
+  if (!hasPermission && settings.hostPermissionRequestMode === HOST_PERMISSION_REQUEST_MODES.NEVER) {
+    return { status: "permission_required", origin, reason: "Host permission is required for page sampling." };
+  }
+  if (!hasPermission) {
+    const granted = await chromeApi.permissions.request({ origins: [origin] });
+    if (!granted) {
+      return { status: "permission_denied", origin, reason: "User denied host permission." };
+    }
+  }
+
+  const [result] = await chromeApi.scripting.executeScript({
+    target: { tabId: tab.id || tab.tabId },
+    func: samplePage,
+    args: [reason]
+  });
+
+  return { status: "ok", origin, sample: result?.result || null };
+}
+
+function samplePage(reason) {
+  const metaDescription = document.querySelector('meta[name="description"]')?.content || "";
+  const canonicalUrl = document.querySelector('link[rel="canonical"]')?.href || "";
+  const headings = [...document.querySelectorAll("h1,h2")]
+    .map((node) => node.textContent?.replace(/\s+/g, " ").trim())
+    .filter(Boolean)
+    .slice(0, 12);
+  const visibleText = document.body?.innerText?.replace(/\s+/g, " ").trim().slice(0, 1800) || "";
+
+  return {
+    reason,
+    title: document.title,
+    metaDescription,
+    canonicalUrl,
+    language: document.documentElement.lang || "",
+    headings,
+    visibleText
+  };
+}

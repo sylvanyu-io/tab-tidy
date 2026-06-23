@@ -1,0 +1,324 @@
+import {
+  EXISTING_GROUP_MODES,
+  ORGANIZE_MODES,
+  REVIEW_GROUP_MODES,
+  TARGET_WINDOW_MODES,
+  normalizeSettings
+} from "../shared/settings.js";
+
+const NO_GROUP_ID = -1;
+
+export async function applyValidatedPlan(chromeApi, plan, inventory, rawSettings = {}) {
+  const settings = normalizeSettings(rawSettings);
+  const rollback = await createRollbackSnapshot(chromeApi, inventory, settings);
+  const operationJournal = [];
+  const createdGroupIds = [];
+  const createdWindowIds = [];
+  let targetWindowId = inventory.scope.currentWindowId;
+
+  if (settings.organizeMode === ORGANIZE_MODES.CONSOLIDATE_ONE_WINDOW) {
+    const target = await resolveTargetWindow(chromeApi, plan, inventory, settings, operationJournal);
+    targetWindowId = target.windowId;
+    createdWindowIds.push(...target.createdWindowIds);
+    await moveTabsToTarget(chromeApi, inventory.tabs || [], targetWindowId, target.seedTabId, operationJournal);
+  }
+
+  if (settings.existingGroupMode === EXISTING_GROUP_MODES.DISSOLVE) {
+    await safeUngroup(chromeApi, (inventory.plannerTabs || []).map((tab) => tab.tabId));
+  }
+
+  if (
+    settings.organizeMode === ORGANIZE_MODES.CONSOLIDATE_ONE_WINDOW &&
+    settings.existingGroupMode === EXISTING_GROUP_MODES.PRESERVE
+  ) {
+    for (const lockedGroup of inventory.lockedGroups || []) {
+      const groupId = await recreateGroup(chromeApi, lockedGroup.tabIds, targetWindowId, lockedGroup, settings);
+      if (groupId !== null) {
+        createdGroupIds.push(groupId);
+        operationJournal.push({ type: "recreate_locked_group", groupId, tabIds: lockedGroup.tabIds });
+      }
+    }
+  }
+
+  for (const group of plan.groups || []) {
+    const tabIds = group.tabRefs.map((ref) => ref.tabId);
+    const groupId = await recreateGroup(chromeApi, tabIds, targetWindowId, group, settings);
+    if (groupId !== null) {
+      createdGroupIds.push(groupId);
+      operationJournal.push({ type: "create_semantic_group", groupId, tabIds, title: group.title });
+    }
+  }
+
+  if (settings.reviewGroupMode === REVIEW_GROUP_MODES.CREATE && (plan.reviewTabs || []).length) {
+    const reviewTabIds = plan.reviewTabs.map((ref) => ref.tabId);
+    const groupId = await recreateGroup(
+      chromeApi,
+      reviewTabIds,
+      targetWindowId,
+      { title: "Review", color: "grey", collapsed: settings.collapseGroupsAfterApply },
+      settings
+    );
+    if (groupId !== null) {
+      createdGroupIds.push(groupId);
+      operationJournal.push({ type: "create_review_group", groupId, tabIds: reviewTabIds });
+    }
+  }
+
+  rollback.createdGroupIds = createdGroupIds;
+  rollback.createdWindowIds = createdWindowIds;
+  rollback.operationJournal.push(...operationJournal);
+
+  return {
+    rollback,
+    result: {
+      operationId: rollback.operationId,
+      targetWindowId,
+      createdGroupIds,
+      createdWindowIds,
+      movedTabsCount: settings.organizeMode === ORGANIZE_MODES.CONSOLIDATE_ONE_WINDOW ? (inventory.tabs || []).length : 0,
+      groupedTabsCount: (plan.groups || []).reduce((sum, group) => sum + group.tabRefs.length, 0),
+      reviewTabsCount: (plan.reviewTabs || []).length
+    }
+  };
+}
+
+export async function createRollbackSnapshot(chromeApi, inventory, settings) {
+  const sourceWindowIds = new Set(inventory.scope.windowIds || []);
+  const windows = (await chromeApi.windows.getAll({ populate: true, windowTypes: ["normal"] })).filter((window) =>
+    sourceWindowIds.has(window.id)
+  );
+  const sourceGroups = await queryGroupsForWindows(chromeApi, windows);
+
+  return {
+    operationId: `op_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+    createdAt: new Date().toISOString(),
+    mode: settings.organizeMode,
+    sourceWindows: windows.map((window) => ({
+      windowId: window.id,
+      type: window.type,
+      incognito: Boolean(window.incognito),
+      focused: Boolean(window.focused),
+      state: window.state || "normal",
+      bounds: {
+        left: window.left,
+        top: window.top,
+        width: window.width,
+        height: window.height
+      },
+      activeTabId: (window.tabs || []).find((tab) => tab.active)?.id || null,
+      tabOrder: (window.tabs || []).map((tab) => tab.id).filter((id) => typeof id === "number")
+    })),
+    sourceGroups,
+    tabs: windows.flatMap((window) =>
+      (window.tabs || []).map((tab) => ({
+        tabId: tab.id,
+        windowId: window.id,
+        index: tab.index,
+        pinned: Boolean(tab.pinned),
+        active: Boolean(tab.active),
+        highlighted: Boolean(tab.highlighted),
+        groupId: tab.groupId ?? NO_GROUP_ID
+      }))
+    ),
+    createdWindowIds: [],
+    createdGroupIds: [],
+    operationJournal: []
+  };
+}
+
+export async function undoFromRollback(chromeApi, rollback) {
+  if (!rollback?.tabs?.length) {
+    throw new Error("No rollback snapshot is available.");
+  }
+
+  const snapshotTabs = rollback.tabs.filter((tab) => typeof tab.tabId === "number");
+  const existingTabs = await getExistingTabs(chromeApi, snapshotTabs.map((tab) => tab.tabId));
+  const survivingIds = [...existingTabs.keys()];
+
+  await safeUngroup(chromeApi, survivingIds);
+
+  const restoredWindowIds = new Map();
+  let restoredTabs = 0;
+
+  for (const sourceWindow of rollback.sourceWindows || []) {
+    const sourceTabs = snapshotTabs
+      .filter((tab) => tab.windowId === sourceWindow.windowId && existingTabs.has(tab.tabId))
+      .sort((left, right) => left.index - right.index);
+    if (!sourceTabs.length) continue;
+
+    const windowId = await ensureSourceWindow(chromeApi, sourceWindow, sourceTabs, existingTabs);
+    restoredWindowIds.set(sourceWindow.windowId, windowId);
+    restoredTabs += sourceTabs.length;
+
+    await moveTabsInOrder(chromeApi, sourceTabs, windowId, existingTabs);
+    await restorePinnedState(chromeApi, sourceTabs);
+
+    if (sourceWindow.activeTabId && existingTabs.has(sourceWindow.activeTabId)) {
+      await safeTabUpdate(chromeApi, sourceWindow.activeTabId, { active: true });
+    }
+  }
+
+  const recreatedGroupIds = [];
+  for (const sourceGroup of rollback.sourceGroups || []) {
+    const targetWindowId = restoredWindowIds.get(sourceGroup.windowId);
+    const memberIds = (sourceGroup.tabOrder || []).filter((tabId) => existingTabs.has(tabId));
+    if (!targetWindowId || !memberIds.length) continue;
+    const groupId = await recreateGroup(chromeApi, memberIds, targetWindowId, sourceGroup, {
+      collapseGroupsAfterApply: sourceGroup.collapsed
+    });
+    if (groupId !== null) recreatedGroupIds.push(groupId);
+  }
+
+  return {
+    operationId: rollback.operationId,
+    restoredTabs,
+    recreatedGroupIds,
+    missingTabs: snapshotTabs.length - restoredTabs
+  };
+}
+
+async function resolveTargetWindow(chromeApi, plan, inventory, settings, journal) {
+  const eligibleTabs = inventory.tabs || [];
+  if (!eligibleTabs.length) throw new Error("No eligible tabs to move.");
+
+  if (settings.targetWindowMode === TARGET_WINDOW_MODES.NEW_WINDOW) {
+    const seedTabId = eligibleTabs[0].tabId;
+    const newWindow = await chromeApi.windows.create({ tabId: seedTabId, focused: true });
+    journal.push({ type: "create_window", windowId: newWindow.id, seedTabId });
+    return { windowId: newWindow.id, createdWindowIds: [newWindow.id], seedTabId };
+  }
+
+  if (settings.targetWindowMode === TARGET_WINDOW_MODES.SELECTED_WINDOW && Number.isInteger(plan.targetWindow?.windowId)) {
+    return { windowId: plan.targetWindow.windowId, createdWindowIds: [], seedTabId: null };
+  }
+
+  const invocationWindowId = inventory.scope.invocationWindowId;
+  if (Number.isInteger(invocationWindowId)) {
+    return { windowId: invocationWindowId, createdWindowIds: [], seedTabId: null };
+  }
+
+  const focusedWindow = (inventory.windows || []).find((window) => window.focused) || inventory.windows?.[0];
+  if (!focusedWindow) throw new Error("Unable to resolve target window.");
+  return { windowId: focusedWindow.windowId, createdWindowIds: [], seedTabId: null };
+}
+
+async function moveTabsToTarget(chromeApi, tabs, targetWindowId, seedTabId, journal) {
+  const tabIds = tabs.filter((tab) => tab.tabId !== seedTabId && tab.windowId !== targetWindowId).map((tab) => tab.tabId);
+  if (!tabIds.length) return;
+  await chromeApi.tabs.move(tabIds, { windowId: targetWindowId, index: -1 });
+  journal.push({ type: "move_tabs", tabIds, toWindowId: targetWindowId });
+}
+
+async function recreateGroup(chromeApi, tabIds, windowId, groupLike, settings) {
+  const existingTabIds = [];
+  for (const tabId of tabIds) {
+    try {
+      await chromeApi.tabs.get(tabId);
+      existingTabIds.push(tabId);
+    } catch {
+      // The user may have closed a tab between preview and apply.
+    }
+  }
+  if (!existingTabIds.length) return null;
+
+  await safeUngroup(chromeApi, existingTabIds);
+  const groupId = await chromeApi.tabs.group({ tabIds: existingTabIds, createProperties: { windowId } });
+  await chromeApi.tabGroups.update(groupId, {
+    title: groupLike.title || "Untitled",
+    color: groupLike.color || "grey",
+    collapsed: Boolean(groupLike.collapsed ?? settings.collapseGroupsAfterApply)
+  });
+  return groupId;
+}
+
+async function safeUngroup(chromeApi, tabIds) {
+  const uniqueIds = [...new Set(tabIds)].filter((id) => typeof id === "number");
+  if (!uniqueIds.length) return;
+  try {
+    await chromeApi.tabs.ungroup(uniqueIds);
+  } catch {
+    // Ungroup can fail when every tab is already ungrouped; grouping below is still safe.
+  }
+}
+
+async function queryGroupsForWindows(chromeApi, windows) {
+  if (!chromeApi.tabGroups?.query) return [];
+  const groups = [];
+  for (const window of windows) {
+    const windowGroups = await chromeApi.tabGroups.query({ windowId: window.id });
+    for (const group of windowGroups) {
+      const tabs = (window.tabs || [])
+        .filter((tab) => tab.groupId === group.id)
+        .sort((left, right) => left.index - right.index);
+      groups.push({
+        groupId: group.id,
+        windowId: window.id,
+        title: group.title || "Existing Group",
+        color: group.color || "grey",
+        collapsed: Boolean(group.collapsed),
+        tabOrder: tabs.map((tab) => tab.id).filter((id) => typeof id === "number")
+      });
+    }
+  }
+  return groups;
+}
+
+async function getExistingTabs(chromeApi, tabIds) {
+  const existing = new Map();
+  for (const tabId of tabIds) {
+    try {
+      existing.set(tabId, await chromeApi.tabs.get(tabId));
+    } catch {
+      // Closed tabs cannot be restored without session restore integration.
+    }
+  }
+  return existing;
+}
+
+async function ensureSourceWindow(chromeApi, sourceWindow, sourceTabs, existingTabs) {
+  try {
+    await chromeApi.windows.get(sourceWindow.windowId);
+    return sourceWindow.windowId;
+  } catch {
+    const seedTabId = sourceTabs[0].tabId;
+    const createProperties = { tabId: seedTabId, focused: false };
+    if (sourceWindow.state === "normal") {
+      Object.assign(createProperties, filterBounds(sourceWindow.bounds));
+    }
+    const newWindow = await chromeApi.windows.create(createProperties);
+    existingTabs.set(seedTabId, await chromeApi.tabs.get(seedTabId));
+    return newWindow.id;
+  }
+}
+
+async function moveTabsInOrder(chromeApi, sourceTabs, windowId, existingTabs) {
+  let nextIndex = 0;
+  for (const snapshot of sourceTabs) {
+    const current = existingTabs.get(snapshot.tabId);
+    if (!current) continue;
+    await chromeApi.tabs.move(snapshot.tabId, { windowId, index: nextIndex });
+    nextIndex += 1;
+  }
+}
+
+async function restorePinnedState(chromeApi, sourceTabs) {
+  for (const snapshot of sourceTabs) {
+    await safeTabUpdate(chromeApi, snapshot.tabId, { pinned: snapshot.pinned });
+  }
+}
+
+async function safeTabUpdate(chromeApi, tabId, updateProperties) {
+  try {
+    await chromeApi.tabs.update(tabId, updateProperties);
+  } catch {
+    // Best-effort rollback should continue when one tab cannot be updated.
+  }
+}
+
+function filterBounds(bounds = {}) {
+  const result = {};
+  for (const key of ["left", "top", "width", "height"]) {
+    if (Number.isFinite(bounds[key])) result[key] = bounds[key];
+  }
+  return result;
+}
