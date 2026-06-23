@@ -51,6 +51,8 @@ const nodes = {
 let lastPreview = null;
 let lastCanApply = false;
 let isEditingSettings = false;
+let pageSamplingOriginCache = { origins: [], refreshedAt: 0 };
+let pageSamplingOriginRefreshTimer = null;
 
 init().catch((error) => setStatus(error.message, true));
 
@@ -61,6 +63,7 @@ async function init() {
   const settings = await sendMessage({ type: "settings:get" });
   writeSettings(settings);
   updateConditionalUi();
+  schedulePageSamplingOriginRefresh();
   syncActionState();
 }
 
@@ -166,6 +169,7 @@ function updateConditionalUi() {
   nodes.deepseekFields.hidden = fields.plannerProvider.value !== "deepseek";
   nodes.rememberProviderKeysRow.hidden = fields.plannerProvider.value === "fake";
   syncChoiceGroups();
+  schedulePageSamplingOriginRefresh();
 }
 
 async function analyze() {
@@ -173,6 +177,7 @@ async function analyze() {
   try {
     const settings = readSettings();
     await ensurePlannerHostPermission(settings);
+    await ensurePageSamplingPermissions(settings);
     const windowId = await resolveInvocationWindowId();
     const job = await sendMessage({ type: "tabs:analyze", settings, windowId });
     lastPreview = job.preview;
@@ -399,9 +404,126 @@ async function ensurePlannerHostPermission(settings) {
   }
 }
 
+async function ensurePageSamplingPermissions(settings) {
+  if (settings.pageContextMode === "off" || settings.pageSamplingConsentMode === "not_acknowledged") return;
+  if (!globalThis.chrome?.permissions?.contains || !globalThis.chrome?.permissions?.request) return;
+
+  const shouldRequestHostOrigins =
+    settings.pageContextMode !== "active_tab_only" && settings.hostPermissionRequestMode !== "never";
+  const origins = shouldRequestHostOrigins ? pageSamplingOriginCache.origins : [];
+  const missingPermissions = [];
+  const hasScripting = await chrome.permissions.contains({ permissions: ["scripting"] });
+  if (!hasScripting) missingPermissions.push("scripting");
+  const missingOrigins = await getMissingOrigins(origins);
+
+  if (settings.hostPermissionRequestMode === "ask_per_origin" && missingOrigins.length > 1) {
+    const [firstOrigin, ...remainingOrigins] = missingOrigins;
+    await requestOptionalPermission({
+      permissions: missingPermissions,
+      origins: firstOrigin ? [firstOrigin] : []
+    });
+    for (const origin of remainingOrigins) {
+      await requestOptionalPermission({ origins: [origin] });
+    }
+    return;
+  }
+
+  if (missingPermissions.length || missingOrigins.length) {
+    await requestOptionalPermission({
+      permissions: missingPermissions,
+      origins: missingOrigins
+    });
+  }
+}
+
+function schedulePageSamplingOriginRefresh() {
+  clearTimeout(pageSamplingOriginRefreshTimer);
+  pageSamplingOriginRefreshTimer = setTimeout(() => {
+    refreshPageSamplingOriginCache().catch(() => {
+      pageSamplingOriginCache = { origins: [], refreshedAt: Date.now() };
+      globalThis.__semanticTabAgentPageSamplingOrigins = pageSamplingOriginCache;
+    });
+  }, 50);
+}
+
+async function refreshPageSamplingOriginCache() {
+  const settings = readSettings();
+  const shouldCollect =
+    settings.pageContextMode !== "off" &&
+    settings.pageSamplingConsentMode !== "not_acknowledged" &&
+    settings.pageContextMode !== "active_tab_only" &&
+    settings.hostPermissionRequestMode !== "never";
+  const windowId = shouldCollect ? await resolveInvocationWindowId() : null;
+  const origins = shouldCollect ? await collectPageSamplingOrigins(settings, windowId) : [];
+  pageSamplingOriginCache = { origins, refreshedAt: Date.now() };
+  globalThis.__semanticTabAgentPageSamplingOrigins = pageSamplingOriginCache;
+}
+
+async function getMissingOrigins(origins) {
+  const missing = [];
+  for (const origin of origins) {
+    const hasPermission = await chrome.permissions.contains({ origins: [origin] });
+    if (!hasPermission) missing.push(origin);
+  }
+  return missing;
+}
+
+async function requestOptionalPermission(request) {
+  const permissions = request.permissions?.filter(Boolean) || [];
+  const origins = request.origins?.filter(Boolean) || [];
+  if (!permissions.length && !origins.length) return true;
+
+  const hasPermission = await chrome.permissions.contains({ permissions, origins });
+  if (hasPermission) return true;
+  return chrome.permissions.request({ permissions, origins });
+}
+
+async function collectPageSamplingOrigins(settings, windowId) {
+  const tabs = await collectVisibleTabs(settings, windowId);
+  return [
+    ...new Set(
+      tabs
+        .filter((tab) => isEligibleForPageSampling(tab, settings))
+        .filter((tab) => settings.pageContextMode !== "ambiguous_with_permission" || isAmbiguousTab(tab))
+        .map((tab) => hostPermissionPattern(tab.url || tab.pendingUrl || ""))
+        .filter(Boolean)
+    )
+  ];
+}
+
+async function collectVisibleTabs(settings, windowId) {
+  if (!globalThis.chrome?.windows) return [];
+  if (settings.organizeMode === "consolidate_one_window") {
+    const windows = await chrome.windows.getAll({ populate: true, windowTypes: ["normal"] });
+    return windows.flatMap((window) => window.tabs || []);
+  }
+
+  const targetWindow =
+    Number.isInteger(windowId)
+      ? await chrome.windows.get(windowId, { populate: true })
+      : await chrome.windows.getCurrent({ populate: true });
+  return targetWindow?.tabs || [];
+}
+
+function isEligibleForPageSampling(tab, settings) {
+  if (!tab || typeof tab.id !== "number") return false;
+  if (tab.pinned && !settings.includePinnedTabs) return false;
+  if (tab.incognito && !settings.includeIncognitoTabs) return false;
+  return Boolean(hostPermissionPattern(tab.url || tab.pendingUrl || ""));
+}
+
+function isAmbiguousTab(tab) {
+  const title = String(tab.title || "").trim().toLowerCase();
+  return !title || title.length < 18 || ["home", "new tab", "untitled", "login", "sign in"].some((term) => title.includes(term));
+}
+
 function providerPermissionPattern(baseUrl) {
+  return hostPermissionPattern(baseUrl);
+}
+
+function hostPermissionPattern(rawUrl) {
   try {
-    const url = new URL(baseUrl);
+    const url = new URL(rawUrl);
     if (!["https:", "http:"].includes(url.protocol)) return "";
     return `${url.protocol}//${url.hostname}/*`;
   } catch {
