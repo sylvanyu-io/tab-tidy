@@ -297,8 +297,12 @@ h2 {
 .choice-card,
 .segmented button,
 .actions button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   min-height: 44px;
   border: 1px solid var(--line);
+  line-height: 1;
   cursor: pointer;
   transition:
     background 160ms var(--ease),
@@ -308,10 +312,13 @@ h2 {
     box-shadow 160ms var(--ease);
 }
 
+.button-label {
+  display: block;
+  line-height: 1;
+  transform: translateY(0.5px);
+}
+
 .choice-card {
-  display: grid;
-  gap: 5px;
-  align-content: start;
   min-height: 92px;
   padding: 13px 12px;
   text-align: left;
@@ -321,7 +328,10 @@ h2 {
 }
 
 .compact-choice-grid .choice-card {
-  place-items: center;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 36px;
   min-height: 36px;
   padding: 0 8px;
   text-align: center;
@@ -397,6 +407,7 @@ h2 {
 }
 
 .segmented button {
+  height: 34px;
   min-height: 34px;
   padding: 0 8px;
   color: var(--muted);
@@ -715,6 +726,7 @@ details[open] > summary::before {
 
 .actions button {
   min-width: 70px;
+  height: 44px;
   min-height: 44px;
   padding: 0 13px;
   color: var(--text);

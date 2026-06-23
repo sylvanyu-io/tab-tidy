@@ -354,8 +354,17 @@ function syncActionState() {
   nodes.settingsSummaryBtn.hidden = !compactPreview;
   nodes.settingsSummaryText.textContent = `${scopeLabel()} · ${providerLabel()}`;
   nodes.actions.dataset.state = lastPreview ? "preview" : "idle";
-  nodes.analyzeBtn.textContent = lastPreview ? "重新生成" : "生成方案";
+  setButtonLabel(nodes.analyzeBtn, lastPreview ? "重新生成" : "生成方案");
   nodes.applyBtn.dataset.role = lastPreview && lastCanApply ? "primary" : "";
+}
+
+function setButtonLabel(button, text) {
+  const label = button.querySelector(".button-label");
+  if (label) {
+    label.textContent = text;
+  } else {
+    button.textContent = text;
+  }
 }
 
 function scopeLabel() {

@@ -37,8 +37,12 @@
           </div>
 
           <div class="choice-grid compact-choice-grid" data-choice-for="organizeMode">
-            <button class="choice-card" type="button" data-value="current_window">当前窗口</button>
-            <button class="choice-card" type="button" data-value="consolidate_one_window">所有窗口</button>
+            <button class="choice-card" type="button" data-value="current_window">
+              <span class="button-label">当前窗口</span>
+            </button>
+            <button class="choice-card" type="button" data-value="consolidate_one_window">
+              <span class="button-label">所有窗口</span>
+            </button>
           </div>
         </div>
 
@@ -53,9 +57,9 @@
           </div>
 
           <div class="segmented" data-choice-for="plannerProvider">
-            <button type="button" data-value="fake">预览</button>
-            <button type="button" data-value="deepseek">DeepSeek</button>
-            <button type="button" data-value="openai">OpenAI</button>
+            <button type="button" data-value="fake"><span class="button-label">预览</span></button>
+            <button type="button" data-value="deepseek"><span class="button-label">DeepSeek</span></button>
+            <button type="button" data-value="openai"><span class="button-label">OpenAI</span></button>
           </div>
         </div>
 
@@ -220,9 +224,9 @@
       </details>
 
       <div class="actions">
-        <button id="analyzeBtn" class="primary-action" type="button">生成方案</button>
-        <button id="applyBtn" type="button" disabled>开始整理</button>
-        <button id="undoBtn" type="button">撤销</button>
+        <button id="analyzeBtn" class="primary-action" type="button"><span class="button-label">生成方案</span></button>
+        <button id="applyBtn" type="button" disabled><span class="button-label">开始整理</span></button>
+        <button id="undoBtn" type="button"><span class="button-label">撤销</span></button>
       </div>
 
       <section id="previewSection" class="preview" aria-live="polite" hidden>
