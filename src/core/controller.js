@@ -1,5 +1,6 @@
-import { DEFAULT_SETTINGS, PLANNER_PROVIDERS, normalizeSettings } from "../shared/settings.js";
+import { DEFAULT_SETTINGS, PAGE_CONTEXT_MODES, PLANNER_PROVIDERS, normalizeSettings } from "../shared/settings.js";
 import { applyValidatedPlan, undoFromRollback } from "./chrome-executor.js";
+import { requestPageSample } from "./page-sampler.js";
 import { createPlan } from "./planner.js";
 import { buildPreview } from "./preview.js";
 import { STORAGE_KEYS, getLocal, removeLocal, setLocal } from "./storage.js";
@@ -36,6 +37,7 @@ export async function saveSettings(chromeApi, nextSettings) {
 export async function analyzeTabs(chromeApi, rawSettings, invocation = {}) {
   const settings = await saveSettings(chromeApi, rawSettings);
   const inventory = await collectTabInventory(chromeApi, settings, invocation);
+  await attachPageSamples(chromeApi, inventory, settings);
   const { plan, validation } = await createValidatedPlan(inventory, settings);
   const preview = buildPreview(plan, inventory, validation, settings);
   const jobSettings = redactSettingsForJob(settings);
@@ -84,8 +86,15 @@ function redactSettingsForJob(settings) {
 }
 
 function settingsForPersistence(settings) {
-  if (settings.pageSamplingConsentMode !== "acknowledged_for_session") return settings;
-  return { ...settings, pageSamplingConsentMode: "not_acknowledged" };
+  const persisted = { ...settings };
+  if (persisted.pageSamplingConsentMode === "acknowledged_for_session") {
+    persisted.pageSamplingConsentMode = "not_acknowledged";
+  }
+  if (!persisted.rememberProviderKeys) {
+    persisted.openaiApiKey = "";
+    persisted.deepseekApiKey = "";
+  }
+  return persisted;
 }
 
 async function createValidatedPlan(inventory, settings) {
@@ -109,4 +118,53 @@ async function createValidatedPlan(inventory, settings) {
   const retryPlan = await createPlan(inventory, retrySettings);
   validation = validatePlan(retryPlan, inventory, settings);
   return { plan: retryPlan, validation };
+}
+
+async function attachPageSamples(chromeApi, inventory, settings) {
+  inventory.pageSamples = [];
+  if (settings.pageContextMode === PAGE_CONTEXT_MODES.OFF) return inventory;
+
+  const candidates = selectSamplingCandidates(inventory, settings);
+  for (const tab of candidates) {
+    const liveTab = await getLiveTab(chromeApi, tab.tabId);
+    const sampleResult = liveTab
+      ? await requestPageSample(chromeApi, liveTab, settings, `Improve semantic grouping for tab ${tab.tabId}.`)
+      : { status: "missing", reason: "Tab disappeared before sampling." };
+    inventory.pageSamples.push({
+      tabId: tab.tabId,
+      windowId: tab.windowId,
+      status: sampleResult.status,
+      origin: sampleResult.origin || "",
+      reason: sampleResult.reason || "",
+      sample: sampleResult.sample || null
+    });
+  }
+  return inventory;
+}
+
+function selectSamplingCandidates(inventory, settings) {
+  const tabs = (inventory.plannerTabs || []).filter((tab) => tab.sampleable);
+  if (settings.pageContextMode === PAGE_CONTEXT_MODES.ACTIVE_TAB_ONLY) {
+    return tabs.filter((tab) => tab.active);
+  }
+  if (settings.pageContextMode === PAGE_CONTEXT_MODES.ALL_GRANTED_ORIGINS) {
+    return tabs;
+  }
+  if (settings.pageContextMode === PAGE_CONTEXT_MODES.AMBIGUOUS_WITH_PERMISSION) {
+    return tabs.filter(isAmbiguousTab);
+  }
+  return [];
+}
+
+function isAmbiguousTab(tab) {
+  const title = String(tab.title || "").trim().toLowerCase();
+  return !title || title.length < 18 || ["home", "new tab", "untitled", "login", "sign in"].some((term) => title.includes(term));
+}
+
+async function getLiveTab(chromeApi, tabId) {
+  try {
+    return await chromeApi.tabs.get(tabId);
+  } catch {
+    return null;
+  }
 }

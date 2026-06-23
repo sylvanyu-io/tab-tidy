@@ -28,7 +28,15 @@ test("OpenAI planner posts a structured-output Responses request", async () => {
     windows: [{ windowId: 1, tabCount: 1 }],
     plannerTabs: [{ tabId: 10, windowId: 1, title: "OpenAI docs", hostname: "platform.openai.com" }],
     excludedTabs: [],
-    lockedGroups: []
+    lockedGroups: [],
+    pageSamples: [
+      {
+        tabId: 10,
+        windowId: 1,
+        status: "ok",
+        sample: { title: "OpenAI docs", headings: ["Structured Outputs"], visibleText: "JSON schema output" }
+      }
+    ]
   };
 
   const fetchImpl = async (url, options) => {
@@ -42,6 +50,9 @@ test("OpenAI planner posts a structured-output Responses request", async () => {
     assert.equal(body.text.format.type, "json_schema");
     assert.equal(body.text.format.strict, true);
     assert.equal(body.text.format.name, "semantic_tab_action_plan");
+    const payload = JSON.parse(body.input);
+    assert.equal(payload.eligibleTabs[0].pageSample.status, "ok");
+    assert.equal(payload.pageSampleResults[0].status, "ok");
     return {
       ok: true,
       async json() {

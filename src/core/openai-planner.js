@@ -61,6 +61,7 @@ export function buildPlannerSystemPrompt(settings) {
 }
 
 export function buildPlannerPayload(inventory, settings) {
+  const pageSamplesByTabId = new Map((inventory.pageSamples || []).map((result) => [result.tabId, result]));
   return {
     settings: {
       organizeMode: settings.organizeMode,
@@ -83,7 +84,8 @@ export function buildPlannerPayload(inventory, settings) {
       audible: tab.audible,
       discarded: tab.discarded,
       sampleable: tab.sampleable,
-      existingGroup: tab.groupTitle || ""
+      existingGroup: tab.groupTitle || "",
+      pageSample: formatPageSample(pageSamplesByTabId.get(tab.tabId))
     })),
     excludedTabs: (inventory.excludedTabs || []).map((tab) => ({
       tabId: tab.tabId,
@@ -91,7 +93,30 @@ export function buildPlannerPayload(inventory, settings) {
       title: tab.title,
       reason: tab.exclusionReason
     })),
-    lockedGroups: inventory.lockedGroups || []
+    lockedGroups: inventory.lockedGroups || [],
+    pageSampleResults: (inventory.pageSamples || []).map((result) => ({
+      tabId: result.tabId,
+      windowId: result.windowId,
+      status: result.status,
+      origin: result.origin,
+      reason: result.reason
+    }))
+  };
+}
+
+function formatPageSample(result) {
+  if (!result) return null;
+  if (result.status !== "ok") {
+    return { status: result.status, reason: result.reason || "" };
+  }
+  const sample = result.sample || {};
+  return {
+    status: "ok",
+    title: sample.title || "",
+    metaDescription: sample.metaDescription || "",
+    language: sample.language || "",
+    headings: sample.headings || [],
+    visibleText: sample.visibleText || ""
   };
 }
 

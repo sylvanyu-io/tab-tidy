@@ -20,6 +20,7 @@ export function buildPreview(plan, inventory, validation, rawSettings = {}) {
     lockedGroupsCount: (inventory.lockedGroups || []).length,
     movedTabsCount,
     reviewGroupWillBeCreated: settings.reviewGroupMode === REVIEW_GROUP_MODES.CREATE && reviewTabIds.size > 0,
+    pageSampling: summarizePageSamples(inventory.pageSamples || []),
     groups: (plan.groups || []).map((group) => ({
       groupKey: group.groupKey,
       title: group.title,
@@ -37,5 +38,14 @@ export function buildPreview(plan, inventory, validation, rawSettings = {}) {
         ? [`${movedTabsCount} eligible tab(s) will be moved into one target window.`]
         : [])
     ]
+  };
+}
+
+function summarizePageSamples(results) {
+  return {
+    requested: results.length,
+    ok: results.filter((result) => result.status === "ok").length,
+    permissionRequired: results.filter((result) => result.status === "permission_required").length,
+    blocked: results.filter((result) => ["blocked", "permission_denied", "unsupported_url", "missing"].includes(result.status)).length
   };
 }

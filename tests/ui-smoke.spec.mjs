@@ -35,16 +35,16 @@ test.afterAll(async () => {
 test("side panel renders settings and mock preview", async ({ page }) => {
   await page.goto(`${baseUrl}/src/sidepanel/index.html`);
 
-  await expect(page.getByRole("heading", { name: "Semantic Tab Agent" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "智能整理标签页" })).toBeVisible();
   await expect(page.locator("#samplingRisk")).toBeHidden();
 
-  await page.selectOption("#pageContextMode", "ambiguous_with_permission");
+  await page.locator("#ackSampling").check();
   await expect(page.locator("#samplingRisk")).toBeVisible();
 
-  await page.getByRole("button", { name: "Analyze" }).click();
-  await expect(page.locator(".preview").getByText("AI Research", { exact: true })).toBeVisible();
-  await expect(page.locator(".preview").getByText("Project Work", { exact: true })).toBeVisible();
-  await expect(page.getByRole("button", { name: "Apply" })).toBeEnabled();
+  await page.getByRole("button", { name: "生成方案" }).click();
+  await expect(page.locator(".preview").getByText("AI 研究", { exact: true })).toBeVisible();
+  await expect(page.locator(".preview").getByText("当前项目", { exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "应用方案" })).toBeEnabled();
 });
 
 function contentType(filePath) {

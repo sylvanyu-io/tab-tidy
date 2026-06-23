@@ -22,3 +22,13 @@ test("invalid selected target window ids normalize to null", () => {
   const settings = normalizeSettings({ ...DEFAULT_SETTINGS, selectedTargetWindowId: "not-a-window" });
   assert.equal(settings.selectedTargetWindowId, null);
 });
+
+test("provider keys are not persisted unless explicitly remembered", async () => {
+  const chrome = createFakeChrome();
+
+  await saveSettings(chrome, { ...DEFAULT_SETTINGS, deepseekApiKey: "deepseek-test-key", rememberProviderKeys: false });
+  assert.equal((await getSettings(chrome)).deepseekApiKey, "");
+
+  await saveSettings(chrome, { ...DEFAULT_SETTINGS, deepseekApiKey: "deepseek-test-key", rememberProviderKeys: true });
+  assert.equal((await getSettings(chrome)).deepseekApiKey, "deepseek-test-key");
+});

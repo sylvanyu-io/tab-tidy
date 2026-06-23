@@ -10,132 +10,189 @@
     <main class="app-shell">
       <header class="topbar">
         <div>
-          <h1>Semantic Tab Agent</h1>
-          <p id="statusText">Ready</p>
+          <h1>智能整理标签页</h1>
+          <p id="statusText">准备就绪</p>
         </div>
       </header>
 
       <section class="panel">
+        <div id="progressBar" class="progress" hidden>
+          <div id="progressFill"></div>
+        </div>
+
         <div class="field">
-          <label for="organizeMode">Scope</label>
+          <label for="organizeMode">整理范围</label>
           <select id="organizeMode">
-            <option value="current_window">Current window</option>
-            <option value="consolidate_one_window">All windows to one window</option>
+            <option value="current_window">只整理当前窗口</option>
+            <option value="consolidate_one_window">合并并整理所有窗口</option>
           </select>
         </div>
 
         <div class="field">
-          <label for="existingGroupMode">Existing groups</label>
-          <select id="existingGroupMode">
-            <option value="preserve_existing_groups">Preserve</option>
-            <option value="dissolve_existing_groups">Dissolve</option>
+          <label for="plannerProvider">AI 服务</label>
+          <select id="plannerProvider">
+            <option value="fake">本地预览</option>
+            <option value="deepseek">DeepSeek</option>
+            <option value="openai">OpenAI</option>
           </select>
         </div>
 
-        <div class="field">
-          <label for="reviewGroupMode">Review tabs</label>
-          <select id="reviewGroupMode">
-            <option value="create_review_group">Create Review group</option>
-            <option value="leave_review_ungrouped">Leave ungrouped</option>
-          </select>
+        <div id="openaiFields" class="provider-fields">
+          <div class="field">
+            <label for="openaiApiKey">OpenAI 密钥</label>
+            <input id="openaiApiKey" type="password" autocomplete="off" />
+          </div>
         </div>
 
-        <div class="field">
-          <label for="urlPrivacyMode">URL detail</label>
-          <select id="urlPrivacyMode">
-            <option value="title_only">Title only</option>
-            <option value="sanitized_url">Sanitized URL</option>
-            <option value="full_url">Full URL</option>
-          </select>
+        <div id="deepseekFields" class="provider-fields">
+          <div class="field">
+            <label for="deepseekApiKey">DeepSeek 密钥</label>
+            <input id="deepseekApiKey" type="password" autocomplete="off" />
+          </div>
         </div>
 
-        <div class="field">
-          <label for="pageContextMode">Page context</label>
-          <select id="pageContextMode">
-            <option value="off">Off</option>
-            <option value="active_tab_only">Active tab only</option>
-            <option value="ambiguous_with_permission">Ambiguous tabs with permission</option>
-            <option value="all_granted_origins">All granted origins</option>
-          </select>
-        </div>
+        <label id="rememberProviderKeysRow" class="checkbox-row">
+          <input id="rememberProviderKeys" type="checkbox" />
+          <span>记住密钥</span>
+        </label>
+
+        <label class="checkbox-row emphasis-toggle">
+          <input id="ackSampling" type="checkbox" />
+          <span>读取当前页面摘要来提升分类</span>
+        </label>
 
         <div id="samplingRisk" class="risk" hidden>
-          <strong>Page sampling risk</strong>
+          <strong>会读取页面文字摘要</strong>
           <p>
-            Page samples can expose sensitive page text to the selected AI provider.
-            Passwords, form values, cookies, local storage, and full HTML are not collected.
+            只读取标题、描述、标题层级和一小段可见文字；不会读取密码、表单内容、Cookie、本地存储或完整 HTML。
           </p>
-          <label class="checkbox-row">
-            <input id="ackSampling" type="checkbox" />
-            <span>Acknowledge for this session</span>
-          </label>
         </div>
 
         <div class="field">
-          <label for="promptPreset">Prompt preset</label>
-          <select id="promptPreset">
-            <option value="conservative">Conservative</option>
-            <option value="research">Research</option>
-            <option value="project_work">Project work</option>
-            <option value="aggressive_cleanup">Aggressive cleanup</option>
-          </select>
+          <label for="customPrompt">整理偏好</label>
+          <textarea
+            id="customPrompt"
+            rows="4"
+            spellcheck="true"
+            placeholder="例如：把找工作、AI 论文、当前项目分开；不确定的页面放到待确认。"
+          ></textarea>
         </div>
 
-        <div class="field">
-          <label for="plannerProvider">Planner</label>
-          <select id="plannerProvider">
-            <option value="fake">Local fake planner</option>
-            <option value="openai">OpenAI</option>
-            <option value="deepseek">DeepSeek</option>
-          </select>
-        </div>
+        <details class="advanced-settings">
+          <summary>高级设置</summary>
 
-        <div class="field">
-          <label for="openaiModel">OpenAI model</label>
-          <input id="openaiModel" type="text" autocomplete="off" />
-        </div>
+          <div id="targetWindowField" class="field" hidden>
+            <label for="targetWindowMode">合并后放到</label>
+            <select id="targetWindowMode">
+              <option value="new_window">新窗口</option>
+              <option value="current_window">当前窗口</option>
+            </select>
+          </div>
 
-        <div class="field">
-          <label for="openaiApiKey">OpenAI API key</label>
-          <input id="openaiApiKey" type="password" autocomplete="off" />
-        </div>
+          <div class="field">
+            <label for="existingGroupMode">已有分组</label>
+            <select id="existingGroupMode">
+              <option value="preserve_existing_groups">保留</option>
+              <option value="dissolve_existing_groups">重新整理</option>
+            </select>
+          </div>
 
-        <div class="field">
-          <label for="deepseekModel">DeepSeek model</label>
-          <input id="deepseekModel" type="text" autocomplete="off" />
-        </div>
+          <div class="field">
+            <label for="reviewGroupMode">待确认标签页</label>
+            <select id="reviewGroupMode">
+              <option value="create_review_group">创建待确认分组</option>
+              <option value="leave_review_ungrouped">保持未分组</option>
+            </select>
+          </div>
 
-        <div class="field">
-          <label for="deepseekApiKey">DeepSeek API key</label>
-          <input id="deepseekApiKey" type="password" autocomplete="off" />
-        </div>
+          <div class="field">
+            <label for="urlPrivacyMode">发送给 AI 的网址信息</label>
+            <select id="urlPrivacyMode">
+              <option value="title_only">只发标题</option>
+              <option value="sanitized_url">精简网址</option>
+              <option value="full_url">完整网址</option>
+            </select>
+          </div>
 
-        <div class="field">
-          <label for="customPrompt">Custom prompt</label>
-          <textarea id="customPrompt" rows="5" spellcheck="true"></textarea>
-        </div>
+          <div class="field">
+            <label for="pageContextMode">页面摘要范围</label>
+            <select id="pageContextMode">
+              <option value="off">关闭</option>
+              <option value="active_tab_only">仅当前标签页</option>
+              <option value="ambiguous_with_permission">只读取不确定页面</option>
+              <option value="all_granted_origins">读取已授权站点</option>
+            </select>
+          </div>
 
-        <div class="toggles">
-          <label class="checkbox-row">
-            <input id="includePinnedTabs" type="checkbox" />
-            <span>Include pinned tabs</span>
-          </label>
-          <label class="checkbox-row">
-            <input id="collapseGroupsAfterApply" type="checkbox" />
-            <span>Collapse groups after apply</span>
-          </label>
-        </div>
+          <div id="hostPermissionField" class="field" hidden>
+            <label for="hostPermissionRequestMode">站点授权</label>
+            <select id="hostPermissionRequestMode">
+              <option value="never">整理时不弹授权</option>
+              <option value="ask_per_origin">按站点询问</option>
+            </select>
+          </div>
+
+          <div class="field">
+            <label for="promptPreset">整理风格</label>
+            <select id="promptPreset">
+              <option value="conservative">稳妥</option>
+              <option value="research">研究资料</option>
+              <option value="project_work">项目工作</option>
+              <option value="aggressive_cleanup">强力清理</option>
+            </select>
+          </div>
+
+          <div class="field">
+            <label for="openaiModel">OpenAI 模型</label>
+            <input id="openaiModel" type="text" autocomplete="off" />
+          </div>
+
+          <div class="field">
+            <label for="deepseekModel">DeepSeek 模型</label>
+            <input id="deepseekModel" type="text" autocomplete="off" />
+          </div>
+
+          <div class="toggles">
+            <label class="checkbox-row">
+              <input id="includePinnedTabs" type="checkbox" />
+              <span>包含固定标签页</span>
+            </label>
+            <label class="checkbox-row">
+              <input id="includeIncognitoTabs" type="checkbox" />
+              <span>包含无痕标签页</span>
+            </label>
+            <label class="checkbox-row">
+              <input id="collapseGroupsAfterApply" type="checkbox" />
+              <span>应用后折叠分组</span>
+            </label>
+          </div>
+
+          <div class="number-grid">
+            <div class="field">
+              <label for="minConfidenceToApply">最低置信度</label>
+              <input id="minConfidenceToApply" type="number" min="0" max="1" step="0.05" />
+            </div>
+            <div class="field">
+              <label for="maxTabsPerGroup">单组最大数量</label>
+              <input id="maxTabsPerGroup" type="number" min="1" max="500" step="1" />
+            </div>
+          </div>
+        </details>
 
         <div class="actions">
-          <button id="analyzeBtn" type="button">Analyze</button>
-          <button id="applyBtn" type="button" disabled>Apply</button>
-          <button id="undoBtn" type="button">Undo</button>
+          <button id="analyzeBtn" type="button">生成方案</button>
+          <button id="applyBtn" type="button" disabled>应用方案</button>
+          <button id="undoBtn" type="button">撤销</button>
         </div>
       </section>
 
       <section class="preview" aria-live="polite">
-        <h2>Preview</h2>
-        <div id="previewRoot" class="empty">No plan yet.</div>
+        <h2>整理方案</h2>
+        <div id="previewRoot" class="empty">还没有生成方案。</div>
+        <details id="detailsRoot" hidden>
+          <summary>技术详情</summary>
+          <pre id="detailsText"></pre>
+        </details>
       </section>
     </main>
 

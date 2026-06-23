@@ -13,8 +13,11 @@ const zipPath = join(distDir, zipName);
 await rm(extensionDir, { recursive: true, force: true });
 await mkdir(extensionDir, { recursive: true });
 
-for (const path of ["manifest.json", "src"]) {
-  await cp(join(rootDir, path), join(extensionDir, path), { recursive: true });
+for (const path of ["manifest.json", "src", "icons"]) {
+  const sourcePath = join(rootDir, path);
+  if (existsSync(sourcePath)) {
+    await cp(sourcePath, join(extensionDir, path), { recursive: true });
+  }
 }
 
 await rm(zipPath, { force: true });

@@ -7,6 +7,8 @@
   --muted: #5e6975;
   --accent: #1b6f8f;
   --accent-strong: #155873;
+  --success: #247a48;
+  --warn: #a15c00;
   --danger-bg: #fff5e4;
   --danger-border: #e8b451;
   --danger-text: #4f3700;
@@ -21,6 +23,8 @@
     --muted: #a8b2bd;
     --accent: #63b7d4;
     --accent-strong: #8fd0e4;
+    --success: #73d69a;
+    --warn: #f0b35c;
     --danger-bg: #322815;
     --danger-border: #8b6a25;
     --danger-text: #f4d58a;
@@ -93,6 +97,21 @@ h2 {
   padding: 12px;
 }
 
+.progress {
+  height: 4px;
+  overflow: hidden;
+  background: color-mix(in srgb, var(--accent) 18%, transparent);
+  border-radius: 999px;
+}
+
+.progress div {
+  width: 0;
+  height: 100%;
+  background: var(--accent);
+  border-radius: inherit;
+  transition: width 180ms ease;
+}
+
 .field {
   display: grid;
   gap: 5px;
@@ -106,7 +125,8 @@ label {
 select,
 textarea,
 input[type="text"],
-input[type="password"] {
+input[type="password"],
+input[type="number"] {
   width: 100%;
   color: var(--text);
   background: var(--panel);
@@ -120,9 +140,20 @@ textarea {
   min-height: 88px;
 }
 
+.provider-fields {
+  display: grid;
+  gap: 12px;
+}
+
 .toggles {
   display: grid;
   gap: 7px;
+}
+
+.number-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
 }
 
 .checkbox-row {
@@ -213,4 +244,28 @@ button:disabled {
   border-radius: 999px;
   padding: 2px 7px;
   color: var(--muted);
+}
+
+details {
+  border-top: 1px solid var(--border);
+  padding-top: 8px;
+}
+
+summary {
+  cursor: pointer;
+  color: var(--muted);
+  font-weight: 700;
+}
+
+pre {
+  max-height: 260px;
+  overflow: auto;
+  margin: 8px 0 0;
+  padding: 8px;
+  color: var(--muted);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
 }

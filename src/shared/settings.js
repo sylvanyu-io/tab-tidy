@@ -87,6 +87,7 @@ export const DEFAULT_SETTINGS = Object.freeze({
   customPrompt: "",
   selectedTargetWindowId: null,
   plannerProvider: PLANNER_PROVIDERS.FAKE,
+  rememberProviderKeys: false,
   openaiModel: "gpt-5.5",
   openaiApiKey: "",
   deepseekModel: "deepseek-chat",
@@ -118,6 +119,7 @@ export function normalizeSettings(input = {}) {
   merged.includePinnedTabs = Boolean(merged.includePinnedTabs);
   merged.includeIncognitoTabs = Boolean(merged.includeIncognitoTabs);
   merged.collapseGroupsAfterApply = Boolean(merged.collapseGroupsAfterApply);
+  merged.rememberProviderKeys = Boolean(merged.rememberProviderKeys);
   merged.minConfidenceToApply = clampNumber(merged.minConfidenceToApply, 0, 1, DEFAULT_SETTINGS.minConfidenceToApply);
   merged.maxTabsPerGroup = Math.max(1, Number.parseInt(merged.maxTabsPerGroup, 10) || DEFAULT_SETTINGS.maxTabsPerGroup);
   merged.customPrompt = String(merged.customPrompt || "").slice(0, 4000);

@@ -6,6 +6,8 @@ import {
   EXISTING_GROUP_MODES,
   ORGANIZE_MODES,
   PLANNER_PROVIDERS,
+  PAGE_CONTEXT_MODES,
+  PAGE_SAMPLING_CONSENT_MODES,
   TARGET_WINDOW_MODES
 } from "../src/shared/settings.js";
 import { createFakeChrome } from "./helpers/fake-chrome.mjs";
@@ -153,4 +155,31 @@ test("non-fake planners retry once with validation feedback", async () => {
   } finally {
     globalThis.fetch = originalFetch;
   }
+});
+
+test("active tab page samples are attached to analysis preview", async () => {
+  const chrome = createFakeChrome({
+    windows: [
+      {
+        id: 1,
+        focused: true,
+        tabs: [{ id: 10, title: "Ambiguous", url: "https://example.com/page", active: true }]
+      }
+    ]
+  });
+
+  const job = await analyzeTabs(
+    chrome,
+    {
+      ...DEFAULT_SETTINGS,
+      pageContextMode: PAGE_CONTEXT_MODES.ACTIVE_TAB_ONLY,
+      pageSamplingConsentMode: PAGE_SAMPLING_CONSENT_MODES.ACKNOWLEDGED_FOR_SESSION
+    },
+    { windowId: 1 }
+  );
+
+  assert.equal(job.inventory.pageSamples.length, 1);
+  assert.equal(job.inventory.pageSamples[0].status, "ok");
+  assert.equal(job.preview.pageSampling.ok, 1);
+  assert.equal(job.preview.pageSampling.requested, 1);
 });
