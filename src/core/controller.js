@@ -1,7 +1,8 @@
 import { DEFAULT_SETTINGS, PAGE_CONTEXT_MODES, PLANNER_PROVIDERS, normalizeSettings } from "../shared/settings.js";
-import { applyValidatedPlan, undoFromRollback } from "./chrome-executor.js";
+import { applyValidatedPlan, createRollbackSnapshot, undoFromRollback } from "./chrome-executor.js";
 import { requestPageSample } from "./page-sampler.js";
 import { createPlan } from "./planner.js";
+import { normalizePlanOrder } from "./plan-normalizer.js";
 import { buildPreview } from "./preview.js";
 import { STORAGE_KEYS, getLocal, removeLocal, setLocal } from "./storage.js";
 import { collectTabInventory } from "./tab-inventory.js";
@@ -68,7 +69,17 @@ export async function applyLastPlan(chromeApi) {
     throw new Error(`Tabs changed since preview: ${latestValidation.errors.join(" ")}`);
   }
 
-  const { rollback, result } = await applyValidatedPlan(chromeApi, job.plan, latestInventory, job.settings);
+  const rollbackSnapshot = await createRollbackSnapshot(chromeApi, latestInventory, job.settings);
+  await setLocal(chromeApi, STORAGE_KEYS.lastRollback, rollbackSnapshot);
+
+  const { rollback, result } = await applyValidatedPlan(
+    chromeApi,
+    job.plan,
+    latestInventory,
+    job.settings,
+    rollbackSnapshot,
+    (nextRollback) => setLocal(chromeApi, STORAGE_KEYS.lastRollback, nextRollback)
+  );
   await setLocal(chromeApi, STORAGE_KEYS.lastRollback, rollback);
   return result;
 }
@@ -98,7 +109,7 @@ function settingsForPersistence(settings) {
 }
 
 async function createValidatedPlan(inventory, settings) {
-  const plan = await createPlan(inventory, settings);
+  const plan = normalizePlanOrder(await createPlan(inventory, settings), inventory);
   let validation = validatePlan(plan, inventory, settings);
   if (validation.ok || settings.plannerProvider === PLANNER_PROVIDERS.FAKE) {
     return { plan, validation };
@@ -115,7 +126,7 @@ async function createValidatedPlan(inventory, settings) {
       .join("\n")
       .slice(0, 4000)
   };
-  const retryPlan = await createPlan(inventory, retrySettings);
+  const retryPlan = normalizePlanOrder(await createPlan(inventory, retrySettings), inventory);
   validation = validatePlan(retryPlan, inventory, settings);
   return { plan: retryPlan, validation };
 }

@@ -3,6 +3,7 @@ const fields = {
   targetWindowMode: document.querySelector("#targetWindowMode"),
   existingGroupMode: document.querySelector("#existingGroupMode"),
   reviewGroupMode: document.querySelector("#reviewGroupMode"),
+  undoTargetWindowMode: document.querySelector("#undoTargetWindowMode"),
   urlPrivacyMode: document.querySelector("#urlPrivacyMode"),
   pageContextMode: document.querySelector("#pageContextMode"),
   hostPermissionRequestMode: document.querySelector("#hostPermissionRequestMode"),
@@ -108,6 +109,7 @@ function readSettings() {
     targetWindowMode:
       fields.organizeMode.value === "consolidate_one_window" ? fields.targetWindowMode.value : "current_window",
     reviewGroupMode: fields.reviewGroupMode.value,
+    undoTargetWindowMode: fields.undoTargetWindowMode.value,
     urlPrivacyMode: fields.urlPrivacyMode.value,
     pageContextMode:
       fields.ackSampling.checked && pageContextMode === "off"
@@ -560,6 +562,7 @@ async function mockMessage(message) {
       targetWindowMode: "current_window",
       existingGroupMode: "preserve_existing_groups",
       reviewGroupMode: "create_review_group",
+      undoTargetWindowMode: "leave_empty_target_window",
       pageContextMode: "off",
       hostPermissionRequestMode: "never",
       pageSamplingConsentMode: "not_acknowledged",
@@ -568,7 +571,7 @@ async function mockMessage(message) {
       includeIncognitoTabs: false,
       collapseGroupsAfterApply: false,
       minConfidenceToApply: 0.65,
-      maxTabsPerGroup: 80,
+      maxTabsPerGroup: 40,
       promptPreset: "conservative",
       plannerProvider: "gateway",
       rememberProviderKeys: false,

@@ -79,6 +79,11 @@ export function createFakeChrome(seed = {}) {
         }
         reindexAll(state);
         return cloneWindow(newWindow, true);
+      },
+      async remove(windowId) {
+        if (!state.windows.has(windowId)) throw new Error(`No window with id ${windowId}`);
+        state.windows.delete(windowId);
+        cleanupGroups(state);
       }
     },
     tabs: {

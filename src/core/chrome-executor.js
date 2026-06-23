@@ -3,24 +3,55 @@ import {
   ORGANIZE_MODES,
   REVIEW_GROUP_MODES,
   TARGET_WINDOW_MODES,
+  UNDO_TARGET_WINDOW_MODES,
   normalizeSettings
 } from "../shared/settings.js";
+import { validatePlan } from "./plan-validator.js";
 
 const NO_GROUP_ID = -1;
 
-export async function applyValidatedPlan(chromeApi, plan, inventory, rawSettings = {}) {
+export async function applyValidatedPlan(chromeApi, plan, inventory, rawSettings = {}, rollbackSnapshot = null, onRollbackUpdate = null) {
   const settings = normalizeSettings(rawSettings);
-  const rollback = await createRollbackSnapshot(chromeApi, inventory, settings);
+  const validation = validatePlan(plan, inventory, settings);
+  if (!validation.ok) {
+    throw new Error(`Cannot apply an invalid plan: ${validation.errors.join(" ")}`);
+  }
+
+  const rollback = rollbackSnapshot || (await createRollbackSnapshot(chromeApi, inventory, settings));
+  await notifyRollbackUpdate(onRollbackUpdate, rollback);
   const operationJournal = [];
   const createdGroupIds = [];
   const createdWindowIds = [];
+  const eligibleTabsCount = (inventory.tabs || []).length;
   let targetWindowId = inventory.scope.currentWindowId;
+
+  if (!eligibleTabsCount && !(plan.groups || []).length && !(plan.reviewTabs || []).length) {
+    return {
+      rollback,
+      result: {
+        operationId: rollback.operationId,
+        targetWindowId,
+        createdGroupIds,
+        createdWindowIds,
+        movedTabsCount: 0,
+        groupedTabsCount: 0,
+        reviewTabsCount: 0
+      }
+    };
+  }
 
   if (settings.organizeMode === ORGANIZE_MODES.CONSOLIDATE_ONE_WINDOW) {
     const target = await resolveTargetWindow(chromeApi, plan, inventory, settings, operationJournal);
     targetWindowId = target.windowId;
     createdWindowIds.push(...target.createdWindowIds);
+    rollback.createdWindowIds = createdWindowIds;
+    rollback.operationJournal.push(...operationJournal);
+    operationJournal.length = 0;
+    await notifyRollbackUpdate(onRollbackUpdate, rollback);
     await moveTabsToTarget(chromeApi, inventory.tabs || [], targetWindowId, target.seedTabId, operationJournal);
+    rollback.operationJournal.push(...operationJournal);
+    operationJournal.length = 0;
+    await notifyRollbackUpdate(onRollbackUpdate, rollback);
   }
 
   if (settings.existingGroupMode === EXISTING_GROUP_MODES.DISSOLVE) {
@@ -36,6 +67,10 @@ export async function applyValidatedPlan(chromeApi, plan, inventory, rawSettings
       if (groupId !== null) {
         createdGroupIds.push(groupId);
         operationJournal.push({ type: "recreate_locked_group", groupId, tabIds: lockedGroup.tabIds });
+        rollback.createdGroupIds = createdGroupIds;
+        rollback.operationJournal.push(...operationJournal);
+        operationJournal.length = 0;
+        await notifyRollbackUpdate(onRollbackUpdate, rollback);
       }
     }
   }
@@ -46,6 +81,10 @@ export async function applyValidatedPlan(chromeApi, plan, inventory, rawSettings
     if (groupId !== null) {
       createdGroupIds.push(groupId);
       operationJournal.push({ type: "create_semantic_group", groupId, tabIds, title: group.title });
+      rollback.createdGroupIds = createdGroupIds;
+      rollback.operationJournal.push(...operationJournal);
+      operationJournal.length = 0;
+      await notifyRollbackUpdate(onRollbackUpdate, rollback);
     }
   }
 
@@ -61,12 +100,17 @@ export async function applyValidatedPlan(chromeApi, plan, inventory, rawSettings
     if (groupId !== null) {
       createdGroupIds.push(groupId);
       operationJournal.push({ type: "create_review_group", groupId, tabIds: reviewTabIds });
+      rollback.createdGroupIds = createdGroupIds;
+      rollback.operationJournal.push(...operationJournal);
+      operationJournal.length = 0;
+      await notifyRollbackUpdate(onRollbackUpdate, rollback);
     }
   }
 
   rollback.createdGroupIds = createdGroupIds;
   rollback.createdWindowIds = createdWindowIds;
   rollback.operationJournal.push(...operationJournal);
+  await notifyRollbackUpdate(onRollbackUpdate, rollback);
 
   return {
     rollback,
@@ -80,6 +124,12 @@ export async function applyValidatedPlan(chromeApi, plan, inventory, rawSettings
       reviewTabsCount: (plan.reviewTabs || []).length
     }
   };
+}
+
+async function notifyRollbackUpdate(onRollbackUpdate, rollback) {
+  if (typeof onRollbackUpdate === "function") {
+    await onRollbackUpdate(rollback);
+  }
 }
 
 export async function createRollbackSnapshot(chromeApi, inventory, settings) {
@@ -120,6 +170,7 @@ export async function createRollbackSnapshot(chromeApi, inventory, settings) {
         groupId: tab.groupId ?? NO_GROUP_ID
       }))
     ),
+    undoTargetWindowMode: settings.undoTargetWindowMode,
     createdWindowIds: [],
     createdGroupIds: [],
     operationJournal: []
@@ -163,21 +214,47 @@ export async function undoFromRollback(chromeApi, rollback) {
     const targetWindowId = restoredWindowIds.get(sourceGroup.windowId);
     const memberIds = (sourceGroup.tabOrder || []).filter((tabId) => existingTabs.has(tabId));
     if (!targetWindowId || !memberIds.length) continue;
-    const groupId = await recreateGroup(chromeApi, memberIds, targetWindowId, sourceGroup, {
-      collapseGroupsAfterApply: sourceGroup.collapsed
-    });
+    const groupId = await recreateGroup(
+      chromeApi,
+      memberIds,
+      targetWindowId,
+      sourceGroup,
+      { collapseGroupsAfterApply: sourceGroup.collapsed },
+      { requireAllTabs: false }
+    );
     if (groupId !== null) recreatedGroupIds.push(groupId);
   }
+
+  const closedCreatedWindowIds = await closeEmptyCreatedWindows(chromeApi, rollback);
 
   return {
     operationId: rollback.operationId,
     restoredTabs,
     recreatedGroupIds,
+    closedCreatedWindowIds,
     missingTabs: snapshotTabs.length - restoredTabs
   };
 }
 
-async function resolveTargetWindow(chromeApi, plan, inventory, settings, journal) {
+async function closeEmptyCreatedWindows(chromeApi, rollback) {
+  if (rollback.undoTargetWindowMode !== UNDO_TARGET_WINDOW_MODES.CLOSE_EMPTY_CREATED) return [];
+  if (!chromeApi.windows?.remove) return [];
+
+  const closedWindowIds = [];
+  for (const windowId of rollback.createdWindowIds || []) {
+    try {
+      const window = await chromeApi.windows.get(windowId, { populate: true });
+      if ((window.tabs || []).length) continue;
+      await chromeApi.windows.remove(windowId);
+      closedWindowIds.push(windowId);
+    } catch {
+      // Already closed windows are an acceptable rollback outcome.
+    }
+  }
+  return closedWindowIds;
+}
+
+async function resolveTargetWindow(chromeApi, _plan, inventory, settings, journal) {
   const eligibleTabs = inventory.tabs || [];
   if (!eligibleTabs.length) throw new Error("No eligible tabs to move.");
 
@@ -188,8 +265,11 @@ async function resolveTargetWindow(chromeApi, plan, inventory, settings, journal
     return { windowId: newWindow.id, createdWindowIds: [newWindow.id], seedTabId };
   }
 
-  if (settings.targetWindowMode === TARGET_WINDOW_MODES.SELECTED_WINDOW && Number.isInteger(plan.targetWindow?.windowId)) {
-    return { windowId: plan.targetWindow.windowId, createdWindowIds: [], seedTabId: null };
+  if (settings.targetWindowMode === TARGET_WINDOW_MODES.SELECTED_WINDOW) {
+    if (!Number.isInteger(settings.selectedTargetWindowId)) {
+      throw new Error("Selected-window mode requires a configured target window.");
+    }
+    return { windowId: settings.selectedTargetWindowId, createdWindowIds: [], seedTabId: null };
   }
 
   const invocationWindowId = inventory.scope.invocationWindowId;
@@ -209,15 +289,20 @@ async function moveTabsToTarget(chromeApi, tabs, targetWindowId, seedTabId, jour
   journal.push({ type: "move_tabs", tabIds, toWindowId: targetWindowId });
 }
 
-async function recreateGroup(chromeApi, tabIds, windowId, groupLike, settings) {
+async function recreateGroup(chromeApi, tabIds, windowId, groupLike, settings, options = {}) {
+  const requireAllTabs = options.requireAllTabs !== false;
   const existingTabIds = [];
+  const missingTabIds = [];
   for (const tabId of tabIds) {
     try {
       await chromeApi.tabs.get(tabId);
       existingTabIds.push(tabId);
     } catch {
-      // The user may have closed a tab between preview and apply.
+      missingTabIds.push(tabId);
     }
+  }
+  if (requireAllTabs && missingTabIds.length) {
+    throw new Error(`Cannot create group ${groupLike.title || "Untitled"} because tab(s) disappeared: ${missingTabIds.join(", ")}.`);
   }
   if (!existingTabIds.length) return null;
 

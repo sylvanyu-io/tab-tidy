@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { analyzeTabs, applyLastPlan, undoLastApply } from "../src/core/controller.js";
+import { undoFromRollback } from "../src/core/chrome-executor.js";
 import {
   DEFAULT_SETTINGS,
   EXISTING_GROUP_MODES,
@@ -8,7 +9,8 @@ import {
   PLANNER_PROVIDERS,
   PAGE_CONTEXT_MODES,
   PAGE_SAMPLING_CONSENT_MODES,
-  TARGET_WINDOW_MODES
+  TARGET_WINDOW_MODES,
+  UNDO_TARGET_WINDOW_MODES
 } from "../src/shared/settings.js";
 import { createFakeChrome } from "./helpers/fake-chrome.mjs";
 
@@ -94,6 +96,178 @@ test("consolidate_one_window moves all eligible normal-window tabs into one targ
   assert.equal(undo.restoredTabs, 2);
   const windows = await chrome.windows.getAll({ populate: true, windowTypes: ["normal"] });
   assert.equal(windows.reduce((sum, window) => sum + window.tabs.length, 0), 2);
+});
+
+test("consolidate_one_window can use the invocation window as target", async () => {
+  const chrome = createFakeChrome({
+    windows: [
+      {
+        id: 1,
+        focused: true,
+        tabs: [{ id: 10, title: "GitHub issue", url: "https://github.com/acme/repo/issues/1", active: true }]
+      },
+      {
+        id: 2,
+        tabs: [{ id: 20, title: "Chrome extension docs", url: "https://developer.chrome.com/docs/extensions" }]
+      }
+    ]
+  });
+  const settings = {
+    ...DEFAULT_SETTINGS,
+    plannerProvider: PLANNER_PROVIDERS.FAKE,
+    organizeMode: ORGANIZE_MODES.CONSOLIDATE_ONE_WINDOW,
+    targetWindowMode: TARGET_WINDOW_MODES.CURRENT_WINDOW,
+    existingGroupMode: EXISTING_GROUP_MODES.DISSOLVE
+  };
+
+  const job = await analyzeTabs(chrome, settings, { windowId: 1 });
+  assert.equal(job.validation.ok, true);
+  assert.equal(job.plan.targetWindow.windowId, 1);
+
+  const result = await applyLastPlan(chrome);
+  assert.equal(result.targetWindowId, 1);
+  assert.deepEqual(result.createdWindowIds, []);
+  const targetWindow = await chrome.windows.get(1, { populate: true });
+  assert.deepEqual(
+    targetWindow.tabs.map((tab) => tab.id).sort(),
+    [10, 20]
+  );
+});
+
+test("consolidate_one_window with no eligible tabs is a no-op", async () => {
+  const chrome = createFakeChrome({
+    windows: [
+      {
+        id: 1,
+        focused: true,
+        tabs: [{ id: 10, title: "Pinned mail", url: "https://mail.example.com", active: true, pinned: true }]
+      },
+      {
+        id: 2,
+        tabs: [{ id: 20, title: "Pinned docs", url: "https://docs.example.com", pinned: true }]
+      }
+    ]
+  });
+  const settings = {
+    ...DEFAULT_SETTINGS,
+    plannerProvider: PLANNER_PROVIDERS.FAKE,
+    organizeMode: ORGANIZE_MODES.CONSOLIDATE_ONE_WINDOW,
+    targetWindowMode: TARGET_WINDOW_MODES.NEW_WINDOW
+  };
+
+  const job = await analyzeTabs(chrome, settings, { windowId: 1 });
+  assert.equal(job.validation.ok, true);
+  assert.equal(job.preview.excludedTabsCount, 2);
+
+  const result = await applyLastPlan(chrome);
+  assert.equal(result.movedTabsCount, 0);
+  assert.equal(result.createdWindowIds.length, 0);
+  const windows = await chrome.windows.getAll({ populate: true, windowTypes: ["normal"] });
+  assert.equal(windows.length, 2);
+});
+
+test("apply failure keeps a rollback snapshot so undo can restore", async () => {
+  const chrome = createFakeChrome({
+    windows: [
+      {
+        id: 1,
+        focused: true,
+        tabs: [
+          { id: 10, title: "GitHub pull request", url: "https://github.com/acme/repo/pull/1", active: true },
+          { id: 11, title: "Chrome tabs API docs", url: "https://developer.chrome.com/docs/extensions/reference/api/tabs" }
+        ]
+      }
+    ]
+  });
+
+  const job = await analyzeTabs(chrome, FAKE_PLANNER_SETTINGS, { windowId: 1 });
+  assert.equal(job.validation.ok, true);
+
+  const originalUpdate = chrome.tabGroups.update;
+  chrome.tabGroups.update = async (...args) => {
+    await originalUpdate(...args);
+    throw new Error("simulated group update failure");
+  };
+
+  await assert.rejects(() => applyLastPlan(chrome), /simulated group update failure/);
+  assert.notEqual((await chrome.tabs.get(10)).groupId, -1);
+
+  chrome.tabGroups.update = originalUpdate;
+  const undo = await undoLastApply(chrome);
+  assert.equal(undo.restoredTabs, 2);
+  assert.equal((await chrome.tabs.get(10)).groupId, -1);
+  assert.equal((await chrome.tabs.get(11)).groupId, -1);
+});
+
+test("undo can close an empty target window created by the operation", async () => {
+  const chrome = createFakeChrome({
+    windows: [
+      {
+        id: 1,
+        focused: true,
+        tabs: [{ id: 10, title: "Chrome tabs API docs", url: "https://developer.chrome.com/docs/extensions/reference/api/tabs", active: true }]
+      },
+      {
+        id: 2,
+        tabs: []
+      }
+    ]
+  });
+
+  const rollback = {
+    operationId: "op_test",
+    undoTargetWindowMode: UNDO_TARGET_WINDOW_MODES.CLOSE_EMPTY_CREATED,
+    sourceWindows: [
+      {
+        windowId: 1,
+        type: "normal",
+        state: "normal",
+        activeTabId: 10,
+        tabOrder: [10]
+      }
+    ],
+    sourceGroups: [],
+    tabs: [{ tabId: 10, windowId: 1, index: 0, pinned: false, active: true, highlighted: false, groupId: -1 }],
+    createdWindowIds: [2],
+    createdGroupIds: [],
+    operationJournal: []
+  };
+
+  const result = await undoFromRollback(chrome, rollback);
+  assert.deepEqual(result.closedCreatedWindowIds, [2]);
+  await assert.rejects(() => chrome.windows.get(2), /No window with id 2/);
+});
+
+test("apply fails instead of silently grouping a partial tab set", async () => {
+  const chrome = createFakeChrome({
+    windows: [
+      {
+        id: 1,
+        focused: true,
+        tabs: [
+          { id: 10, title: "Chrome tabs API docs", url: "https://developer.chrome.com/docs/extensions/reference/api/tabs", active: true },
+          { id: 11, title: "Chrome tabGroups API docs", url: "https://developer.chrome.com/docs/extensions/reference/api/tabGroups" }
+        ]
+      }
+    ]
+  });
+
+  const job = await analyzeTabs(chrome, FAKE_PLANNER_SETTINGS, { windowId: 1 });
+  assert.equal(job.validation.ok, true);
+
+  const originalGet = chrome.tabs.get;
+  chrome.tabs.get = async (tabId) => {
+    if (tabId === 11) throw new Error("tab disappeared during apply");
+    return originalGet(tabId);
+  };
+
+  await assert.rejects(() => applyLastPlan(chrome), /tab\(s\) disappeared: 11/);
+
+  chrome.tabs.get = originalGet;
+  const undo = await undoLastApply(chrome);
+  assert.equal(undo.restoredTabs, 2);
+  assert.equal((await chrome.tabs.get(10)).groupId, -1);
+  assert.equal((await chrome.tabs.get(11)).groupId, -1);
 });
 
 test("non-fake planners retry once with validation feedback", async () => {
