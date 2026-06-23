@@ -58,8 +58,7 @@ export const PROMPT_PRESETS = Object.freeze({
 
 export const PLANNER_PROVIDERS = Object.freeze({
   FAKE: "fake",
-  GATEWAY: "gateway",
-  DEEPSEEK: "deepseek"
+  GATEWAY: "gateway"
 });
 
 export const DEFAULT_GATEWAY_BASE_URL = "http://127.0.0.1:8317/v1";
@@ -107,9 +106,7 @@ export const DEFAULT_SETTINGS = Object.freeze({
   gatewayBaseUrl: DEFAULT_GATEWAY_BASE_URL,
   gatewayModel: "gpt-5.5",
   gatewayThinkingIntensity: THINKING_INTENSITIES.HIGH,
-  gatewayApiKey: "",
-  deepseekModel: "deepseek-chat",
-  deepseekApiKey: ""
+  gatewayApiKey: ""
 });
 
 const enumValues = {
@@ -146,8 +143,6 @@ export function normalizeSettings(input = {}) {
   merged.gatewayBaseUrl = normalizeBaseUrl(merged.gatewayBaseUrl, DEFAULT_SETTINGS.gatewayBaseUrl);
   merged.gatewayModel = normalizeGatewayModel(merged.gatewayModel);
   merged.gatewayApiKey = String(merged.gatewayApiKey || "").trim();
-  merged.deepseekModel = String(merged.deepseekModel || DEFAULT_SETTINGS.deepseekModel).trim().slice(0, 100);
-  merged.deepseekApiKey = String(merged.deepseekApiKey || "").trim();
   const selectedTargetWindowId =
     merged.selectedTargetWindowId === null || merged.selectedTargetWindowId === ""
       ? null

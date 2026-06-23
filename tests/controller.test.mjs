@@ -276,7 +276,7 @@ test("non-fake planners retry once with validation feedback", async () => {
       {
         id: 1,
         focused: true,
-        tabs: [{ id: 10, title: "DeepSeek JSON docs", url: "https://api-docs.deepseek.com/guides/json_mode", active: true }]
+        tabs: [{ id: 10, title: "Gateway JSON docs", url: "https://example.com/gateway-json", active: true }]
       }
     ]
   });
@@ -294,7 +294,7 @@ test("non-fake planners retry once with validation feedback", async () => {
         color: "blue",
         confidence: 0.9,
         tabRefs: [{ tabId: 10, windowId: 1 }],
-        reason: "DeepSeek API documentation."
+        reason: "Gateway API documentation."
       }
     ],
     reviewTabs: []
@@ -326,7 +326,7 @@ test("non-fake planners retry once with validation feedback", async () => {
   try {
     const job = await analyzeTabs(
       chrome,
-      { ...DEFAULT_SETTINGS, plannerProvider: PLANNER_PROVIDERS.DEEPSEEK, deepseekApiKey: "test-key" },
+      { ...DEFAULT_SETTINGS, plannerProvider: PLANNER_PROVIDERS.GATEWAY, gatewayApiKey: "test-key" },
       { windowId: 1 }
     );
     assert.equal(calls, 2);

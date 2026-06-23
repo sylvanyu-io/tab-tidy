@@ -11,9 +11,6 @@ const COARSE_MAX_BUCKETS = 24;
 
 export async function createGatewayPlan(inventory, rawSettings = {}, fetchImpl = globalThis.fetch, options = {}) {
   const settings = normalizeSettings(rawSettings);
-  if (!settings.gatewayApiKey) {
-    throw new Error("AI gateway planner requires an API key in settings.");
-  }
   if (typeof fetchImpl !== "function") {
     throw new Error("Fetch is not available in this environment.");
   }
@@ -45,10 +42,7 @@ async function createSingleGatewayPlan(inventory, settings, fetchImpl, options =
     gatewayChatCompletionsUrl(settings),
     {
       method: "POST",
-      headers: {
-        "content-type": "application/json",
-        authorization: `Bearer ${settings.gatewayApiKey}`
-      },
+      headers: gatewayHeaders(settings),
       body: JSON.stringify(body)
     },
     "AI gateway planner",
@@ -142,6 +136,14 @@ async function createHierarchicalGatewayPlan(inventory, settings, fetchImpl, opt
 
 export function gatewayChatCompletionsUrl(settings) {
   return `${settings.gatewayBaseUrl.replace(/\/+$/, "")}/chat/completions`;
+}
+
+function gatewayHeaders(settings) {
+  const headers = { "content-type": "application/json" };
+  if (settings.gatewayApiKey) {
+    headers.authorization = `Bearer ${settings.gatewayApiKey}`;
+  }
+  return headers;
 }
 
 export function buildPlannerSystemPrompt(settings) {
@@ -244,10 +246,7 @@ async function createCoarseGatewayBuckets(inventory, settings, fetchImpl, option
     gatewayChatCompletionsUrl(settings),
     {
       method: "POST",
-      headers: {
-        "content-type": "application/json",
-        authorization: `Bearer ${settings.gatewayApiKey}`
-      },
+      headers: gatewayHeaders(settings),
       body: JSON.stringify(body)
     },
     "AI gateway coarse planner",

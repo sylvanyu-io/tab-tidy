@@ -203,7 +203,7 @@ export async function undoLastApply(chromeApi) {
 }
 
 function redactSettingsForJob(settings) {
-  return { ...settings, gatewayApiKey: "", deepseekApiKey: "" };
+  return { ...settings, gatewayApiKey: "" };
 }
 
 function settingsForPersistence(settings) {
@@ -213,7 +213,6 @@ function settingsForPersistence(settings) {
   }
   if (!persisted.rememberProviderKeys) {
     persisted.gatewayApiKey = "";
-    persisted.deepseekApiKey = "";
   }
   return persisted;
 }

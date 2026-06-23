@@ -13,7 +13,7 @@ Implemented:
 - Metadata-only inventory and URL sanitization.
 - Existing native group preserve/dissolve switch.
 - Page sampling off by default with explicit consent and permission gates.
-- Fake, AI gateway, and DeepSeek planner providers.
+- AI gateway planner, with an offline fake planner kept for automated harnesses.
 - Local schema validation before every browser mutation.
 - Low-confidence groups below the apply threshold are rejected; the planner must
   put uncertain tabs in Review.
@@ -29,7 +29,6 @@ Implemented:
   undoable.
 - Fake Chrome harness, Playwright UI smoke test, and real-extension stress
   runner against an isolated Chromium profile.
-- Planner network calls have a timeout instead of hanging indefinitely.
 - Active analysis jobs expose coarse progress states in the popup and can be
   canceled; cancellation aborts provider fetches when the request is still live.
 - Large AI gateway jobs use a coarse-then-refine planner: a low-effort coarse
@@ -40,7 +39,7 @@ Not production-complete yet:
 
 - No Chrome Web Store assets or listing text.
 - No signed release package workflow.
-- No provider key management beyond local BYOK storage.
+- No hosted account system; custom gateway keys stay in local extension storage.
 - No provider-specific adaptive scheduler beyond the AI gateway coarse/refine
   path.
 - No telemetry/diagnostics toggle.
@@ -51,8 +50,7 @@ Blocking gates:
 
 - `npm run check` passes.
 - `npm run release:check` passes and produces a clean extension package.
-- DeepSeek live smoke passes with a disposable key.
-- AI gateway live smoke passes with a disposable key.
+- AI gateway live smoke passes against the configured gateway.
 - `npm run stress:extension` validates current-window apply/undo and
   consolidate-to-one-window apply/undo on a throwaway Chromium profile.
 - Page sampling cannot run without visible risk acknowledgement.
@@ -68,13 +66,13 @@ Blocking gates:
   tabs.
 - If a tab disappears mid-apply, the executor fails rather than silently grouping
   a partial tab set.
-- No provider key appears in git history, screenshots, test output, or fixtures.
+- No custom gateway key appears in git history, screenshots, test output, or
+  fixtures.
 - Extension package contains no `node_modules`, test outputs, or local secrets.
 
 Recommended before public listing:
 
-- Add provider setup screen that explains BYOK storage.
-- Add export/import settings without exporting API keys by default.
+- Add export/import settings without exporting custom gateway keys by default.
 - Add first-run privacy disclosure.
 - Add error recovery UI for provider rate limit, invalid key, and invalid plan.
 - Expand adaptive planning beyond the AI gateway path if other providers become
@@ -84,12 +82,13 @@ Recommended before public listing:
 
 ## Provider Policy
 
-The extension uses bring-your-own-key provider credentials. Runtime rules:
+The extension uses a chat-completions-compatible AI gateway. The default local
+gateway can be keyless; custom gateways may use an optional key. Runtime rules:
 
-- Never ship a shared provider key.
-- Never commit provider keys.
-- Redact keys from job snapshots and logs.
-- Use provider-specific host permissions only.
+- Never ship a shared custom gateway key.
+- Never commit custom gateway keys.
+- Redact custom keys from job snapshots and logs.
+- Request gateway host permission only for the configured gateway origin.
 - Keep provider output as planning intent only; validator/executor remain local.
 
 AI gateway:
@@ -97,13 +96,7 @@ AI gateway:
 - Uses a chat-completions-compatible gateway with JSON object output.
 - Exposes only planner-suitable text models in the UI.
 - Adapts common `tabIds` grouping output, then still requires local validation.
-
-DeepSeek:
-
-- Uses `/chat/completions` with `response_format: {"type": "json_object"}`.
-- Because JSON Output does not enforce the full local schema, every DeepSeek plan
-  must pass local validation before preview/apply.
-- The controller retries once with validation feedback for non-fake providers.
+- The controller retries once with validation feedback for gateway plans.
 
 ## Browser Safety Rules
 
@@ -141,10 +134,9 @@ Consolidate-to-one-window mode:
 Provider behavior:
 
 - Fake planner works offline.
-- AI gateway valid key.
-- AI gateway invalid key.
-- DeepSeek valid key.
-- DeepSeek invalid key.
+- AI gateway keyless local gateway.
+- AI gateway valid custom key.
+- AI gateway invalid custom key.
 - Provider returns invalid JSON or invalid plan.
 
 Page sampling:
@@ -159,9 +151,3 @@ Page sampling:
 
 - Chrome APIs: `docs/permissions-research.md` and
   `docs/multi-window-feasibility.md`.
-- DeepSeek JSON Output:
-  https://api-docs.deepseek.com/guides/json_mode
-- DeepSeek Chat Completions API:
-  https://api-docs.deepseek.com/api/create-chat-completion
-- DeepSeek models and base URL:
-  https://api-docs.deepseek.com/quick_start/pricing

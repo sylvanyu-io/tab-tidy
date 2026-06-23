@@ -47,16 +47,14 @@ test("AI gateway settings normalize safely", () => {
   );
 });
 
-test("provider keys are not persisted unless explicitly remembered", async () => {
+test("gateway key is not persisted unless explicitly remembered", async () => {
   const chrome = createFakeChrome();
 
-  await saveSettings(chrome, { ...DEFAULT_SETTINGS, gatewayApiKey: "gateway-test-key", deepseekApiKey: "deepseek-test-key", rememberProviderKeys: false });
+  await saveSettings(chrome, { ...DEFAULT_SETTINGS, gatewayApiKey: "gateway-test-key", rememberProviderKeys: false });
   const transient = await getSettings(chrome);
   assert.equal(transient.gatewayApiKey, "");
-  assert.equal(transient.deepseekApiKey, "");
 
-  await saveSettings(chrome, { ...DEFAULT_SETTINGS, gatewayApiKey: "gateway-test-key", deepseekApiKey: "deepseek-test-key", rememberProviderKeys: true });
+  await saveSettings(chrome, { ...DEFAULT_SETTINGS, gatewayApiKey: "gateway-test-key", rememberProviderKeys: true });
   const persisted = await getSettings(chrome);
   assert.equal(persisted.gatewayApiKey, "gateway-test-key");
-  assert.equal(persisted.deepseekApiKey, "deepseek-test-key");
 });

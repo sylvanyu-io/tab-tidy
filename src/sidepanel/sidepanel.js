@@ -9,13 +9,10 @@ const fields = {
   hostPermissionRequestMode: document.querySelector("#hostPermissionRequestMode"),
   promptPreset: document.querySelector("#promptPreset"),
   plannerProvider: document.querySelector("#plannerProvider"),
-  rememberProviderKeys: document.querySelector("#rememberProviderKeys"),
   gatewayBaseUrl: document.querySelector("#gatewayBaseUrl"),
   gatewayModel: document.querySelector("#gatewayModel"),
   gatewayThinkingIntensity: document.querySelector("#gatewayThinkingIntensity"),
   gatewayApiKey: document.querySelector("#gatewayApiKey"),
-  deepseekModel: document.querySelector("#deepseekModel"),
-  deepseekApiKey: document.querySelector("#deepseekApiKey"),
   customPrompt: document.querySelector("#customPrompt"),
   includePinnedTabs: document.querySelector("#includePinnedTabs"),
   includeIncognitoTabs: document.querySelector("#includeIncognitoTabs"),
@@ -41,9 +38,6 @@ const nodes = {
   samplingRisk: document.querySelector("#samplingRisk"),
   hostPermissionField: document.querySelector("#hostPermissionField"),
   targetWindowField: document.querySelector("#targetWindowField"),
-  gatewayFields: document.querySelector("#gatewayFields"),
-  deepseekFields: document.querySelector("#deepseekFields"),
-  rememberProviderKeysRow: document.querySelector("#rememberProviderKeysRow"),
   progressBar: document.querySelector("#progressBar"),
   progressFill: document.querySelector("#progressFill"),
   settingsSummaryBtn: document.querySelector("#settingsSummaryBtn"),
@@ -137,14 +131,12 @@ function readSettings() {
         ? "acknowledged_for_session"
         : "not_acknowledged",
     promptPreset: fields.promptPreset.value,
-    plannerProvider: fields.plannerProvider.value,
-    rememberProviderKeys: fields.rememberProviderKeys.checked,
+    plannerProvider: fields.plannerProvider.value || "gateway",
+    rememberProviderKeys: Boolean(fields.gatewayApiKey.value),
     gatewayBaseUrl: fields.gatewayBaseUrl.value,
     gatewayModel: fields.gatewayModel.value,
     gatewayThinkingIntensity: fields.gatewayThinkingIntensity.value,
     gatewayApiKey: fields.gatewayApiKey.value,
-    deepseekModel: fields.deepseekModel.value,
-    deepseekApiKey: fields.deepseekApiKey.value,
     customPrompt: fields.customPrompt.value,
     includePinnedTabs: fields.includePinnedTabs.checked,
     includeIncognitoTabs: fields.includeIncognitoTabs.checked,
@@ -181,9 +173,6 @@ function updateConditionalUi() {
   nodes.hostPermissionField.hidden =
     !samplingEnabled || fields.pageContextMode.value === "off" || fields.pageContextMode.value === "active_tab_only";
   nodes.targetWindowField.hidden = fields.organizeMode.value !== "consolidate_one_window";
-  nodes.gatewayFields.hidden = fields.plannerProvider.value !== "gateway";
-  nodes.deepseekFields.hidden = fields.plannerProvider.value !== "deepseek";
-  nodes.rememberProviderKeysRow.hidden = fields.plannerProvider.value === "fake";
   syncChoiceGroups();
   schedulePageSamplingOriginRefresh();
 }
@@ -350,7 +339,7 @@ function renderError(error) {
 }
 
 function replacerForDetails(key, value) {
-  if (key === "gatewayApiKey" || key === "deepseekApiKey") return "";
+  if (key === "gatewayApiKey") return "";
   if (key === "inventory" && value?.tabs) {
     return {
       ...value,
@@ -505,7 +494,7 @@ function syncActionState() {
   const compactPreview = Boolean(lastPreview && !isEditingSettings);
   nodes.appShell.dataset.flowState = compactPreview ? "preview" : "setup";
   nodes.settingsSummaryBtn.hidden = !compactPreview;
-  nodes.settingsSummaryText.textContent = `${scopeLabel()} · ${providerLabel()}`;
+  nodes.settingsSummaryText.textContent = scopeLabel();
   nodes.actions.dataset.state = lastPreview ? "preview" : "idle";
   setButtonLabel(nodes.analyzeBtn, lastPreview ? "重新生成" : "生成方案");
   nodes.applyBtn.dataset.role = lastPreview && lastCanApply ? "primary" : "";
@@ -522,12 +511,6 @@ function setButtonLabel(button, text) {
 
 function scopeLabel() {
   return fields.organizeMode.value === "consolidate_one_window" ? "所有窗口" : "当前窗口";
-}
-
-function providerLabel() {
-  if (fields.plannerProvider.value === "gateway") return "AI 网关";
-  if (fields.plannerProvider.value === "deepseek") return "DeepSeek";
-  return "本地预览";
 }
 
 async function ensurePlannerHostPermission(settings) {
@@ -719,8 +702,6 @@ async function mockMessage(message) {
       gatewayModel: "gpt-5.5",
       gatewayThinkingIntensity: "high",
       gatewayApiKey: "",
-      deepseekModel: "deepseek-chat",
-      deepseekApiKey: "",
       customPrompt: ""
     };
   }

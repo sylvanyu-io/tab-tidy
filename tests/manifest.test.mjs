@@ -8,4 +8,5 @@ test("extension uses an action popup instead of a side panel", async () => {
   assert.equal(manifest.action.default_popup, "src/sidepanel/index.html");
   assert.equal(manifest.side_panel, undefined);
   assert.equal((manifest.permissions || []).includes("sidePanel"), false);
+  assert.equal(manifest.host_permissions, undefined);
 });

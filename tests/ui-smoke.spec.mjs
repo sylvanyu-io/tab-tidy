@@ -36,6 +36,7 @@ test("popup renders settings and mock preview", async ({ page }) => {
   await page.goto(`${baseUrl}/src/sidepanel/index.html`);
 
   await expect(page.getByRole("heading", { name: "Tab Tidy" })).toBeVisible();
+  await expect(page.locator(".segmented")).toHaveCount(0);
   await expect(page.locator("#previewSection")).toBeHidden();
   await expect(page.locator("#samplingRisk")).toBeHidden();
 
@@ -45,6 +46,7 @@ test("popup renders settings and mock preview", async ({ page }) => {
 
   await page.getByText("更多选项").click();
   await expect(page.locator("#gatewayBaseUrl")).toHaveValue("http://127.0.0.1:8317/v1");
+  await expect(page.locator("#gatewayApiKey")).toHaveAttribute("placeholder", "留空也可以使用");
   await expect(page.locator("#gatewayModel")).toHaveValue("gpt-5.5");
   await expect(page.locator("#gatewayThinkingIntensity")).toHaveValue("high");
   await expect(page.locator("#undoTargetWindowMode")).toHaveValue("leave_empty_target_window");
@@ -80,8 +82,6 @@ test("popup shows optimistic progress while waiting for AI", async ({ page }) =>
       gatewayModel: "gpt-5.5",
       gatewayThinkingIntensity: "high",
       gatewayApiKey: "",
-      deepseekModel: "deepseek-chat",
-      deepseekApiKey: "",
       customPrompt: ""
     };
     const activeJob = {

@@ -55,7 +55,7 @@ action popup UI
 - Action popup: review UI, long-running job progress, model settings, cancellation,
   and apply/undo controls.
 - Content script or programmatic injection: collects optional page evidence such as meta description, headings, canonical URL, and a short visible-text sample.
-- LLM adapter: provider-independent interface. Start with BYOK cloud model support, later add Chrome built-in AI or a local native-messaging bridge.
+- LLM adapter: chat-completions-compatible gateway first, later add Chrome built-in AI or a local native-messaging bridge.
 - Planner validator: rejects invalid tab IDs, duplicate assignments, over-broad groups, or actions touching incognito/private tabs unless explicitly enabled.
 
 See [agent-contract.md](agent-contract.md) for the planner tools, prompt switches, custom prompt rules, and non-negotiable execution limits.
@@ -242,10 +242,10 @@ Default policy:
 - show exactly what will be sent to the LLM;
 - allow metadata-only mode;
 - allow domain denylist and workspace allowlist;
-- store API keys only locally, never in sync storage;
-- do not ship a hidden shared API key in the extension package.
+- store custom gateway keys only locally, never in sync storage;
+- do not ship a hidden shared key in the extension package.
 
-For a public release, BYOK is the simplest honest model. A hosted relay can improve UX, but it becomes a privacy and cost product, not just an extension.
+For a public release, a keyless local gateway is the simplest user experience. A hosted relay can improve UX, but it becomes a privacy and cost product, not just an extension.
 
 ## Technical Risks
 
@@ -253,7 +253,7 @@ For a public release, BYOK is the simplest honest model. A hosted relay can impr
 2. Token pressure: hundreds of tabs cannot be handled as one naive prompt. Use batching, compact descriptors, and context sampling.
 3. LLM instability: enforce JSON schema, validate all tab IDs, and show preview before applying.
 4. Native tab groups are window-scoped: cross-window native grouping only works by moving tabs or groups into one normal window.
-5. Permission fatigue: broad host permissions will scare users. Start with `"tabs"`, `"tabGroups"`, `"storage"`, `"activeTab"`, and provider-specific HTTPS permissions for the configured LLM endpoint. Page sampling needs optional `"scripting"` plus granted host permission for sampled origins; `activeTab` only covers the user-invoked active tab, not bulk background tabs.
+5. Permission fatigue: broad host permissions will scare users. Start with `"tabs"`, `"tabGroups"`, `"storage"`, `"activeTab"`, and request the configured gateway origin only when needed. Page sampling needs optional `"scripting"` plus granted host permission for sampled origins; `activeTab` only covers the user-invoked active tab, not bulk background tabs.
 6. Sensitive content: a more powerful model may make better groups, but cloud inference means sending browsing metadata away. This must be explicit.
 7. Scale and latency: grouping 500 tabs should feel incremental while planning, but apply should use one validated plan that covers the active scope.
 
@@ -273,7 +273,7 @@ MVP should implement:
 - Undo last apply.
 - Existing-group handling switch: preserve locked existing groups or dissolve and regroup.
 - Prompt presets, prompt-affecting switches, Review handling, permission request mode, and a custom prompt field.
-- Local settings for provider, API key, privacy mode, ignored domains.
+- Local settings for gateway address, optional key, privacy mode, ignored domains.
 
 MVP should not implement:
 
@@ -311,7 +311,7 @@ MVP should not implement:
 ## Open Decisions
 
 - Browser target: Chrome first, then maybe Edge/Arc/Firefox.
-- LLM provider: BYOK OpenAI/Anthropic/Gemini, local, or Chrome built-in AI.
+- LLM provider: local/free gateway first, optional custom gateway, or Chrome built-in AI later.
 - Default mode: current window, with consolidate-to-one-window as a visible switch.
 - Privacy default: send full URL, sanitized URL, or title-only.
 - Whether the product should be a deterministic tool with an AI planner, or a conversational agent that can ask follow-up questions.

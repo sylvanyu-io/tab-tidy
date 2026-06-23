@@ -179,14 +179,50 @@ test("AI gateway planner adapts common tabIds output and strips markdown fences"
   assert.deepEqual(plan.reviewTabs, []);
 });
 
-test("AI gateway planner requires an API key", async () => {
-  await assert.rejects(
-    () => createGatewayPlan({}, { ...DEFAULT_SETTINGS, plannerProvider: PLANNER_PROVIDERS.GATEWAY }),
-    /API key/
+test("AI gateway planner can call a free gateway without an API key", async () => {
+  const fetchImpl = async (_url, options) => {
+    assert.equal(options.headers.authorization, undefined);
+    assert.equal(options.headers["content-type"], "application/json");
+    return {
+      ok: true,
+      async json() {
+        return {
+          choices: [
+            {
+              message: {
+                content: JSON.stringify({
+                  schemaVersion: 1,
+                  mode: "current_window",
+                  scope: { kind: "current_window", windowIds: [1] },
+                  targetWindow: { kind: "current_window", windowId: 1, title: "Current Window" },
+                  eligibleTabs: [
+                    { tabId: 10, windowId: 1 },
+                    { tabId: 11, windowId: 1 }
+                  ],
+                  excludedTabs: [],
+                  groups: [],
+                  reviewTabs: [
+                    { tabId: 10, windowId: 1, reason: "Review." },
+                    { tabId: 11, windowId: 1, reason: "Review." }
+                  ]
+                })
+              }
+            }
+          ]
+        };
+      }
+    };
+  };
+
+  const plan = await createGatewayPlan(
+    inventory,
+    { ...DEFAULT_SETTINGS, plannerProvider: PLANNER_PROVIDERS.GATEWAY, gatewayApiKey: "" },
+    fetchImpl
   );
+  assert.equal(plan.reviewTabs.length, 2);
 });
 
-test("AI gateway planner times out hanging requests", async () => {
+test("AI gateway planner honors an explicit timeout", async () => {
   const fetchImpl = async () => new Promise(() => {});
 
   await assert.rejects(

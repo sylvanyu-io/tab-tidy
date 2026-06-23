@@ -25,7 +25,7 @@
       </div>
 
       <button id="settingsSummaryBtn" class="settings-summary" type="button" hidden>
-        <span id="settingsSummaryText">当前窗口 · DeepSeek</span>
+        <span id="settingsSummaryText">当前窗口</span>
         <strong>调整</strong>
       </button>
 
@@ -50,45 +50,10 @@
           <option value="consolidate_one_window">合并并整理所有窗口</option>
         </select>
 
-        <div class="control-group">
-          <div class="control-label">
-            <span>AI 服务</span>
-          </div>
-
-          <div class="segmented" data-choice-for="plannerProvider">
-            <button type="button" data-value="fake"><span class="button-label">预览</span></button>
-            <button type="button" data-value="deepseek"><span class="button-label">DeepSeek</span></button>
-            <button type="button" data-value="gateway"><span class="button-label">AI 网关</span></button>
-          </div>
-        </div>
-
-        <select id="plannerProvider" class="native-select" aria-label="整理助手">
-          <option value="fake">本地预览</option>
-          <option value="deepseek">DeepSeek</option>
-          <option value="gateway">AI 网关</option>
+        <select id="plannerProvider" class="native-select" aria-hidden="true" tabindex="-1">
+          <option value="gateway">AI</option>
+          <option value="fake">Internal test</option>
         </select>
-
-        <div id="gatewayFields" class="provider-fields">
-          <div class="field inline-secret">
-            <label for="gatewayApiKey">密钥</label>
-            <input id="gatewayApiKey" type="password" autocomplete="off" placeholder="sk-..." />
-          </div>
-        </div>
-
-        <div id="deepseekFields" class="provider-fields">
-          <div class="field inline-secret">
-            <label for="deepseekApiKey">密钥</label>
-            <input id="deepseekApiKey" type="password" autocomplete="off" placeholder="sk-..." />
-          </div>
-        </div>
-
-        <label id="rememberProviderKeysRow" class="mini-check">
-          <input id="rememberProviderKeys" type="checkbox" />
-          <span>
-            <strong>记住密钥</strong>
-            <small>否则只在本次使用</small>
-          </span>
-        </label>
 
         <details class="preferences-panel">
           <summary>
@@ -219,8 +184,8 @@
         </div>
 
         <div class="field">
-          <label for="deepseekModel">DeepSeek 模型</label>
-          <input id="deepseekModel" type="text" autocomplete="off" />
+          <label for="gatewayApiKey">AI 网关密钥（可选）</label>
+          <input id="gatewayApiKey" type="password" autocomplete="off" placeholder="留空也可以使用" />
         </div>
 
         <div class="toggles">

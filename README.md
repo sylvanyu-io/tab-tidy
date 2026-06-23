@@ -30,11 +30,9 @@ accepts the final plan.
 For 100+ tab jobs, refinement follows the selected thinking intensity; the
 default remains high.
 Image models can exist on the same gateway, but they are not useful planner
-models for this workflow. The key is stored only when "remember key" is enabled.
-
-DeepSeek is also supported. It uses DeepSeek's chat-completions-compatible
-`/chat/completions` API with JSON Output, then the same local validator and
-executor as every other planner.
+models for this workflow. The default local gateway does not require a key. If
+you use a custom gateway that needs one, set it in "More options"; it is stored
+only in local extension storage.
 
 Page content sampling is off by default. Session-only acknowledgement is not
 persisted; persistent acknowledgement is reserved for a later settings flow.
@@ -59,16 +57,10 @@ npm run test:ui
 The UI smoke test opens the popup HTML (`src/sidepanel/index.html`) in mock mode. It does not
 need a loaded extension.
 
-Optional DeepSeek live smoke:
-
-```bash
-DEEPSEEK_API_KEY=... npm run smoke:deepseek
-```
-
 Optional AI gateway live smoke:
 
 ```bash
-GATEWAY_BASE_URL=http://127.0.0.1:8317/v1 GATEWAY_API_KEY=... GATEWAY_THINKING_INTENSITY=high npm run smoke:gateway
+GATEWAY_BASE_URL=http://127.0.0.1:8317/v1 GATEWAY_THINKING_INTENSITY=high npm run smoke:gateway
 ```
 
 Real extension stress test:
@@ -86,11 +78,11 @@ test-only window so Playwright can keep it alive; the installed extension entry
 is still the toolbar action popup. Optional gateway stress:
 
 ```bash
-GATEWAY_BASE_URL=http://127.0.0.1:8317/v1 GATEWAY_API_KEY=... STRESS_GATEWAY_TABS=60 npm run stress:extension
+GATEWAY_BASE_URL=http://127.0.0.1:8317/v1 STRESS_GATEWAY_TABS=60 npm run stress:extension
 ```
 
-Do not commit provider keys. Rotate any key that has appeared in chat, shell
-history, logs, screenshots, or test output.
+Do not commit custom gateway keys. Rotate any key that has appeared in chat,
+shell history, logs, screenshots, or test output.
 
 Release check:
 
