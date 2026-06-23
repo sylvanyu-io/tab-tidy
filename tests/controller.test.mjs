@@ -10,6 +10,7 @@ import {
   undoLastApply
 } from "../src/core/controller.js";
 import { undoFromRollback } from "../src/core/chrome-executor.js";
+import { STORAGE_KEYS } from "../src/core/storage.js";
 import {
   DEFAULT_SETTINGS,
   EXISTING_GROUP_MODES,
@@ -510,6 +511,39 @@ test("startAnalyzeTabs returns immediately while the background job writes final
   assert.equal(lastJob.operationId, started.operationId);
   assert.equal(lastJob.validation.ok, true);
   assert.equal(lastJob.preview.groups.length > 0, true);
+});
+
+test("canceling during preview cannot be overwritten by completion", async () => {
+  const chrome = createFakeChrome({
+    windows: [
+      {
+        id: 1,
+        focused: true,
+        tabs: [
+          { id: 10, title: "Chrome tabs API docs", url: "https://developer.chrome.com/docs/extensions/reference/api/tabs", active: true },
+          { id: 11, title: "Chrome tabGroups API docs", url: "https://developer.chrome.com/docs/extensions/reference/api/tabGroups" }
+        ]
+      }
+    ]
+  });
+
+  const originalSet = chrome.storage.local.set;
+  let issuedCancel = false;
+  chrome.storage.local.set = async (items) => {
+    await originalSet(items);
+    const activeJob = items[STORAGE_KEYS.activeJob];
+    if (activeJob?.phase === "preview" && !issuedCancel) {
+      issuedCancel = true;
+      await cancelActiveJob(chrome);
+    }
+  };
+
+  await startAnalyzeTabs(chrome, FAKE_PLANNER_SETTINGS, { windowId: 1 });
+  const finalJob = await waitForActiveJob(chrome, (job) => job?.status === "canceled" || job?.status === "complete");
+
+  assert.equal(issuedCancel, true);
+  assert.equal(finalJob.status, "canceled");
+  assert.equal(finalJob.message, "已取消整理。");
 });
 
 async function waitForActiveJob(chrome, predicate) {

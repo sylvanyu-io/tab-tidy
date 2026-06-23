@@ -323,10 +323,18 @@ async function updateActiveJob(chromeApi, operationId, patch) {
   if (current?.operationId && current.operationId !== operationId) return current;
 
   const nextPatch = { ...patch };
-  if (current?.status === "canceling" && !ACTIVE_JOB_TERMINAL_STATUSES.has(nextPatch.status)) {
-    nextPatch.status = "canceling";
-    nextPatch.phase = "canceling";
-    nextPatch.message = "正在取消整理";
+  if (current?.status === "canceling") {
+    if (nextPatch.status === "complete") {
+      nextPatch.status = "canceled";
+      nextPatch.phase = "canceled";
+      nextPatch.message = "已取消整理。";
+      nextPatch.error = "";
+      nextPatch.finishedAt = nextPatch.finishedAt || new Date().toISOString();
+    } else if (!ACTIVE_JOB_TERMINAL_STATUSES.has(nextPatch.status)) {
+      nextPatch.status = "canceling";
+      nextPatch.phase = "canceling";
+      nextPatch.message = "正在取消整理";
+    }
   }
   if (
     typeof current?.progress === "number" &&
