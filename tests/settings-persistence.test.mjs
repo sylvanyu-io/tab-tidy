@@ -21,6 +21,9 @@ test("session-only page sampling consent is not persisted", async () => {
 test("invalid selected target window ids normalize to null", () => {
   const settings = normalizeSettings({ ...DEFAULT_SETTINGS, selectedTargetWindowId: "not-a-window" });
   assert.equal(settings.selectedTargetWindowId, null);
+  assert.equal(normalizeSettings({ ...DEFAULT_SETTINGS, selectedTargetWindowId: 0 }).selectedTargetWindowId, null);
+  assert.equal(normalizeSettings({ ...DEFAULT_SETTINGS, selectedTargetWindowId: -12 }).selectedTargetWindowId, null);
+  assert.equal(normalizeSettings({ ...DEFAULT_SETTINGS, selectedTargetWindowId: "42" }).selectedTargetWindowId, 42);
 });
 
 test("invalid undo target window mode falls back to conservative default", () => {

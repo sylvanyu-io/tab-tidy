@@ -154,7 +154,7 @@ export function normalizeSettings(input = {}) {
     merged.selectedTargetWindowId === null || merged.selectedTargetWindowId === ""
       ? null
       : Number(merged.selectedTargetWindowId);
-  merged.selectedTargetWindowId = Number.isInteger(selectedTargetWindowId) ? selectedTargetWindowId : null;
+  merged.selectedTargetWindowId = Number.isInteger(selectedTargetWindowId) && selectedTargetWindowId > 0 ? selectedTargetWindowId : null;
 
   return merged;
 }
