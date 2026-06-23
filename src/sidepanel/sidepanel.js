@@ -32,9 +32,11 @@ const nodes = {
   rememberProviderKeysRow: document.querySelector("#rememberProviderKeysRow"),
   progressBar: document.querySelector("#progressBar"),
   progressFill: document.querySelector("#progressFill"),
+  actions: document.querySelector(".actions"),
   analyzeBtn: document.querySelector("#analyzeBtn"),
   applyBtn: document.querySelector("#applyBtn"),
   undoBtn: document.querySelector("#undoBtn"),
+  previewCount: document.querySelector("#previewCount"),
   previewRoot: document.querySelector("#previewRoot"),
   detailsRoot: document.querySelector("#detailsRoot"),
   detailsText: document.querySelector("#detailsText")
@@ -47,10 +49,12 @@ init().catch((error) => setStatus(error.message, true));
 
 async function init() {
   bindEvents();
+  bindChoiceGroups();
 
   const settings = await sendMessage({ type: "settings:get" });
   writeSettings(settings);
   updateConditionalUi();
+  syncActionState();
 }
 
 function bindEvents() {
@@ -65,6 +69,21 @@ function bindEvents() {
   nodes.analyzeBtn.addEventListener("click", analyze);
   nodes.applyBtn.addEventListener("click", applyLastPlan);
   nodes.undoBtn.addEventListener("click", undoLastApply);
+}
+
+function bindChoiceGroups() {
+  document.querySelectorAll("[data-choice-for]").forEach((group) => {
+    const field = fields[group.dataset.choiceFor];
+    if (!field) return;
+
+    group.querySelectorAll("button[data-value]").forEach((button) => {
+      button.addEventListener("click", () => {
+        field.value = button.dataset.value;
+        syncChoiceGroups();
+        field.dispatchEvent(new Event("change", { bubbles: true }));
+      });
+    });
+  });
 }
 
 function readSettings() {
@@ -114,13 +133,14 @@ function writeSettings(settings) {
       element.value = settings[key];
     }
   }
+  syncChoiceGroups();
 }
 
 async function persistSettings() {
   const settings = await sendMessage({ type: "settings:save", settings: readSettings() });
   writeSettings(settings);
   updateConditionalUi();
-  setStatus("Settings saved");
+  setStatus("偏好已保存");
 }
 
 function updateConditionalUi() {
@@ -132,10 +152,11 @@ function updateConditionalUi() {
   nodes.openaiFields.hidden = fields.plannerProvider.value !== "openai";
   nodes.deepseekFields.hidden = fields.plannerProvider.value !== "deepseek";
   nodes.rememberProviderKeysRow.hidden = fields.plannerProvider.value === "fake";
+  syncChoiceGroups();
 }
 
 async function analyze() {
-  setBusy(true, "正在生成方案");
+  setBusy(true, "正在思考怎么整理");
   try {
     const windowId = await resolveInvocationWindowId();
     const job = await sendMessage({ type: "tabs:analyze", settings: readSettings(), windowId });
@@ -144,7 +165,8 @@ async function analyze() {
     renderPreview(job);
     renderDetails(job);
     nodes.applyBtn.disabled = !lastCanApply;
-    setStatus(job.validation?.ok ? "方案已生成" : "方案需要检查", !job.validation?.ok);
+    syncActionState();
+    setStatus(job.validation?.ok ? "方案好了，可以先检查" : "方案需要检查", !job.validation?.ok);
   } catch (error) {
     setStatus(error.message, true);
     renderError(error);
@@ -155,11 +177,11 @@ async function analyze() {
 
 async function applyLastPlan() {
   if (lastPreview?.requiresConfirmation) {
-    const confirmed = confirm("这会移动多个窗口里的标签页，并创建浏览器分组。确认应用吗？");
+    const confirmed = confirm("这会移动多个窗口里的标签页，并创建浏览器分组。确认开始整理吗？");
     if (!confirmed) return;
   }
 
-  setBusy(true, "正在应用");
+  setBusy(true, "正在整理标签页");
   try {
     const result = await sendMessage({ type: "tabs:applyLastPlan" });
     setStatus(`已创建 ${result.createdGroupIds?.length || 0} 个分组`);
@@ -189,18 +211,26 @@ function renderPreview(job) {
   const groups = preview.groups || [];
   const warnings = preview.warnings || [];
   const sample = preview.pageSampling || { requested: 0, ok: 0, permissionRequired: 0, blocked: 0 };
+  const reviewTabsCount = preview.reviewTabsCount || 0;
 
-  if (!groups.length && !preview.reviewTabsCount && !preview.lockedGroupsCount) {
+  if (!groups.length && !reviewTabsCount && !preview.lockedGroupsCount) {
     nodes.previewRoot.className = "empty";
     nodes.previewRoot.textContent = "没有可整理的标签页。";
+    nodes.previewCount.textContent = "空";
     return;
   }
 
   nodes.previewRoot.className = "preview-list";
+  nodes.previewCount.textContent = `${groups.length} 组`;
   nodes.previewRoot.replaceChildren(
-    ...groups.map((group) => {
+    previewSummary(groups.length, reviewTabsCount),
+    ...groups.map((group, index) => {
       const row = document.createElement("div");
       row.className = "group-row";
+      row.style.setProperty("--swatch", swatchForIndex(index));
+
+      const swatch = document.createElement("div");
+      swatch.className = "group-swatch";
 
       const body = document.createElement("div");
       const title = document.createElement("div");
@@ -215,29 +245,45 @@ function renderPreview(job) {
       badge.className = "badge";
       badge.textContent = `${group.tabCount} 个`;
 
-      row.append(body, badge);
+      row.append(swatch, body, badge);
       return row;
     }),
-    summaryRow("待确认", preview.reviewTabsCount || 0),
-    summaryRow("不会处理", preview.excludedTabsCount || 0),
-    summaryRow("保留原分组", preview.lockedGroupsCount || 0),
-    summaryRow("页面摘要", `${sample.ok}/${sample.requested}`),
-    summaryRow("需要授权", sample.permissionRequired || 0),
-    summaryRow("提醒", warnings.length)
+    previewStats([
+      ["待确认", reviewTabsCount],
+      ["不会处理", preview.excludedTabsCount || 0],
+      ["保留原分组", preview.lockedGroupsCount || 0],
+      ["页面摘要", `${sample.ok}/${sample.requested}`],
+      ["需要授权", sample.permissionRequired || 0],
+      ["提醒", warnings.length]
+    ])
   );
 }
 
-function summaryRow(label, count) {
-  const row = document.createElement("div");
-  row.className = "group-row";
-  const title = document.createElement("div");
-  title.className = "group-title";
-  title.textContent = label;
-  const badge = document.createElement("div");
-  badge.className = "badge";
-  badge.textContent = String(count);
-  row.append(title, badge);
-  return row;
+function previewSummary(groupCount, reviewTabsCount) {
+  const summary = document.createElement("div");
+  summary.className = "preview-summary";
+  const groupText = groupCount ? `将创建 ${groupCount} 个分组` : "不会创建新分组";
+  const reviewText = reviewTabsCount ? `，${reviewTabsCount} 个放到待确认` : "";
+  summary.textContent = `${groupText}${reviewText}。`;
+  return summary;
+}
+
+function previewStats(items) {
+  const stats = document.createElement("div");
+  stats.className = "preview-stats";
+  for (const [label, count] of items) {
+    const chip = document.createElement("span");
+    chip.className = "stat-chip";
+    chip.textContent = `${label} ${count}`;
+    stats.append(chip);
+  }
+  return stats;
+}
+
+function swatchForIndex(index) {
+  return ["var(--group-a)", "var(--group-b)", "var(--group-c)", "var(--group-d)", "var(--group-e)", "var(--group-f)"][
+    index % 6
+  ];
 }
 
 function renderDetails(payload) {
@@ -247,6 +293,7 @@ function renderDetails(payload) {
 
 function renderError(error) {
   nodes.detailsRoot.hidden = false;
+  nodes.previewCount.textContent = "出错";
   nodes.detailsText.textContent = JSON.stringify({ error: error.message }, null, 2);
 }
 
@@ -270,11 +317,29 @@ function setBusy(isBusy, label = "") {
   nodes.progressBar.hidden = !isBusy;
   nodes.progressFill.style.width = isBusy ? "65%" : "0";
   if (isBusy && label) setStatus(label);
+  syncActionState();
 }
 
 function setStatus(text, isError = false) {
   nodes.statusText.textContent = text;
-  nodes.statusText.style.color = isError ? "#b42318" : "";
+  nodes.statusText.dataset.tone = isError ? "error" : "";
+}
+
+function syncChoiceGroups() {
+  document.querySelectorAll("[data-choice-for]").forEach((group) => {
+    const field = fields[group.dataset.choiceFor];
+    if (!field) return;
+    group.querySelectorAll("button[data-value]").forEach((button) => {
+      const selected = button.dataset.value === field.value;
+      button.setAttribute("aria-pressed", selected ? "true" : "false");
+    });
+  });
+}
+
+function syncActionState() {
+  nodes.actions.dataset.state = lastPreview ? "preview" : "idle";
+  nodes.analyzeBtn.textContent = lastPreview ? "重新生成" : "先看方案";
+  nodes.applyBtn.dataset.role = lastPreview && lastCanApply ? "primary" : "";
 }
 
 async function sendMessage(message) {
@@ -316,7 +381,7 @@ async function mockMessage(message) {
       minConfidenceToApply: 0.65,
       maxTabsPerGroup: 80,
       promptPreset: "conservative",
-      plannerProvider: "fake",
+      plannerProvider: "deepseek",
       rememberProviderKeys: false,
       openaiModel: "gpt-5.5",
       openaiApiKey: "",

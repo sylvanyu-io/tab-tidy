@@ -86,7 +86,7 @@ export const DEFAULT_SETTINGS = Object.freeze({
   promptPreset: PROMPT_PRESETS.CONSERVATIVE,
   customPrompt: "",
   selectedTargetWindowId: null,
-  plannerProvider: PLANNER_PROVIDERS.FAKE,
+  plannerProvider: PLANNER_PROVIDERS.DEEPSEEK,
   rememberProviderKeys: false,
   openaiModel: "gpt-5.5",
   openaiApiKey: "",

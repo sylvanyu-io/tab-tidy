@@ -12,6 +12,11 @@ import {
 } from "../src/shared/settings.js";
 import { createFakeChrome } from "./helpers/fake-chrome.mjs";
 
+const FAKE_PLANNER_SETTINGS = Object.freeze({
+  ...DEFAULT_SETTINGS,
+  plannerProvider: PLANNER_PROVIDERS.FAKE
+});
+
 test("analyze/apply/undo groups only the current window by default", async () => {
   const chrome = createFakeChrome({
     windows: [
@@ -31,7 +36,7 @@ test("analyze/apply/undo groups only the current window by default", async () =>
     ]
   });
 
-  const job = await analyzeTabs(chrome, DEFAULT_SETTINGS, { windowId: 1 });
+  const job = await analyzeTabs(chrome, FAKE_PLANNER_SETTINGS, { windowId: 1 });
   assert.equal(job.validation.ok, true);
   assert.equal(job.preview.excludedTabsCount, 1);
   assert.deepEqual(
@@ -66,6 +71,7 @@ test("consolidate_one_window moves all eligible normal-window tabs into one targ
   });
   const settings = {
     ...DEFAULT_SETTINGS,
+    plannerProvider: PLANNER_PROVIDERS.FAKE,
     organizeMode: ORGANIZE_MODES.CONSOLIDATE_ONE_WINDOW,
     targetWindowMode: TARGET_WINDOW_MODES.NEW_WINDOW,
     existingGroupMode: EXISTING_GROUP_MODES.DISSOLVE
@@ -172,6 +178,7 @@ test("active tab page samples are attached to analysis preview", async () => {
     chrome,
     {
       ...DEFAULT_SETTINGS,
+      plannerProvider: PLANNER_PROVIDERS.FAKE,
       pageContextMode: PAGE_CONTEXT_MODES.ACTIVE_TAB_ONLY,
       pageSamplingConsentMode: PAGE_SAMPLING_CONSENT_MODES.ACKNOWLEDGED_FOR_SESSION
     },
