@@ -284,7 +284,8 @@ async function prepareStressExtension(sourceDir, baseUrl) {
 
   const manifestPath = join(targetDir, "manifest.json");
   const manifest = JSON.parse(await readFile(manifestPath, "utf8"));
-  const originPattern = `${new URL(baseUrl).origin}/*`;
+  const base = new URL(baseUrl);
+  const originPattern = `${base.protocol}//${base.hostname}/*`;
   manifest.permissions = [...new Set([...(manifest.permissions || []), "scripting"])];
   manifest.host_permissions = [...new Set([...(manifest.host_permissions || []), originPattern])];
   await writeFile(manifestPath, JSON.stringify(manifest, null, 2));
