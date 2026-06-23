@@ -35,7 +35,7 @@ test("AI gateway settings normalize safely", () => {
   );
   assert.equal(
     normalizeSettings({ ...DEFAULT_SETTINGS, gatewayBaseUrl: "javascript:alert(1)" }).gatewayBaseUrl,
-    DEFAULT_SETTINGS.gatewayBaseUrl
+    ""
   );
   assert.equal(
     normalizeSettings({ ...DEFAULT_SETTINGS, gatewayThinkingIntensity: "nope" }).gatewayThinkingIntensity,

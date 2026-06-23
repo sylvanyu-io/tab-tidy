@@ -56,6 +56,7 @@ const nodes = {
 
 let lastPreview = null;
 let lastCanApply = false;
+let canUndo = false;
 let isEditingSettings = false;
 let pageSamplingOriginCache = { origins: [], refreshedAt: 0 };
 let pageSamplingOriginRefreshTimer = null;
@@ -151,6 +152,8 @@ function writeSettings(settings) {
     if (key === "ackSampling") {
       element.checked =
         settings.pageSamplingConsentMode === "acknowledged_for_session" || settings.pageContextMode !== "off";
+    } else if (key === "plannerProvider") {
+      element.value = allowInternalFakeProvider() && settings[key] === "fake" ? "fake" : "gateway";
     } else if (element.type === "checkbox") {
       element.checked = Boolean(settings[key]);
     } else if (settings[key] !== undefined) {
@@ -158,6 +161,10 @@ function writeSettings(settings) {
     }
   }
   syncChoiceGroups();
+}
+
+function allowInternalFakeProvider() {
+  return Boolean(globalThis.__semanticTabAgentAllowFakeProvider);
 }
 
 async function persistSettings() {
@@ -223,6 +230,7 @@ async function applyLastPlan() {
   setBusy(true, "正在整理标签页");
   try {
     const result = await sendMessage({ type: "tabs:applyLastPlan" });
+    canUndo = true;
     setStatus(`已创建 ${result.createdGroupIds?.length || 0} 个分组`);
     renderDetails({ applyResult: result });
   } catch (error) {
@@ -236,6 +244,7 @@ async function undoLastApply() {
   setBusy(true, "正在撤销");
   try {
     const result = await sendMessage({ type: "tabs:undoLastApply" });
+    canUndo = false;
     setStatus(`已恢复 ${result.restoredTabs || 0} 个标签页`);
     renderDetails({ undoResult: result });
   } catch (error) {
@@ -496,6 +505,7 @@ function syncActionState() {
   nodes.settingsSummaryBtn.hidden = !compactPreview;
   nodes.settingsSummaryText.textContent = scopeLabel();
   nodes.actions.dataset.state = lastPreview ? "preview" : "idle";
+  nodes.actions.dataset.canUndo = canUndo ? "true" : "false";
   setButtonLabel(nodes.analyzeBtn, lastPreview ? "重新生成" : "生成方案");
   nodes.applyBtn.dataset.role = lastPreview && lastCanApply ? "primary" : "";
 }
@@ -517,7 +527,7 @@ async function ensurePlannerHostPermission(settings) {
   if (settings.plannerProvider !== "gateway") return;
   if (!globalThis.chrome?.permissions?.contains || !globalThis.chrome?.permissions?.request) return;
 
-  const pattern = providerPermissionPattern(settings.gatewayBaseUrl);
+  const pattern = providerPermissionPattern(settings.gatewayBaseUrl || "http://127.0.0.1:8317/v1");
   if (!pattern) return;
 
   const hasPermission = await chrome.permissions.contains({ origins: [pattern] });
@@ -698,7 +708,7 @@ async function mockMessage(message) {
       promptPreset: "conservative",
       plannerProvider: "gateway",
       rememberProviderKeys: false,
-      gatewayBaseUrl: "http://127.0.0.1:8317/v1",
+      gatewayBaseUrl: "",
       gatewayModel: "gpt-5.5",
       gatewayThinkingIntensity: "high",
       gatewayApiKey: "",

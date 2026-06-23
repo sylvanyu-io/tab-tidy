@@ -1,4 +1,4 @@
-import { ORGANIZE_MODES, PROMPT_PRESET_TEXT, TARGET_WINDOW_MODES, normalizeSettings } from "../shared/settings.js";
+import { BUILTIN_GATEWAY_BASE_URL, ORGANIZE_MODES, PROMPT_PRESET_TEXT, TARGET_WINDOW_MODES, normalizeSettings } from "../shared/settings.js";
 import { fetchJsonWithTimeout } from "./fetch-timeout.js";
 import { ACTION_PLAN_JSON_SCHEMA } from "./plan-schema.js";
 import { CHROME_GROUP_COLORS } from "./plan-validator.js";
@@ -135,7 +135,11 @@ async function createHierarchicalGatewayPlan(inventory, settings, fetchImpl, opt
 }
 
 export function gatewayChatCompletionsUrl(settings) {
-  return `${settings.gatewayBaseUrl.replace(/\/+$/, "")}/chat/completions`;
+  return `${effectiveGatewayBaseUrl(settings).replace(/\/+$/, "")}/chat/completions`;
+}
+
+export function effectiveGatewayBaseUrl(settings) {
+  return settings.gatewayBaseUrl || BUILTIN_GATEWAY_BASE_URL;
 }
 
 function gatewayHeaders(settings) {

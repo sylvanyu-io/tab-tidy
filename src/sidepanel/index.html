@@ -55,12 +55,7 @@
           <option value="fake">Internal test</option>
         </select>
 
-        <details class="preferences-panel">
-          <summary>
-            <span>整理偏好</span>
-            <small>页面摘要、自定义要求</small>
-          </summary>
-
+        <div class="preferences-panel">
           <label class="switch-row emphasis-toggle">
             <span>
               <strong>参考页面短摘要</strong>
@@ -83,7 +78,7 @@
               placeholder="例如：找工作、AI 论文、当前项目分开；拿不准的放到待确认。"
             ></textarea>
           </div>
-        </details>
+        </div>
       </section>
 
       <details class="advanced-settings">
@@ -179,13 +174,13 @@
         </div>
 
         <div class="field">
-          <label for="gatewayBaseUrl">AI 网关地址</label>
-          <input id="gatewayBaseUrl" type="url" autocomplete="off" placeholder="http://127.0.0.1:8317/v1" />
+          <label for="gatewayBaseUrl">AI 网关地址（可选）</label>
+          <input id="gatewayBaseUrl" type="url" autocomplete="off" placeholder="不填则使用默认服务" />
         </div>
 
         <div class="field">
           <label for="gatewayApiKey">AI 网关密钥（可选）</label>
-          <input id="gatewayApiKey" type="password" autocomplete="off" placeholder="留空也可以使用" />
+          <input id="gatewayApiKey" type="password" autocomplete="off" placeholder="默认服务无需填写" />
         </div>
 
         <div class="toggles">

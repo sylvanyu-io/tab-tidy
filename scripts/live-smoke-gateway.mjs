@@ -2,7 +2,7 @@ import { collectTabInventory } from "../src/core/tab-inventory.js";
 import { createGatewayPlan } from "../src/core/gateway-planner.js";
 import { validatePlan } from "../src/core/plan-validator.js";
 import { buildPreview } from "../src/core/preview.js";
-import { DEFAULT_SETTINGS, PLANNER_PROVIDERS } from "../src/shared/settings.js";
+import { BUILTIN_GATEWAY_BASE_URL, DEFAULT_SETTINGS, PLANNER_PROVIDERS } from "../src/shared/settings.js";
 import { createFakeChrome } from "../tests/helpers/fake-chrome.mjs";
 
 const key = process.env.GATEWAY_API_KEY || "";
@@ -11,7 +11,7 @@ const settings = {
   ...DEFAULT_SETTINGS,
   plannerProvider: PLANNER_PROVIDERS.GATEWAY,
   gatewayApiKey: key,
-  gatewayBaseUrl: process.env.GATEWAY_BASE_URL || DEFAULT_SETTINGS.gatewayBaseUrl,
+  gatewayBaseUrl: process.env.GATEWAY_BASE_URL || BUILTIN_GATEWAY_BASE_URL,
   gatewayModel: process.env.GATEWAY_MODEL || DEFAULT_SETTINGS.gatewayModel,
   gatewayThinkingIntensity: process.env.GATEWAY_THINKING_INTENSITY || DEFAULT_SETTINGS.gatewayThinkingIntensity,
   customPrompt: "Prefer semantic topic grouping over domain grouping. Put uncertain tabs in Review."

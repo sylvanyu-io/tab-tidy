@@ -39,14 +39,15 @@ test("popup renders settings and mock preview", async ({ page }) => {
   await expect(page.locator(".segmented")).toHaveCount(0);
   await expect(page.locator("#previewSection")).toBeHidden();
   await expect(page.locator("#samplingRisk")).toBeHidden();
+  await expect(page.getByText("整理偏好")).toHaveCount(0);
 
-  await page.getByText("整理偏好").click();
   await page.locator("#ackSampling").check();
   await expect(page.locator("#samplingRisk")).toBeVisible();
 
   await page.getByText("更多选项").click();
-  await expect(page.locator("#gatewayBaseUrl")).toHaveValue("http://127.0.0.1:8317/v1");
-  await expect(page.locator("#gatewayApiKey")).toHaveAttribute("placeholder", "留空也可以使用");
+  await expect(page.locator("#gatewayBaseUrl")).toHaveValue("");
+  await expect(page.locator("#gatewayBaseUrl")).toHaveAttribute("placeholder", "不填则使用默认服务");
+  await expect(page.locator("#gatewayApiKey")).toHaveAttribute("placeholder", "默认服务无需填写");
   await expect(page.locator("#gatewayModel")).toHaveValue("gpt-5.5");
   await expect(page.locator("#gatewayThinkingIntensity")).toHaveValue("high");
   await expect(page.locator("#undoTargetWindowMode")).toHaveValue("leave_empty_target_window");
@@ -56,6 +57,10 @@ test("popup renders settings and mock preview", async ({ page }) => {
   await expect(page.locator(".preview").getByText("AI 研究", { exact: true })).toBeVisible();
   await expect(page.locator(".preview").getByText("当前项目", { exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "开始整理" })).toBeEnabled();
+  await expect(page.getByRole("button", { name: "撤销" })).toBeHidden();
+
+  await page.getByRole("button", { name: "开始整理" }).click();
+  await expect(page.getByRole("button", { name: "撤销" })).toBeVisible();
 });
 
 test("popup shows optimistic progress while waiting for AI", async ({ page }) => {
@@ -78,7 +83,7 @@ test("popup shows optimistic progress while waiting for AI", async ({ page }) =>
       promptPreset: "conservative",
       plannerProvider: "gateway",
       rememberProviderKeys: false,
-      gatewayBaseUrl: "http://127.0.0.1:8317/v1",
+      gatewayBaseUrl: "",
       gatewayModel: "gpt-5.5",
       gatewayThinkingIntensity: "high",
       gatewayApiKey: "",

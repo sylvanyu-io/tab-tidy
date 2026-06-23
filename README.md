@@ -19,7 +19,9 @@ Default behavior is current-window only. The "All windows to one window" scope i
 an explicit switch and moves all eligible normal-window tabs into one target
 window only after preview and confirmation.
 
-The AI gateway defaults to `http://127.0.0.1:8317/v1`. The popup exposes
+The AI gateway address and key fields are blank by default. Leaving them blank
+uses the built-in service; filling the address switches to a custom
+chat-completions-compatible gateway. The popup exposes
 only `gpt-5.5`, `claude-opus-4-8`, and `claude-sonnet-4-6` for tab planning.
 Thinking intensity defaults to high and can be set to low, medium, high, or
 ultra-high from advanced settings.
@@ -30,9 +32,9 @@ accepts the final plan.
 For 100+ tab jobs, refinement follows the selected thinking intensity; the
 default remains high.
 Image models can exist on the same gateway, but they are not useful planner
-models for this workflow. The default local gateway does not require a key. If
-you use a custom gateway that needs one, set it in "More options"; it is stored
-only in local extension storage.
+models for this workflow. The built-in service does not require a key. If you
+use a custom gateway that needs one, set it in "More options"; it is stored only
+in local extension storage.
 
 Page content sampling is off by default. Session-only acknowledgement is not
 persisted; persistent acknowledgement is reserved for a later settings flow.

@@ -4,13 +4,14 @@ import { cp, mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
+import { BUILTIN_GATEWAY_BASE_URL } from "../src/shared/settings.js";
 
 const extensionDir = resolve("dist/extension");
 const totalTabs = positiveInteger(process.env.STRESS_TABS, 240);
 const windowCount = positiveInteger(process.env.STRESS_WINDOWS, 4);
 const gatewayTabs = positiveInteger(process.env.STRESS_GATEWAY_TABS, Math.min(totalTabs, 180));
 const gatewayKey = process.env.GATEWAY_API_KEY || "";
-const gatewayBaseUrl = process.env.GATEWAY_BASE_URL || "http://127.0.0.1:8317/v1";
+const gatewayBaseUrl = process.env.GATEWAY_BASE_URL || BUILTIN_GATEWAY_BASE_URL;
 const gatewayModel = process.env.GATEWAY_MODEL || "gpt-5.5";
 const runId = `sta-stress-${Date.now().toString(36)}`;
 
@@ -370,6 +371,7 @@ async function sendRuntime(page, message) {
 
 async function runUiSamplingAnalyze(page, options) {
   await page.evaluate(({ organizeMode }) => {
+    window.__semanticTabAgentAllowFakeProvider = true;
     const set = (selector, value) => {
       const element = document.querySelector(selector);
       element.value = value;

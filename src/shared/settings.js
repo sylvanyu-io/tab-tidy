@@ -61,7 +61,8 @@ export const PLANNER_PROVIDERS = Object.freeze({
   GATEWAY: "gateway"
 });
 
-export const DEFAULT_GATEWAY_BASE_URL = "http://127.0.0.1:8317/v1";
+export const BUILTIN_GATEWAY_BASE_URL = "http://127.0.0.1:8317/v1";
+export const DEFAULT_GATEWAY_BASE_URL = "";
 
 export const GATEWAY_MODELS = Object.freeze(["gpt-5.5", "claude-opus-4-8", "claude-sonnet-4-6"]);
 
@@ -140,7 +141,7 @@ export function normalizeSettings(input = {}) {
   merged.minConfidenceToApply = clampNumber(merged.minConfidenceToApply, 0, 1, DEFAULT_SETTINGS.minConfidenceToApply);
   merged.maxTabsPerGroup = Math.max(1, Number.parseInt(merged.maxTabsPerGroup, 10) || DEFAULT_SETTINGS.maxTabsPerGroup);
   merged.customPrompt = String(merged.customPrompt || "").slice(0, 4000);
-  merged.gatewayBaseUrl = normalizeBaseUrl(merged.gatewayBaseUrl, DEFAULT_SETTINGS.gatewayBaseUrl);
+  merged.gatewayBaseUrl = normalizeOptionalBaseUrl(merged.gatewayBaseUrl);
   merged.gatewayModel = normalizeGatewayModel(merged.gatewayModel);
   merged.gatewayApiKey = String(merged.gatewayApiKey || "").trim();
   const selectedTargetWindowId =
@@ -158,16 +159,19 @@ function clampNumber(value, min, max, fallback) {
   return Math.min(max, Math.max(min, numeric));
 }
 
-function normalizeBaseUrl(value, fallback) {
+function normalizeOptionalBaseUrl(value) {
+  const rawValue = String(value || "").trim();
+  if (!rawValue) return "";
+
   try {
-    const url = new URL(String(value || fallback).trim());
-    if (!["https:", "http:"].includes(url.protocol)) return fallback;
+    const url = new URL(rawValue);
+    if (!["https:", "http:"].includes(url.protocol)) return "";
     url.hash = "";
     url.search = "";
     url.pathname = url.pathname.replace(/\/+$/, "");
     return url.toString().replace(/\/$/, "");
   } catch {
-    return fallback;
+    return "";
   }
 }
 
