@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { getSettings, saveSettings } from "../src/core/controller.js";
-import { DEFAULT_SETTINGS, PAGE_SAMPLING_CONSENT_MODES, THINKING_INTENSITIES } from "../src/shared/settings.js";
+import { DEFAULT_SETTINGS, PAGE_SAMPLING_CONSENT_MODES, THINKING_INTENSITIES, UNDO_TARGET_WINDOW_MODES } from "../src/shared/settings.js";
 import { normalizeSettings } from "../src/shared/settings.js";
 import { createFakeChrome } from "./helpers/fake-chrome.mjs";
 
@@ -21,6 +21,11 @@ test("session-only page sampling consent is not persisted", async () => {
 test("invalid selected target window ids normalize to null", () => {
   const settings = normalizeSettings({ ...DEFAULT_SETTINGS, selectedTargetWindowId: "not-a-window" });
   assert.equal(settings.selectedTargetWindowId, null);
+});
+
+test("invalid undo target window mode falls back to conservative default", () => {
+  const settings = normalizeSettings({ ...DEFAULT_SETTINGS, undoTargetWindowMode: "close_anything" });
+  assert.equal(settings.undoTargetWindowMode, UNDO_TARGET_WINDOW_MODES.LEAVE_EMPTY);
 });
 
 test("AI gateway settings normalize safely", () => {

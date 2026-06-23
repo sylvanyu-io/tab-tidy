@@ -1,11 +1,11 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { validatePlan } from "../src/core/plan-validator.js";
-import { DEFAULT_SETTINGS, EXISTING_GROUP_MODES } from "../src/shared/settings.js";
+import { DEFAULT_SETTINGS, EXISTING_GROUP_MODES, ORGANIZE_MODES, TARGET_WINDOW_MODES } from "../src/shared/settings.js";
 
 test("current-window mode rejects tabs from another window", () => {
   const inventory = {
-    scope: { currentWindowId: 1 },
+    scope: { kind: "current_window", currentWindowId: 1, windowIds: [1] },
     plannerTabs: [{ tabId: 10, windowId: 1, pinned: false, incognito: false }],
     lockedGroups: [],
     excludedTabs: []
@@ -13,6 +13,7 @@ test("current-window mode rejects tabs from another window", () => {
   const plan = {
     schemaVersion: 1,
     mode: "current_window",
+    targetWindow: { kind: "current_window", windowId: 1, title: "Current Window" },
     groups: [{ groupKey: "x", title: "X", color: "blue", confidence: 0.8, tabRefs: [{ tabId: 10, windowId: 2 }] }],
     reviewTabs: [],
     excludedTabs: []
@@ -26,7 +27,7 @@ test("current-window mode rejects tabs from another window", () => {
 test("preserve existing groups rejects reassignment of locked tabs", () => {
   const settings = { ...DEFAULT_SETTINGS, existingGroupMode: EXISTING_GROUP_MODES.PRESERVE };
   const inventory = {
-    scope: { currentWindowId: 1 },
+    scope: { kind: "current_window", currentWindowId: 1, windowIds: [1] },
     plannerTabs: [],
     lockedGroups: [{ groupId: 88, windowId: 1, tabIds: [10] }],
     excludedTabs: []
@@ -34,6 +35,7 @@ test("preserve existing groups rejects reassignment of locked tabs", () => {
   const plan = {
     schemaVersion: 1,
     mode: "current_window",
+    targetWindow: { kind: "current_window", windowId: 1, title: "Current Window" },
     groups: [{ groupKey: "x", title: "X", color: "blue", confidence: 0.8, tabRefs: [{ tabId: 10, windowId: 1 }] }],
     reviewTabs: [],
     excludedTabs: []
@@ -42,4 +44,114 @@ test("preserve existing groups rejects reassignment of locked tabs", () => {
   const result = validatePlan(plan, inventory, settings);
   assert.equal(result.ok, false);
   assert.match(result.errors.join("\n"), /locked existing group|Preserved existing group/);
+});
+
+test("group confidence below apply threshold is invalid", () => {
+  const inventory = {
+    scope: { kind: "current_window", currentWindowId: 1, windowIds: [1] },
+    plannerTabs: [{ tabId: 10, windowId: 1, pinned: false, incognito: false }],
+    lockedGroups: [],
+    excludedTabs: []
+  };
+  const plan = {
+    schemaVersion: 1,
+    mode: "current_window",
+    targetWindow: { kind: "current_window", windowId: 1, title: "Current Window" },
+    groups: [{ groupKey: "weak", title: "Weak", color: "blue", confidence: 0.2, tabRefs: [{ tabId: 10, windowId: 1 }] }],
+    reviewTabs: [],
+    excludedTabs: []
+  };
+
+  const result = validatePlan(plan, inventory, DEFAULT_SETTINGS);
+  assert.equal(result.ok, false);
+  assert.match(result.errors.join("\n"), /below the apply threshold/);
+});
+
+test("groups above the tab limit are invalid", () => {
+  const plannerTabs = Array.from({ length: 3 }, (_, index) => ({
+    tabId: index + 10,
+    windowId: 1,
+    pinned: false,
+    incognito: false
+  }));
+  const inventory = {
+    scope: { kind: "current_window", currentWindowId: 1, windowIds: [1] },
+    plannerTabs,
+    lockedGroups: [],
+    excludedTabs: []
+  };
+  const plan = {
+    schemaVersion: 1,
+    mode: "current_window",
+    targetWindow: { kind: "current_window", windowId: 1, title: "Current Window" },
+    groups: [
+      {
+        groupKey: "huge",
+        title: "Huge",
+        color: "blue",
+        confidence: 0.9,
+        reason: "Still too large.",
+        tabRefs: plannerTabs.map((tab) => ({ tabId: tab.tabId, windowId: tab.windowId }))
+      }
+    ],
+    reviewTabs: [],
+    excludedTabs: []
+  };
+
+  const result = validatePlan(plan, inventory, { ...DEFAULT_SETTINGS, maxTabsPerGroup: 2 });
+  assert.equal(result.ok, false);
+  assert.match(result.errors.join("\n"), /above the limit 2/);
+});
+
+test("selected target window must come from settings, not planner choice", () => {
+  const settings = {
+    ...DEFAULT_SETTINGS,
+    organizeMode: ORGANIZE_MODES.CONSOLIDATE_ONE_WINDOW,
+    targetWindowMode: TARGET_WINDOW_MODES.SELECTED_WINDOW,
+    selectedTargetWindowId: 2
+  };
+  const inventory = {
+    scope: { kind: "all_normal_windows", currentWindowId: null, invocationWindowId: 1, windowIds: [1, 2, 3] },
+    plannerTabs: [{ tabId: 10, windowId: 1, pinned: false, incognito: false }],
+    lockedGroups: [],
+    excludedTabs: []
+  };
+  const plan = {
+    schemaVersion: 1,
+    mode: "consolidate_one_window",
+    targetWindow: { kind: "selected_window", windowId: 3, title: "Wrong Window" },
+    groups: [{ groupKey: "x", title: "X", color: "blue", confidence: 0.8, tabRefs: [{ tabId: 10, windowId: 1 }] }],
+    reviewTabs: [],
+    excludedTabs: []
+  };
+
+  const result = validatePlan(plan, inventory, settings);
+  assert.equal(result.ok, false);
+  assert.match(result.errors.join("\n"), /targetWindow\.windowId must be 2/);
+});
+
+test("current target window in consolidate mode must be the invocation window", () => {
+  const settings = {
+    ...DEFAULT_SETTINGS,
+    organizeMode: ORGANIZE_MODES.CONSOLIDATE_ONE_WINDOW,
+    targetWindowMode: TARGET_WINDOW_MODES.CURRENT_WINDOW
+  };
+  const inventory = {
+    scope: { kind: "all_normal_windows", currentWindowId: null, invocationWindowId: 2, windowIds: [1, 2] },
+    plannerTabs: [{ tabId: 10, windowId: 1, pinned: false, incognito: false }],
+    lockedGroups: [],
+    excludedTabs: []
+  };
+  const plan = {
+    schemaVersion: 1,
+    mode: "consolidate_one_window",
+    targetWindow: { kind: "current_window", windowId: 1, title: "Wrong Window" },
+    groups: [{ groupKey: "x", title: "X", color: "blue", confidence: 0.8, tabRefs: [{ tabId: 10, windowId: 1 }] }],
+    reviewTabs: [],
+    excludedTabs: []
+  };
+
+  const result = validatePlan(plan, inventory, settings);
+  assert.equal(result.ok, false);
+  assert.match(result.errors.join("\n"), /targetWindow\.windowId must be 2/);
 });

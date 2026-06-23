@@ -38,6 +38,11 @@ export const PAGE_SAMPLING_CONSENT_MODES = Object.freeze({
   ACKNOWLEDGED_PERSISTENTLY: "acknowledged_persistently"
 });
 
+export const UNDO_TARGET_WINDOW_MODES = Object.freeze({
+  LEAVE_EMPTY: "leave_empty_target_window",
+  CLOSE_EMPTY_CREATED: "close_empty_created_target_window"
+});
+
 export const URL_PRIVACY_MODES = Object.freeze({
   TITLE_ONLY: "title_only",
   SANITIZED_URL: "sanitized_url",
@@ -92,8 +97,8 @@ export const DEFAULT_SETTINGS = Object.freeze({
   includeIncognitoTabs: false,
   collapseGroupsAfterApply: false,
   minConfidenceToApply: 0.65,
-  maxTabsPerGroup: 80,
-  undoTargetWindowMode: "leave_empty_target_window",
+  maxTabsPerGroup: 40,
+  undoTargetWindowMode: UNDO_TARGET_WINDOW_MODES.LEAVE_EMPTY,
   promptPreset: PROMPT_PRESETS.CONSERVATIVE,
   customPrompt: "",
   selectedTargetWindowId: null,
@@ -115,6 +120,7 @@ const enumValues = {
   pageContextMode: Object.values(PAGE_CONTEXT_MODES),
   hostPermissionRequestMode: Object.values(HOST_PERMISSION_REQUEST_MODES),
   pageSamplingConsentMode: Object.values(PAGE_SAMPLING_CONSENT_MODES),
+  undoTargetWindowMode: Object.values(UNDO_TARGET_WINDOW_MODES),
   urlPrivacyMode: Object.values(URL_PRIVACY_MODES),
   promptPreset: Object.values(PROMPT_PRESETS),
   plannerProvider: Object.values(PLANNER_PROVIDERS),

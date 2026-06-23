@@ -1,4 +1,4 @@
-import { EXISTING_GROUP_MODES, ORGANIZE_MODES, normalizeSettings } from "../shared/settings.js";
+import { EXISTING_GROUP_MODES, ORGANIZE_MODES, TARGET_WINDOW_MODES, normalizeSettings } from "../shared/settings.js";
 
 export const CHROME_GROUP_COLORS = Object.freeze(["grey", "blue", "red", "yellow", "green", "pink", "purple", "cyan"]);
 
@@ -17,6 +17,7 @@ export function validatePlan(plan, inventory, rawSettings = {}) {
   }
 
   const currentWindowId = inventory.scope?.currentWindowId;
+  validateTargetWindow(plan.targetWindow, settings, inventory.scope || {}, errors);
   const plannerTabMap = new Map((inventory.plannerTabs || []).map((tab) => [tab.tabId, tab]));
   const lockedTabIds = new Set((inventory.lockedGroups || []).flatMap((group) => group.tabIds));
   const seen = new Map();
@@ -77,6 +78,40 @@ export function validatePlan(plan, inventory, rawSettings = {}) {
   return { ok: errors.length === 0, errors, warnings };
 }
 
+function validateTargetWindow(targetWindow, settings, scope, errors) {
+  if (!targetWindow || typeof targetWindow !== "object") {
+    errors.push("Plan is missing targetWindow.");
+    return;
+  }
+
+  if (settings.organizeMode === ORGANIZE_MODES.CURRENT_WINDOW) {
+    if (targetWindow.kind !== "current_window") {
+      errors.push("Current-window mode targetWindow.kind must be current_window.");
+    }
+    if (Number.isInteger(scope.currentWindowId) && targetWindow.windowId !== scope.currentWindowId) {
+      errors.push(`Current-window mode targetWindow.windowId must be ${scope.currentWindowId}.`);
+    }
+    return;
+  }
+
+  if (targetWindow.kind !== settings.targetWindowMode) {
+    errors.push(`Plan targetWindow.kind ${targetWindow.kind || "<missing>"} does not match setting ${settings.targetWindowMode}.`);
+  }
+  if (settings.targetWindowMode === TARGET_WINDOW_MODES.SELECTED_WINDOW) {
+    if (!Number.isInteger(settings.selectedTargetWindowId)) {
+      errors.push("Selected-window mode requires a configured selectedTargetWindowId.");
+    } else if (targetWindow.windowId !== settings.selectedTargetWindowId) {
+      errors.push(`Selected-window mode targetWindow.windowId must be ${settings.selectedTargetWindowId}.`);
+    }
+  } else if (
+    settings.targetWindowMode === TARGET_WINDOW_MODES.CURRENT_WINDOW &&
+    Number.isInteger(scope.invocationWindowId) &&
+    targetWindow.windowId !== scope.invocationWindowId
+  ) {
+    errors.push(`Current target-window mode targetWindow.windowId must be ${scope.invocationWindowId}.`);
+  }
+}
+
 function validateGroup(group, settings, errors, warnings) {
   if (!group || typeof group !== "object") {
     errors.push("Group entry is invalid.");
@@ -87,11 +122,11 @@ function validateGroup(group, settings, errors, warnings) {
   if (group.title && group.title.length > 40) warnings.push(`Group title "${group.title}" may be too long for Chrome labels.`);
   if (!CHROME_GROUP_COLORS.includes(group.color)) errors.push(`Group ${group.title || group.groupKey} uses unsupported color ${group.color}.`);
   if (!Array.isArray(group.tabRefs)) errors.push(`Group ${group.title || group.groupKey} is missing tabRefs.`);
-  if ((group.tabRefs || []).length > settings.maxTabsPerGroup && !String(group.reason || "").trim()) {
-    warnings.push(`Group ${group.title} exceeds maxTabsPerGroup without an explicit reason.`);
+  if ((group.tabRefs || []).length > settings.maxTabsPerGroup) {
+    errors.push(`Group ${group.title} has ${(group.tabRefs || []).length} tabs, above the limit ${settings.maxTabsPerGroup}.`);
   }
   if (Number(group.confidence) < settings.minConfidenceToApply) {
-    warnings.push(`Group ${group.title} confidence is below the apply threshold.`);
+    errors.push(`Group ${group.title} confidence is below the apply threshold.`);
   }
 }
 
