@@ -26,10 +26,14 @@ let lastCanApply = false;
 init().catch((error) => setStatus(error.message, true));
 
 async function init() {
+  bindEvents();
+
   const settings = await sendMessage({ type: "settings:get" });
   writeSettings(settings);
   updateRiskVisibility();
+}
 
+function bindEvents() {
   for (const element of Object.values(fields)) {
     element.addEventListener("change", persistSettings);
   }

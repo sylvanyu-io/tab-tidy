@@ -1,0 +1,61 @@
+import { expect, test } from "@playwright/test";
+import { createServer } from "node:http";
+import { readFile } from "node:fs/promises";
+import { extname, resolve } from "node:path";
+
+const rootDir = resolve(".");
+let server;
+let baseUrl;
+
+test.beforeAll(async () => {
+  server = createServer(async (request, response) => {
+    try {
+      const pathname = decodeURIComponent(new URL(request.url, "http://localhost").pathname);
+      const filePath = resolve(rootDir, pathname.slice(1));
+      if (!filePath.startsWith(rootDir)) {
+        response.writeHead(403).end();
+        return;
+      }
+      const body = await readFile(filePath);
+      response.writeHead(200, { "content-type": contentType(filePath) });
+      response.end(body);
+    } catch {
+      response.writeHead(404).end();
+    }
+  });
+
+  await new Promise((resolveListen) => server.listen(0, "127.0.0.1", resolveListen));
+  baseUrl = `http://127.0.0.1:${server.address().port}`;
+});
+
+test.afterAll(async () => {
+  await new Promise((resolveClose) => server.close(resolveClose));
+});
+
+test("side panel renders settings and mock preview", async ({ page }) => {
+  await page.goto(`${baseUrl}/src/sidepanel/index.html`);
+
+  await expect(page.getByRole("heading", { name: "Semantic Tab Agent" })).toBeVisible();
+  await expect(page.locator("#samplingRisk")).toBeHidden();
+
+  await page.selectOption("#pageContextMode", "ambiguous_with_permission");
+  await expect(page.locator("#samplingRisk")).toBeVisible();
+
+  await page.getByRole("button", { name: "Analyze" }).click();
+  await expect(page.locator(".preview").getByText("AI Research", { exact: true })).toBeVisible();
+  await expect(page.locator(".preview").getByText("Project Work", { exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Apply" })).toBeEnabled();
+});
+
+function contentType(filePath) {
+  switch (extname(filePath)) {
+    case ".html":
+      return "text/html; charset=utf-8";
+    case ".js":
+      return "text/javascript; charset=utf-8";
+    case ".css":
+      return "text/css; charset=utf-8";
+    default:
+      return "application/octet-stream";
+  }
+}
