@@ -60,6 +60,15 @@ DEEPSEEK_API_KEY=... npm run smoke:deepseek
 Do not commit provider keys. Rotate any key that has appeared in chat, shell
 history, logs, screenshots, or test output.
 
+Release check:
+
+```bash
+npm run release:check
+```
+
+This runs automated tests, scans for provider-key patterns, and builds
+`dist/semantic-tab-agent-0.1.0.zip` plus an unpacked `dist/extension`.
+
 Design notes:
 
 - [Agent contract](docs/agent-contract.md)

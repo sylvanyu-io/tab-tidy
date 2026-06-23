@@ -33,6 +33,7 @@ Not production-complete yet:
 Blocking gates:
 
 - `npm run check` passes.
+- `npm run release:check` passes and produces a clean extension package.
 - DeepSeek live smoke passes with a disposable key.
 - OpenAI live smoke passes with a disposable key.
 - Manual Chrome run validates current-window apply and undo on a throwaway
