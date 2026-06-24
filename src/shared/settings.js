@@ -1,3 +1,7 @@
+import { LANGUAGE_MODES, LANGUAGE_MODE_VALUES, normalizeLanguageMode } from "./language.js";
+
+export { LANGUAGE_MODES } from "./language.js";
+
 export const ORGANIZE_MODES = Object.freeze({
   CURRENT_WINDOW: "current_window",
   CONSOLIDATE_ONE_WINDOW: "consolidate_one_window"
@@ -104,6 +108,7 @@ export const DEFAULT_SETTINGS = Object.freeze({
   minConfidenceToApply: 0.65,
   maxTabsPerGroup: 40,
   undoTargetWindowMode: UNDO_TARGET_WINDOW_MODES.LEAVE_EMPTY,
+  languageMode: LANGUAGE_MODES.AUTO,
   promptPreset: PROMPT_PRESETS.CONSERVATIVE,
   customPrompt: "",
   selectedTargetWindowId: null,
@@ -125,6 +130,7 @@ const enumValues = {
   pageSamplingConsentMode: Object.values(PAGE_SAMPLING_CONSENT_MODES),
   undoTargetWindowMode: Object.values(UNDO_TARGET_WINDOW_MODES),
   urlPrivacyMode: Object.values(URL_PRIVACY_MODES),
+  languageMode: LANGUAGE_MODE_VALUES,
   promptPreset: Object.values(PROMPT_PRESETS),
   plannerProvider: Object.values(PLANNER_PROVIDERS),
   gatewayThinkingIntensity: Object.values(THINKING_INTENSITIES)
@@ -145,6 +151,7 @@ export function normalizeSettings(input = {}) {
   merged.rememberProviderKeys = Boolean(merged.rememberProviderKeys);
   merged.minConfidenceToApply = clampNumber(merged.minConfidenceToApply, 0, 1, DEFAULT_SETTINGS.minConfidenceToApply);
   merged.maxTabsPerGroup = Math.max(1, Number.parseInt(merged.maxTabsPerGroup, 10) || DEFAULT_SETTINGS.maxTabsPerGroup);
+  merged.languageMode = normalizeLanguageMode(merged.languageMode);
   merged.customPrompt = String(merged.customPrompt || "").slice(0, 4000);
   merged.gatewayBaseUrl = normalizeOptionalBaseUrl(merged.gatewayBaseUrl);
   merged.gatewayModel = normalizeGatewayModel(merged.gatewayModel);

@@ -5,6 +5,7 @@ import {
   TARGET_WINDOW_MODES,
   normalizeSettings
 } from "../shared/settings.js";
+import { languageInstruction, localizedText, targetWindowTitle } from "../shared/language.js";
 import { fetchJsonWithTimeout } from "./fetch-timeout.js";
 import { ACTION_PLAN_JSON_SCHEMA } from "./plan-schema.js";
 import { CHROME_GROUP_COLORS } from "./plan-validator.js";
@@ -113,26 +114,29 @@ async function createHierarchicalGatewayPlan(inventory, settings, fetchImpl, opt
         progress: refinementProgress(refinementDone, refinementTotal),
         message: `已精分「${bucket.title}」`
       });
-      mergePlanParts(refined.groups, refined.reviewTabs, { finalGroups, finalReviewTabs, seen });
+      mergePlanParts(refined.groups, refined.reviewTabs, { finalGroups, finalReviewTabs, seen, settings });
     } else if (bucket.confidence >= settings.minConfidenceToApply) {
-      mergePlanParts([bucketToGroup(bucket)], [], { finalGroups, finalReviewTabs, seen });
+      mergePlanParts([bucketToGroup(bucket)], [], { finalGroups, finalReviewTabs, seen, settings });
     } else {
-      mergePlanParts([], bucket.tabRefs.map((ref) => ({ ...ref, reason: `Low-confidence coarse bucket: ${bucket.title}.` })), {
-        finalGroups,
-        finalReviewTabs,
-        seen
-      });
+      mergePlanParts(
+        [],
+        bucket.tabRefs.map((ref) => ({
+          ...ref,
+          reason: localizedText(settings.languageMode, `粗分主题「${bucket.title}」置信度不足。`, `Low-confidence coarse bucket: ${bucket.title}.`)
+        })),
+        { finalGroups, finalReviewTabs, seen, settings }
+      );
     }
   }
 
   if (coarse.reviewTabs.length) {
     const reviewBucket = {
       groupKey: "coarse-review",
-      title: "Review",
+      title: localizedText(settings.languageMode, "待分类", "Review"),
       color: "grey",
       confidence: 0.5,
       tabRefs: coarse.reviewTabs,
-      reason: "Coarse pass left these tabs uncertain."
+      reason: localizedText(settings.languageMode, "粗分阶段认为这些标签页仍不确定。", "Coarse pass left these tabs uncertain.")
     };
     await emitProgress(options, {
       phase: "refining",
@@ -146,12 +150,16 @@ async function createHierarchicalGatewayPlan(inventory, settings, fetchImpl, opt
       progress: refinementProgress(refinementDone, refinementTotal),
       message: "不确定标签页已细分"
     });
-    mergePlanParts(refined.groups, refined.reviewTabs, { finalGroups, finalReviewTabs, seen });
+    mergePlanParts(refined.groups, refined.reviewTabs, { finalGroups, finalReviewTabs, seen, settings });
   }
 
   for (const tab of inventory.plannerTabs || []) {
     if (!seen.has(tab.tabId)) {
-      finalReviewTabs.push({ tabId: tab.tabId, windowId: tab.windowId, reason: "Hierarchical planner did not assign this tab." });
+      finalReviewTabs.push({
+        tabId: tab.tabId,
+        windowId: tab.windowId,
+        reason: localizedText(settings.languageMode, "分层规划没有稳定归类这个标签页。", "Hierarchical planner did not assign this tab.")
+      });
       seen.add(tab.tabId);
     }
   }
@@ -221,6 +229,7 @@ export function buildPlannerSystemPrompt(settings) {
     "Use sequenceIndex and index as strong context signals: adjacent tabs are often part of the same task or reading flow.",
     "Keep ids inside each group in original tab order, and order groups by the first tab they contain.",
     "Do not create large generic catch-all groups. Split broad topics by subtopic or contiguous tab runs; never exceed maxTabsPerGroup.",
+    languageInstruction(settings.languageMode),
     `Thinking intensity requested by user: ${thinkingText}.`,
     `Runtime preset: ${presetText}`,
     customPrompt
@@ -239,6 +248,7 @@ export function buildPlannerPayload(inventory, settings) {
       existingGroupMode: settings.existingGroupMode,
       reviewGroupMode: settings.reviewGroupMode,
       urlPrivacyMode: settings.urlPrivacyMode,
+      languageMode: settings.languageMode,
       minConfidenceToApply: settings.minConfidenceToApply,
       maxTabsPerGroup: settings.maxTabsPerGroup,
       thinkingIntensity: settings.gatewayThinkingIntensity
@@ -325,7 +335,7 @@ async function createCoarseGatewayBuckets(inventory, settings, fetchImpl, option
   if (!response.ok) {
     throw new Error(gatewayErrorMessage(response, data, settings));
   }
-  return normalizeCoarsePlan(parseGatewayJson(data), inventory);
+  return normalizeCoarsePlan(parseGatewayJson(data), inventory, settings);
 }
 
 async function refineBucket(bucket, inventory, settings, fetchImpl, options = {}) {
@@ -413,6 +423,7 @@ function buildCoarseSystemPrompt(settings, options = {}) {
     "Put generic, sensitive, or very uncertain tabs in reviewTabIds.",
     "Use sequenceIndex and index as ordering signals. Adjacent tabs often belong together.",
     "Do not create a broad catch-all bucket for unrelated leftovers; use reviewTabIds instead.",
+    languageInstruction(settings.languageMode),
     `Runtime preset: ${presetText}`
   ].join("\n");
 }
@@ -438,7 +449,7 @@ function buildCoarseUserPrompt(inventory, settings) {
   ].join("\n");
 }
 
-function normalizeCoarsePlan(plan, inventory) {
+function normalizeCoarsePlan(plan, inventory, settings) {
   const tabById = new Map((inventory.plannerTabs || []).map((tab) => [tab.tabId, tab]));
   const seen = new Set();
   const buckets = [];
@@ -459,7 +470,7 @@ function normalizeCoarsePlan(plan, inventory) {
 
     buckets.push({
       groupKey: slugify(bucket.bucketKey || bucket.groupKey || bucket.key || bucket.title || bucket.name || `bucket-${index + 1}`),
-      title: String(bucket.title || bucket.name || `Bucket ${index + 1}`).slice(0, 40),
+      title: String(bucket.title || bucket.name || localizedText(settings.languageMode, `粗分主题 ${index + 1}`, `Bucket ${index + 1}`)).slice(0, 40),
       color: CHROME_GROUP_COLORS.includes(bucket.color) ? bucket.color : CHROME_GROUP_COLORS[index % CHROME_GROUP_COLORS.length],
       confidence: clampConfidence(bucket.confidence),
       tabRefs,
@@ -471,12 +482,19 @@ function normalizeCoarsePlan(plan, inventory) {
     .filter((ref) => !seen.has(ref.tabId))
     .map((ref) => {
       seen.add(ref.tabId);
-      return { ...ref, reason: ref.reason || "Coarse pass left this tab for review." };
+      return {
+        ...ref,
+        reason: ref.reason || localizedText(settings.languageMode, "粗分阶段暂时保留给复核。", "Coarse pass left this tab for review.")
+      };
     });
 
   for (const tab of inventory.plannerTabs || []) {
     if (!seen.has(tab.tabId)) {
-      reviewTabs.push({ tabId: tab.tabId, windowId: tab.windowId, reason: "Coarse pass did not assign this tab." });
+      reviewTabs.push({
+        tabId: tab.tabId,
+        windowId: tab.windowId,
+        reason: localizedText(settings.languageMode, "粗分阶段没有稳定归类这个标签页。", "Coarse pass did not assign this tab.")
+      });
       seen.add(tab.tabId);
     }
   }
@@ -563,11 +581,16 @@ function fallbackGroupsForBucket(bucket, settings, error) {
   const chunks = chunkRefs(bucket.tabRefs || [], chunkSize);
   return chunks.map((tabRefs, index) => {
     const suffix = chunks.length > 1 ? ` ${index + 1}` : "";
+    const fallbackReason = localizedText(
+      settings.languageMode,
+      `${bucket.reason} 精分不可用：${error.message}`,
+      `${bucket.reason} Refinement unavailable: ${error.message}`
+    );
     return {
       ...bucketToGroup({ ...bucket, tabRefs }),
       groupKey: chunks.length > 1 ? `${bucket.groupKey}-${index + 1}` : bucket.groupKey,
       title: `${bucket.title}${suffix}`.slice(0, 40),
-      reason: `${bucket.reason} Refinement unavailable: ${error.message}`.slice(0, 280)
+      reason: fallbackReason.slice(0, 280)
     };
   });
 }
@@ -590,14 +613,16 @@ function mergePlanParts(groups, reviewTabs, state) {
     state.finalReviewTabs.push({
       tabId: ref.tabId,
       windowId: ref.windowId,
-      reason: ref.reason || "Left for review by hierarchical planner."
+      reason:
+        ref.reason ||
+        localizedText(state.settings?.languageMode, "分层规划后仍需要复核。", "Left for review by hierarchical planner.")
     });
   }
 }
 
 function buildActionPlan(groups, reviewTabs, inventory, settings) {
   const orderedGroups = orderGroupsByOriginalPosition(
-    uniquifyGroupKeys(groups).map((group) => ({ ...group, tabRefs: sortRefsByOriginalOrder(group.tabRefs || [], inventory) })),
+    uniquifyGroupKeys(groups, settings).map((group) => ({ ...group, tabRefs: sortRefsByOriginalOrder(group.tabRefs || [], inventory) })),
     inventory
   );
   return {
@@ -622,19 +647,19 @@ function buildActionPlan(groups, reviewTabs, inventory, settings) {
   };
 }
 
-function uniquifyGroupKeys(groups) {
+function uniquifyGroupKeys(groups, settings) {
   const seen = new Map();
-  return groups.map((group) => {
+  return groups.map((group, index) => {
     const base = slugify(group.groupKey || group.title);
     const count = seen.get(base) || 0;
     seen.set(base, count + 1);
     return {
       ...group,
       groupKey: count ? `${base}-${count + 1}` : base,
-      title: String(group.title || "Topic").slice(0, 40),
+      title: String(group.title || localizedText(settings.languageMode, `主题 ${index + 1}`, "Topic")).slice(0, 40),
       color: CHROME_GROUP_COLORS.includes(group.color) ? group.color : "grey",
       confidence: clampConfidence(group.confidence),
-      reason: String(group.reason || "Semantic grouping.").slice(0, 280)
+      reason: String(group.reason || localizedText(settings.languageMode, "语义相近的标签页。", "Semantic grouping.")).slice(0, 280)
     };
   });
 }
@@ -706,23 +731,35 @@ function normalizeGatewayPlan(plan, inventory, settings) {
 
     groups.push({
       groupKey: slugify(group.groupKey || group.key || group.name || group.title || `group-${index + 1}`),
-      title: String(group.title || group.name || `Group ${index + 1}`).slice(0, 40),
+      title: String(group.title || group.name || localizedText(settings.languageMode, `分组 ${index + 1}`, `Group ${index + 1}`)).slice(0, 40),
       color: CHROME_GROUP_COLORS.includes(group.color) ? group.color : CHROME_GROUP_COLORS[index % CHROME_GROUP_COLORS.length],
       confidence: clampConfidence(group.confidence),
       tabRefs: refs,
-      reason: String(group.reason || group.rationale || group.reasoning || "Semantic grouping from AI gateway output.").slice(0, 280)
+      reason: String(
+        group.reason ||
+          group.rationale ||
+          group.reasoning ||
+          localizedText(settings.languageMode, "AI 网关输出的语义分组。", "Semantic grouping from AI gateway output.")
+      ).slice(0, 280)
     });
   }
 
   const reviewTabs = sortRefsByOriginalOrder(
     normalizeTabRefs(plan.reviewTabs || plan.review || plan.ungrouped || [], tabById)
     .filter((ref) => !seen.has(ref.tabId))
-    .map((ref) => ({ ...ref, reason: ref.reason || "AI gateway left this tab for review." })),
+    .map((ref) => ({
+      ...ref,
+      reason: ref.reason || localizedText(settings.languageMode, "AI 网关把这个标签页留给复核。", "AI gateway left this tab for review.")
+    })),
     inventory
   );
   for (const tab of plannerTabs) {
     if (!seen.has(tab.tabId) && !reviewTabs.some((ref) => ref.tabId === tab.tabId)) {
-      reviewTabs.push({ tabId: tab.tabId, windowId: tab.windowId, reason: "AI gateway did not assign this tab." });
+      reviewTabs.push({
+        tabId: tab.tabId,
+        windowId: tab.windowId,
+        reason: localizedText(settings.languageMode, "AI 网关没有稳定归类这个标签页。", "AI gateway did not assign this tab.")
+      });
     }
   }
 
@@ -766,14 +803,22 @@ function normalizeSchemaPlanOrder(plan, inventory) {
 
 function buildTargetWindow(inventory, settings) {
   if (settings.targetWindowMode === TARGET_WINDOW_MODES.SELECTED_WINDOW) {
-    return { kind: settings.targetWindowMode, windowId: settings.selectedTargetWindowId, title: "Selected Window" };
+    return {
+      kind: settings.targetWindowMode,
+      windowId: settings.selectedTargetWindowId,
+      title: targetWindowTitle(settings.targetWindowMode, settings.languageMode)
+    };
   }
 
   if (settings.targetWindowMode === TARGET_WINDOW_MODES.CURRENT_WINDOW) {
-    return { kind: settings.targetWindowMode, windowId: resolveInvocationWindowId(inventory), title: "Current Window" };
+    return {
+      kind: settings.targetWindowMode,
+      windowId: resolveInvocationWindowId(inventory),
+      title: targetWindowTitle(settings.targetWindowMode, settings.languageMode)
+    };
   }
 
-  return { kind: settings.targetWindowMode, windowId: null, title: "AI Organized" };
+  return { kind: settings.targetWindowMode, windowId: null, title: targetWindowTitle(settings.targetWindowMode, settings.languageMode) };
 }
 
 function resolveInvocationWindowId(inventory) {

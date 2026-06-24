@@ -14,6 +14,7 @@ import { STORAGE_KEYS } from "../src/core/storage.js";
 import {
   DEFAULT_SETTINGS,
   EXISTING_GROUP_MODES,
+  LANGUAGE_MODES,
   ORGANIZE_MODES,
   PLANNER_PROVIDERS,
   PAGE_CONTEXT_MODES,
@@ -93,6 +94,30 @@ test("collapse toggle can leave newly created groups expanded", async () => {
   const groupedTab = await chrome.tabs.get(10);
   assert.notEqual(groupedTab.groupId, -1);
   assert.equal((await chrome.tabGroups.query({ windowId: 1 })).find((group) => group.id === groupedTab.groupId)?.collapsed, false);
+});
+
+test("review group title follows the selected result language when applying", async () => {
+  const chrome = createFakeChrome({
+    windows: [
+      {
+        id: 1,
+        focused: true,
+        tabs: [
+          { id: 10, title: "Obscure page A", url: "https://rare-a.example", active: true },
+          { id: 11, title: "Obscure page B", url: "https://rare-b.example" }
+        ]
+      }
+    ]
+  });
+
+  const job = await analyzeTabs(chrome, { ...FAKE_PLANNER_SETTINGS, languageMode: LANGUAGE_MODES.EN_US }, { windowId: 1 });
+  assert.equal(job.validation.ok, true);
+  assert.equal(job.preview.reviewGroupTitle, "Needs Review");
+
+  await applyLastPlan(chrome);
+  const groups = await chrome.tabGroups.query({ windowId: 1 });
+  assert.equal(groups.length, 1);
+  assert.equal(groups[0].title, "Needs Review");
 });
 
 test("consolidate_one_window moves all eligible normal-window tabs into one target", async () => {

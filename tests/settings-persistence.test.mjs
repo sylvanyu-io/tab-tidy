@@ -1,7 +1,13 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { getSettings, saveSettings } from "../src/core/controller.js";
-import { DEFAULT_SETTINGS, PAGE_SAMPLING_CONSENT_MODES, THINKING_INTENSITIES, UNDO_TARGET_WINDOW_MODES } from "../src/shared/settings.js";
+import {
+  DEFAULT_SETTINGS,
+  LANGUAGE_MODES,
+  PAGE_SAMPLING_CONSENT_MODES,
+  THINKING_INTENSITIES,
+  UNDO_TARGET_WINDOW_MODES
+} from "../src/shared/settings.js";
 import { normalizeSettings } from "../src/shared/settings.js";
 import { createFakeChrome } from "./helpers/fake-chrome.mjs";
 
@@ -66,6 +72,8 @@ test("AI gateway settings normalize safely", () => {
     normalizeSettings({ ...DEFAULT_SETTINGS, gatewayThinkingIntensity: THINKING_INTENSITIES.ULTRA }).gatewayThinkingIntensity,
     THINKING_INTENSITIES.ULTRA
   );
+  assert.equal(normalizeSettings({ ...DEFAULT_SETTINGS, languageMode: "pirate" }).languageMode, LANGUAGE_MODES.AUTO);
+  assert.equal(normalizeSettings({ ...DEFAULT_SETTINGS, languageMode: LANGUAGE_MODES.EN_US }).languageMode, LANGUAGE_MODES.EN_US);
 });
 
 test("gateway key is not persisted unless explicitly remembered", async () => {

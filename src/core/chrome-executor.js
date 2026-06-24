@@ -6,6 +6,7 @@ import {
   UNDO_TARGET_WINDOW_MODES,
   normalizeSettings
 } from "../shared/settings.js";
+import { reviewGroupTitle } from "../shared/language.js";
 import { validatePlan } from "./plan-validator.js";
 
 const NO_GROUP_ID = -1;
@@ -94,7 +95,7 @@ export async function applyValidatedPlan(chromeApi, plan, inventory, rawSettings
       chromeApi,
       reviewTabIds,
       targetWindowId,
-      { title: "待分类", color: "grey", collapsed: settings.collapseGroupsAfterApply },
+      { title: reviewGroupTitle(settings.languageMode), color: "grey", collapsed: settings.collapseGroupsAfterApply },
       settings
     );
     if (groupId !== null) {

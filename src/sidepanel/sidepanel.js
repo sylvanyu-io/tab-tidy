@@ -1,4 +1,5 @@
 import { BUILTIN_GATEWAY_BASE_URL } from "../shared/settings.js";
+import { localizedText, reviewGroupReason, reviewGroupTitle } from "../shared/language.js";
 
 const fields = {
   organizeMode: document.querySelector("#organizeMode"),
@@ -9,6 +10,7 @@ const fields = {
   urlPrivacyMode: document.querySelector("#urlPrivacyMode"),
   pageContextMode: document.querySelector("#pageContextMode"),
   hostPermissionRequestMode: document.querySelector("#hostPermissionRequestMode"),
+  languageMode: document.querySelector("#languageMode"),
   promptPreset: document.querySelector("#promptPreset"),
   plannerProvider: document.querySelector("#plannerProvider"),
   gatewayBaseUrl: document.querySelector("#gatewayBaseUrl"),
@@ -189,6 +191,7 @@ function readSettings() {
       fields.ackSampling.checked
         ? "acknowledged_for_session"
         : "not_acknowledged",
+    languageMode: fields.languageMode.value,
     promptPreset: fields.promptPreset.value,
     plannerProvider: fields.plannerProvider.value || "gateway",
     rememberProviderKeys: Boolean(fields.gatewayApiKey.value),
@@ -346,6 +349,7 @@ async function undoLastApply() {
 function renderPreview(job) {
   nodes.previewSection.hidden = false;
   const preview = job.preview;
+  const languageMode = preview.languageMode || job.settings?.languageMode || fields.languageMode.value;
   const groups = preview.groups || [];
   const reviewTabsCount = preview.reviewTabsCount || 0;
   const reviewGroupWillBeCreated = Boolean(preview.reviewGroupWillBeCreated && reviewTabsCount);
@@ -363,42 +367,58 @@ function renderPreview(job) {
 
   if (!groups.length && !reviewTabsCount && !preview.lockedGroupsCount) {
     nodes.previewRoot.className = "empty";
-    nodes.previewRoot.textContent = "没有可整理的标签页。";
-    nodes.previewCount.textContent = "空";
+    nodes.previewRoot.textContent = localizedText(languageMode, "没有可整理的标签页。", "No tabs to organize.");
+    nodes.previewCount.textContent = localizedText(languageMode, "空", "Empty");
     return;
   }
 
   nodes.previewRoot.className = "preview-list";
-  nodes.previewCount.textContent = `${visibleGroupCount} 组`;
+  nodes.previewCount.textContent = localizedText(languageMode, `${visibleGroupCount} 组`, `${visibleGroupCount} groups`);
   nodes.previewRoot.replaceChildren(
-    previewSummary(summaryPreview, groups.length, reviewTabsCount, reviewGroupWillBeCreated),
-    ...groups.map((group, index) => groupRow(group, swatchForIndex(index))),
-    ...(reviewGroupWillBeCreated ? [reviewGroupRow(reviewTabsCount)] : [])
+    previewSummary(summaryPreview, groups.length, reviewTabsCount, reviewGroupWillBeCreated, languageMode),
+    ...groups.map((group, index) => groupRow(group, swatchForIndex(index), languageMode)),
+    ...(reviewGroupWillBeCreated ? [reviewGroupRow(reviewTabsCount, languageMode, preview)] : [])
   );
 }
 
-function previewSummary(preview, groupCount, reviewTabsCount, reviewGroupWillBeCreated) {
+function previewSummary(preview, groupCount, reviewTabsCount, reviewGroupWillBeCreated, languageMode) {
   const summary = document.createElement("div");
   summary.className = "preview-summary";
   const main = document.createElement("span");
-  main.textContent = previewSummaryText(preview, groupCount, reviewTabsCount, reviewGroupWillBeCreated);
-  summary.append(main, pageSamplingLine(preview.pageSampling), excludedTabsLine(preview));
+  main.textContent = previewSummaryText(preview, groupCount, reviewTabsCount, reviewGroupWillBeCreated, languageMode);
+  summary.append(main, pageSamplingLine(preview.pageSampling, languageMode), excludedTabsLine(preview, languageMode));
   return summary;
 }
 
-function previewSummaryText(preview, groupCount, reviewTabsCount, reviewGroupWillBeCreated) {
+function previewSummaryText(preview, groupCount, reviewTabsCount, reviewGroupWillBeCreated, languageMode) {
   const handledTabs = preview.eligibleTabsCount || (preview.groupedTabsCount || 0) + reviewTabsCount;
   const groupedTabs = preview.groupedTabsCount || 0;
+
+  if (!handledTabs) {
+    return localizedText(languageMode, "没有可整理的标签页。", "No tabs to organize.");
+  }
+
+  if (languageMode === "en-US") {
+    const subjectText = groupCount ? `found ${groupCount} topic groups` : "found no stable topic groups";
+    const reviewText = reviewTabsCount
+      ? reviewGroupWillBeCreated
+        ? `, with ${reviewTabsCount} set aside for Needs Review`
+        : `, with ${reviewTabsCount} left ungrouped`
+      : "";
+
+    if (!groupCount && reviewTabsCount) {
+      return `AI reviewed ${handledTabs} tabs, ${subjectText}${reviewText}.`;
+    }
+
+    return `AI reviewed ${handledTabs} tabs, ${subjectText}; ${groupedTabs} will be grouped automatically${reviewText}.`;
+  }
+
   const subjectText = groupCount ? `识别出 ${groupCount} 个主题` : "没有找到足够稳定的主题";
   const reviewText = reviewTabsCount
     ? reviewGroupWillBeCreated
-      ? `，${reviewTabsCount} 个留到「待分类」`
+      ? `，${reviewTabsCount} 个留到「${reviewGroupTitle(languageMode)}」`
       : `，${reviewTabsCount} 个暂不归类`
     : "";
-
-  if (!handledTabs) {
-    return "没有可整理的标签页。";
-  }
 
   if (!groupCount && reviewTabsCount) {
     return `AI 已梳理 ${handledTabs} 个标签页，${subjectText}${reviewText}。`;
@@ -407,25 +427,34 @@ function previewSummaryText(preview, groupCount, reviewTabsCount, reviewGroupWil
   return `AI 已梳理 ${handledTabs} 个标签页，${subjectText}；${groupedTabs} 个已自动归类${reviewText}。`;
 }
 
-function pageSamplingLine(pageSampling) {
+function pageSamplingLine(pageSampling, languageMode) {
   const line = document.createElement("small");
   if (!pageSampling?.requested) return line;
 
   const missed = Math.max(0, (pageSampling.permissionRequired || 0) + (pageSampling.blocked || 0));
-  line.textContent = missed
-    ? `页面摘要读到 ${pageSampling.ok}/${pageSampling.requested} 个标签页；${missed} 个只参考标题和网址。`
-    : `页面摘要读到 ${pageSampling.ok}/${pageSampling.requested} 个标签页。`;
+  line.textContent =
+    languageMode === "en-US"
+      ? missed
+        ? `Page summaries were read for ${pageSampling.ok}/${pageSampling.requested} tabs; ${missed} used only title and URL signals.`
+        : `Page summaries were read for ${pageSampling.ok}/${pageSampling.requested} tabs.`
+      : missed
+        ? `页面摘要读到 ${pageSampling.ok}/${pageSampling.requested} 个标签页；${missed} 个只参考标题和网址。`
+        : `页面摘要读到 ${pageSampling.ok}/${pageSampling.requested} 个标签页。`;
   return line;
 }
 
-function excludedTabsLine(preview) {
+function excludedTabsLine(preview, languageMode) {
   const line = document.createElement("small");
   if (!preview?.excludedTabsCount) return line;
-  line.textContent = `另有 ${preview.excludedTabsCount} 个固定、无痕或受限标签页未参与整理。`;
+  line.textContent = localizedText(
+    languageMode,
+    `另有 ${preview.excludedTabsCount} 个固定、无痕或受限标签页未参与整理。`,
+    `${preview.excludedTabsCount} pinned, incognito, or restricted tabs were not included.`
+  );
   return line;
 }
 
-function groupRow(group, swatchColor) {
+function groupRow(group, swatchColor, languageMode = "auto") {
   const row = document.createElement("div");
   row.className = "group-row";
   row.style.setProperty("--swatch", swatchColor);
@@ -444,20 +473,21 @@ function groupRow(group, swatchColor) {
 
   const badge = document.createElement("div");
   badge.className = "badge";
-  badge.textContent = `${group.tabCount} 个`;
+  badge.textContent = localizedText(languageMode, `${group.tabCount} 个`, `${group.tabCount}`);
 
   row.append(swatch, body, badge);
   return row;
 }
 
-function reviewGroupRow(tabCount) {
+function reviewGroupRow(tabCount, languageMode, preview) {
   return groupRow(
     {
-      title: "待分类",
-      reason: "AI 暂时拿不准这些页面的共同主题，不会硬塞进其他分组。",
+      title: preview.reviewGroupTitle || reviewGroupTitle(languageMode),
+      reason: preview.reviewGroupReason || reviewGroupReason(languageMode),
       tabCount
     },
-    "var(--muted)"
+    "var(--muted)",
+    languageMode
   );
 }
 
@@ -935,6 +965,7 @@ async function mockMessage(message) {
       collapseGroupsAfterApply: true,
       minConfidenceToApply: 0.65,
       maxTabsPerGroup: 40,
+      languageMode: "auto",
       promptPreset: "conservative",
       plannerProvider: "gateway",
       rememberProviderKeys: false,

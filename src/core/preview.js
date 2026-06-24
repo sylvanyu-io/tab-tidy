@@ -1,4 +1,5 @@
 import { ORGANIZE_MODES, REVIEW_GROUP_MODES, normalizeSettings } from "../shared/settings.js";
+import { reviewGroupReason, reviewGroupTitle } from "../shared/language.js";
 
 export function buildPreview(plan, inventory, validation, rawSettings = {}) {
   const settings = normalizeSettings(rawSettings);
@@ -23,6 +24,9 @@ export function buildPreview(plan, inventory, validation, rawSettings = {}) {
     lockedGroupsCount: (inventory.lockedGroups || []).length,
     movedTabsCount,
     reviewGroupWillBeCreated: settings.reviewGroupMode === REVIEW_GROUP_MODES.CREATE && reviewTabIds.size > 0,
+    reviewGroupTitle: reviewGroupTitle(settings.languageMode),
+    reviewGroupReason: reviewGroupReason(settings.languageMode),
+    languageMode: settings.languageMode,
     pageSampling: summarizePageSamples(inventory.pageSamples || []),
     groups: (plan.groups || []).map((group) => ({
       groupKey: group.groupKey,

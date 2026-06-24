@@ -61,10 +61,12 @@ test("AI gateway planner posts a chat-completions JSON request", async () => {
     assert.match(body.messages[0].content, /JSON-only planner/);
     assert.match(body.messages[0].content, /compact output/);
     assert.match(body.messages[0].content, /sequenceIndex and index/);
+    assert.match(body.messages[0].content, /Write every user-facing string in English/);
     assert.match(body.messages[1].content, /Structured output docs/);
     assert.match(body.messages[1].content, /Software engineering task input/);
     const payload = JSON.parse(body.messages[1].content.slice(body.messages[1].content.indexOf("{")));
     assert.equal(payload.schema, "tab_tidy_compact_v1");
+    assert.equal(payload.settings.languageMode, "en-US");
     assert.deepEqual(payload.tabFields, [
       "id",
       "windowId",
@@ -103,7 +105,8 @@ test("AI gateway planner posts a chat-completions JSON request", async () => {
       ...DEFAULT_SETTINGS,
       plannerProvider: PLANNER_PROVIDERS.GATEWAY,
       gatewayBaseUrl: "http://localhost:8317/v1",
-      gatewayApiKey: "gateway-test-key"
+      gatewayApiKey: "gateway-test-key",
+      languageMode: "en-US"
     },
     fetchImpl
   );
@@ -524,7 +527,12 @@ test("AI gateway planner uses coarse then refine planning for large inventories"
     };
   };
 
-  const settings = { ...DEFAULT_SETTINGS, plannerProvider: PLANNER_PROVIDERS.GATEWAY, gatewayApiKey: "gateway-test-key" };
+  const settings = {
+    ...DEFAULT_SETTINGS,
+    plannerProvider: PLANNER_PROVIDERS.GATEWAY,
+    gatewayApiKey: "gateway-test-key",
+    languageMode: "en-US"
+  };
   const plan = await createGatewayPlan(largeInventory, settings, fetchImpl, {
     hierarchical: true,
     refineBucketMinTabs: 3
@@ -535,6 +543,7 @@ test("AI gateway planner uses coarse then refine planning for large inventories"
   assert.equal(requests[0].reasoning_effort, "low");
   assert.equal(requests[1].reasoning_effort, "high");
   assert.match(requests[0].messages[0].content, /fast first-pass/);
+  assert.match(requests[0].messages[0].content, /Write every user-facing string in English/);
   assert.match(requests[1].messages[0].content, /JSON-only planner/);
   assert.equal(validation.ok, true, validation.errors.join(" "));
   assert.deepEqual(

@@ -1,46 +1,47 @@
 import { ORGANIZE_MODES, PROMPT_PRESET_TEXT, TARGET_WINDOW_MODES, normalizeSettings } from "../shared/settings.js";
+import { localizedText, targetWindowTitle } from "../shared/language.js";
 
 const GROUP_COLORS = ["blue", "green", "purple", "cyan", "yellow", "pink", "grey"];
 
 const TOPIC_RULES = [
   {
     key: "project-work",
-    title: "Project Work",
+    title: { zh: "项目工作", en: "Project Work" },
     color: "blue",
     confidence: 0.82,
     terms: ["project", "work", "workflow", "github", "gitlab", "pull request", "pulls", "issue", "jira", "linear", "localhost", "vercel", "deploy"]
   },
   {
     key: "ai-research",
-    title: "AI Research",
+    title: { zh: "AI 研究", en: "AI Research" },
     color: "purple",
     confidence: 0.8,
     terms: ["openai", "anthropic", "llm", "gpt", "model", "prompt", "embedding", "arxiv", "paper", "agent"]
   },
   {
     key: "technical-docs",
-    title: "Technical Docs",
+    title: { zh: "技术文档", en: "Technical Docs" },
     color: "cyan",
     confidence: 0.76,
     terms: ["docs", "documentation", "developer", "api", "reference", "mdn", "chrome", "typescript", "npm"]
   },
   {
     key: "reading",
-    title: "Reading",
+    title: { zh: "阅读资料", en: "Reading" },
     color: "green",
     confidence: 0.72,
     terms: ["reading", "notes", "article", "blog", "news", "newsletter", "medium", "substack", "wikipedia"]
   },
   {
     key: "media",
-    title: "Media",
+    title: { zh: "媒体内容", en: "Media" },
     color: "pink",
     confidence: 0.74,
     terms: ["media", "queue", "youtube", "bilibili", "video", "music", "podcast", "netflix"]
   },
   {
     key: "shopping-finance",
-    title: "Shopping & Finance",
+    title: { zh: "购物与财务", en: "Shopping & Finance" },
     color: "yellow",
     confidence: 0.7,
     terms: ["amazon", "shop", "cart", "bank", "invoice", "billing", "stripe", "paypal", "price"]
@@ -59,7 +60,7 @@ export function createFakePlan(inventory, rawSettings = {}) {
       reviewTabs.push({
         tabId: tab.tabId,
         windowId: tab.windowId,
-        reason: "Metadata is too generic for a confident semantic assignment."
+        reason: localizedText(settings.languageMode, "标签信息太泛，暂时无法稳定归类。", "Metadata is too generic for a confident semantic assignment.")
       });
       continue;
     }
@@ -114,14 +115,22 @@ export function createFakePlan(inventory, rawSettings = {}) {
 
 function buildTargetWindow(inventory, settings) {
   if (settings.targetWindowMode === TARGET_WINDOW_MODES.SELECTED_WINDOW) {
-    return { kind: settings.targetWindowMode, windowId: settings.selectedTargetWindowId, title: "Selected Window" };
+    return {
+      kind: settings.targetWindowMode,
+      windowId: settings.selectedTargetWindowId,
+      title: targetWindowTitle(settings.targetWindowMode, settings.languageMode)
+    };
   }
 
   if (settings.targetWindowMode === TARGET_WINDOW_MODES.CURRENT_WINDOW) {
-    return { kind: settings.targetWindowMode, windowId: resolveInvocationWindowId(inventory), title: "Current Window" };
+    return {
+      kind: settings.targetWindowMode,
+      windowId: resolveInvocationWindowId(inventory),
+      title: targetWindowTitle(settings.targetWindowMode, settings.languageMode)
+    };
   }
 
-  return { kind: settings.targetWindowMode, windowId: null, title: "AI Organized" };
+  return { kind: settings.targetWindowMode, windowId: null, title: targetWindowTitle(settings.targetWindowMode, settings.languageMode) };
 }
 
 function resolveInvocationWindowId(inventory) {
@@ -140,7 +149,11 @@ function splitLargeGroups(groups, plannerTabs, settings) {
       groupKey: `${group.groupKey}-${index + 1}`,
       title: `${group.title} ${index + 1}`.slice(0, 40),
       tabRefs,
-      reason: `${group.reason} Split by original tab order to avoid an oversized group.`
+      reason: localizedText(
+        settings.languageMode,
+        `${group.reason} 已按原始标签顺序拆分，避免单组过大。`,
+        `${group.reason} Split by original tab order to avoid an oversized group.`
+      )
     }));
   });
 }
@@ -169,17 +182,22 @@ function classifyTab(tab, settings) {
 
   for (const rule of TOPIC_RULES) {
     if (rule.terms.some((term) => haystack.includes(term))) {
+      const title = localizedRuleTitle(rule, settings.languageMode);
       return {
         key: rule.key,
-        title: rule.title,
+        title,
         color: rule.color,
         confidence: adjustConfidence(rule.confidence, settings, haystack),
-        reason: `Matched semantic signals for ${rule.title.toLowerCase()}.`
+        reason: localizedText(settings.languageMode, `匹配到「${title}」相关语义线索。`, `Matched semantic signals for ${title.toLowerCase()}.`)
       };
     }
   }
 
   return null;
+}
+
+function localizedRuleTitle(rule, languageMode) {
+  return localizedText(languageMode, rule.title.zh, rule.title.en);
 }
 
 function adjustConfidence(base, settings, haystack) {
