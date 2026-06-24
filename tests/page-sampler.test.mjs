@@ -1,7 +1,12 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { requestPageSample } from "../src/core/page-sampler.js";
-import { DEFAULT_SETTINGS, PAGE_CONTEXT_MODES, PAGE_SAMPLING_CONSENT_MODES } from "../src/shared/settings.js";
+import {
+  DEFAULT_SETTINGS,
+  HOST_PERMISSION_REQUEST_MODES,
+  PAGE_CONTEXT_MODES,
+  PAGE_SAMPLING_CONSENT_MODES
+} from "../src/shared/settings.js";
 import { createFakeChrome } from "./helpers/fake-chrome.mjs";
 
 test("page sampling is blocked until the risk warning is acknowledged", async () => {
@@ -64,4 +69,27 @@ test("active_tab_only can sample the active tab without stored host permission",
 
   assert.equal(result.status, "ok");
   assert.equal(result.sample.title, "Sample");
+});
+
+test("host-permission sampling degrades when Chrome still rejects script injection", async () => {
+  const chrome = createFakeChrome({ grantedOrigins: ["https://example.com/*"] });
+  chrome.scripting.executeScript = async () => {
+    throw new Error("Cannot access contents of the page. Extension manifest must request permission to access the respective host.");
+  };
+
+  const result = await requestPageSample(
+    chrome,
+    { id: 10, active: false, url: "https://example.com/article" },
+    {
+      ...DEFAULT_SETTINGS,
+      pageContextMode: PAGE_CONTEXT_MODES.ALL_GRANTED_ORIGINS,
+      hostPermissionRequestMode: HOST_PERMISSION_REQUEST_MODES.ASK_FOR_ALL_VISIBLE_ORIGINS,
+      pageSamplingConsentMode: PAGE_SAMPLING_CONSENT_MODES.ACKNOWLEDGED_FOR_SESSION
+    },
+    "host permission check"
+  );
+
+  assert.equal(result.status, "permission_required");
+  assert.equal(result.origin, "https://example.com/*");
+  assert.match(result.reason, /Chrome did not allow/);
 });

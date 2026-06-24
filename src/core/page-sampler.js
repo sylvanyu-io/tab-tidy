@@ -54,7 +54,15 @@ export async function requestPageSample(chromeApi, tab, rawSettings, reason = ""
     }
   }
 
-  return { status: "ok", origin, sample: await executePageSample(chromeApi, tab, reason) };
+  try {
+    return { status: "ok", origin, sample: await executePageSample(chromeApi, tab, reason) };
+  } catch (error) {
+    return {
+      status: "permission_required",
+      origin,
+      reason: executionPermissionReason(error)
+    };
+  }
 }
 
 async function executePageSample(chromeApi, tab, reason) {
@@ -65,6 +73,14 @@ async function executePageSample(chromeApi, tab, reason) {
   });
 
   return result?.result || null;
+}
+
+function executionPermissionReason(error) {
+  const message = String(error?.message || "");
+  if (/cannot access contents|manifest must request permission|Cannot access a chrome/i.test(message)) {
+    return "Chrome did not allow reading this page. Host permission may be missing, expired, or restricted for this page.";
+  }
+  return "Chrome did not allow reading this page.";
 }
 
 function samplePage(reason) {
