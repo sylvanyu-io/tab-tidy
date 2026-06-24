@@ -19,11 +19,11 @@ console.log(`Generated icons in ${outDir}`);
 
 function makeIconSvg() {
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" role="img" aria-label="Tab Tidy">
-  <rect x="4" y="4" width="24" height="24" rx="7" fill="#1c1914"/>
-  <rect x="8.8" y="8.8" width="6" height="6" rx="2.1" fill="#c9ff4a"/>
-  <rect x="17.2" y="8.8" width="6" height="6" rx="2.1" fill="#1f55ff"/>
-  <rect x="8.8" y="17.2" width="6" height="6" rx="2.1" fill="#d94a32"/>
-  <rect x="17.2" y="17.2" width="6" height="6" rx="2.1" fill="#fffaf0" opacity="0.72"/>
+  <rect x="0" y="0" width="32" height="32" rx="9" fill="#1c1914"/>
+  <rect x="6" y="6" width="8" height="8" rx="2.7" fill="#c9ff4a"/>
+  <rect x="18" y="6" width="8" height="8" rx="2.7" fill="#1f55ff"/>
+  <rect x="6" y="18" width="8" height="8" rx="2.7" fill="#d94a32"/>
+  <rect x="18" y="18" width="8" height="8" rx="2.7" fill="#fffaf0" opacity="0.72"/>
 </svg>
 `;
 }
@@ -31,10 +31,10 @@ function makeIconSvg() {
 function makeLogoSvg() {
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 560 132" role="img" aria-label="Tab Tidy">
   <rect x="10" y="18" width="88" height="88" rx="24" fill="#1c1914"/>
-  <rect x="29" y="35" width="20" height="20" rx="7" fill="#c9ff4a"/>
-  <rect x="59" y="35" width="20" height="20" rx="7" fill="#1f55ff"/>
-  <rect x="29" y="65" width="20" height="20" rx="7" fill="#d94a32"/>
-  <rect x="59" y="65" width="20" height="20" rx="7" fill="#fffaf0" opacity="0.72"/>
+  <rect x="29" y="37" width="20" height="20" rx="7" fill="#c9ff4a"/>
+  <rect x="59" y="37" width="20" height="20" rx="7" fill="#1f55ff"/>
+  <rect x="29" y="67" width="20" height="20" rx="7" fill="#d94a32"/>
+  <rect x="59" y="67" width="20" height="20" rx="7" fill="#fffaf0" opacity="0.72"/>
   <text x="124" y="65" fill="#1c1914" font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Avenir Next', 'Segoe UI', sans-serif" font-size="48" font-weight="900" letter-spacing="0">Tab Tidy</text>
   <text x="126" y="96" fill="#706755" font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Avenir Next', 'Segoe UI', sans-serif" font-size="21" font-weight="750" letter-spacing="0">AI 自动归类标签页</text>
 </svg>
@@ -46,21 +46,22 @@ function makeIcon(size) {
   const canvasSize = size * scale;
   const rgba = Buffer.alloc(canvasSize * canvasSize * 4);
 
-  const markSide = Math.round(size * 0.75) * scale;
-  const markX = Math.round((canvasSize - markSide) / 2);
-  const markY = Math.round((canvasSize - markSide) / 2);
+  const markSide = canvasSize;
+  const markX = 0;
+  const markY = 0;
   const markWidth = markSide;
   const markHeight = markSide;
-  const markRadius = Math.round(size * 0.22) * scale;
+  const markRadius = Math.round(size * 0.28) * scale;
 
   roundedRect(rgba, canvasSize, markX, markY, markWidth, markHeight, markRadius, [28, 25, 20, 255]);
 
-  const chipSize = Math.round(size * 0.19) * scale;
-  const chipRadius = Math.max(1, Math.round(size * 0.066)) * scale;
-  const chipX1 = Math.round(size * 0.275) * scale;
-  const chipX2 = Math.round(size * 0.5375) * scale;
-  const chipY1 = Math.round(size * 0.275) * scale;
-  const chipY2 = Math.round(size * 0.5375) * scale;
+  const chipSize = Math.round(size * 0.25) * scale;
+  const chipRadius = Math.max(1, Math.round(size * 0.084)) * scale;
+  const chipGap = Math.round(size * 0.125) * scale;
+  const chipX1 = Math.round((canvasSize - chipSize * 2 - chipGap) / 2);
+  const chipX2 = chipX1 + chipSize + chipGap;
+  const chipY1 = chipX1;
+  const chipY2 = chipX2;
 
   roundedRect(rgba, canvasSize, chipX1, chipY1, chipSize, chipSize, chipRadius, [201, 255, 74, 255]);
   roundedRect(rgba, canvasSize, chipX2, chipY1, chipSize, chipSize, chipRadius, [31, 85, 255, 255]);
