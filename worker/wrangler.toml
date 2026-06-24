@@ -12,7 +12,7 @@ binding = "RATE_LIMIT_KV"
 id = "a392f7d94e1e42aebe25f7725b43f9c4"
 
 [vars]
-ALLOWED_MODELS = "gpt-5.5,claude-opus-4-8,claude-sonnet-4-6"
+ALLOWED_MODELS = "gpt-5.5,claude-opus-4-8,claude-sonnet-4-6,gpt-5.3-codex-spark"
 MAX_BODY_BYTES = "1000000"
 MAX_TOKENS = "8192"
 IP_HOURLY_REQUESTS = "60"
