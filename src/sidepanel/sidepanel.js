@@ -555,8 +555,8 @@ function pageSamplingLine(pageSampling, languageMode) {
         ? `Page summaries were read for ${pageSampling.ok}/${pageSampling.requested} tabs; ${missed} used only title and URL signals.`
         : `Page summaries were read for ${pageSampling.ok}/${pageSampling.requested} tabs.`
       : missed
-        ? `页面摘要读到 ${pageSampling.ok}/${pageSampling.requested} 个标签页；${missed} 个只参考标题和网址。`
-        : `页面摘要读到 ${pageSampling.ok}/${pageSampling.requested} 个标签页。`;
+        ? `页面摘要已读 ${pageSampling.ok}/${pageSampling.requested} 个标签页；${missed} 个只参考标题和网址。`
+        : `页面摘要已读 ${pageSampling.ok}/${pageSampling.requested} 个标签页。`;
   return line;
 }
 
@@ -916,7 +916,7 @@ async function ensurePlannerHostPermission(settings) {
 
 async function ensureContinuousSummaryPermissions() {
   if (!hasContentAccessFeature()) {
-    throw new Error("当前构建不包含实验性页面摘要缓存。");
+    throw new Error("当前版本不支持持续积累页面摘要。");
   }
   if (!globalThis.chrome?.permissions?.contains || !globalThis.chrome?.permissions?.request) return;
 
@@ -950,7 +950,7 @@ async function ensurePageSamplingPermissions(settings, options = {}) {
 
   if (!requestMissing) {
     if (missingPermissions.length) {
-      throw new Error("需要先打开「参考页面短摘要」并完成授权，才能读取页面摘要。");
+      throw new Error("需要先打开「需要时补读页面摘要」并完成授权，才能读取页面摘要。");
     }
     return;
   }

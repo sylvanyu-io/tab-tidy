@@ -61,16 +61,21 @@ test("popup renders settings and mock preview", async ({ page }) => {
   await expect(page.locator("#previewSection")).toBeHidden();
   await expect(page.locator("#samplingRisk")).toBeHidden();
   await expect(page.getByText("整理偏好")).toHaveCount(0);
+  await expect(page.getByText("开发版功能")).toHaveCount(0);
+  await expect(page.getByText("商店版")).toHaveCount(0);
   await expect(page.getByText("调整", { exact: true })).toHaveCount(0);
   await expect(page.locator("#settingsSummaryBtn")).toHaveCount(0);
 
   await page.locator("#ackSampling").check();
   await expect(page.locator("#samplingRisk")).toBeVisible();
+  await expect(page.getByText("默认只读拿不准的可访问页面")).toBeVisible();
   await expect(page.locator("#pageContextMode")).toHaveValue("ambiguous_with_permission");
   await expect(page.locator("#hostPermissionRequestMode")).toHaveValue("ask_for_all_visible_origins");
   await expect(page.locator("#pageContextMode option[value='active_tab_only']")).toHaveCount(0);
 
   await page.getByText("更多选项").click();
+  await expect(page.getByLabel("补读范围")).toHaveValue("ambiguous_with_permission");
+  await expect(page.locator("#pageContextMode")).toContainText("尽量读取已授权页面");
   await expect(page.locator("#gatewayBaseUrl")).toHaveValue("");
   await expect(page.locator("#gatewayBaseUrl")).toHaveAttribute("placeholder", "不填则使用默认服务");
   await expect(page.locator("#gatewayApiKey")).toHaveAttribute("placeholder", "默认服务无需填写");
@@ -126,7 +131,7 @@ test("popup renders settings and mock preview", async ({ page }) => {
   await expect(
     page.locator(".preview").getByText("AI 已梳理 23 个标签页，识别出 2 个主题；20 个已自动归类，3 个留到「待分类」。")
   ).toBeVisible();
-  await expect(page.locator(".preview").getByText("页面摘要读到 2/3 个标签页；1 个只参考标题和网址。")).toBeVisible();
+  await expect(page.locator(".preview").getByText("页面摘要已读 2/3 个标签页；1 个只参考标题和网址。")).toBeVisible();
   await expect(page.locator(".preview").getByText("另有 1 个固定、无痕或受限标签页未参与整理。")).toBeVisible();
   await expect(page.getByText("待确认")).toHaveCount(0);
   await expect(page.locator(".preview-stats")).toHaveCount(0);
@@ -904,7 +909,7 @@ test("page summary main toggle requests scripting and page origins", async ({ pa
   await expect.poll(() => page.evaluate(() => window.__permissionRequests.length)).toBe(requestsAfterToggle);
 });
 
-test("experimental continuous summaries request all-site optional access once", async ({ page }) => {
+test("continuous summaries request all-site optional access once", async ({ page }) => {
   await page.addInitScript(() => {
     let settings = {
       organizeMode: "current_window",
@@ -1205,7 +1210,7 @@ test("canceling generation returns to setup without error preview", async ({ pag
       status: "running",
       phase: "sampling",
       progress: 24,
-      message: "正在读取页面摘要 67/244，已读到 1 个",
+      message: "正在读取页面摘要 67/244，已读 1 个",
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString()
     };
@@ -1321,7 +1326,7 @@ test("generation does not request page sampling permissions from a stale enabled
 
   await page.goto(`${baseUrl}/src/sidepanel/index.html`);
   await page.getByRole("button", { name: "生成方案" }).click();
-  await expect(page.locator("#statusText")).toHaveText("需要先打开「参考页面短摘要」并完成授权，才能读取页面摘要。");
+  await expect(page.locator("#statusText")).toHaveText("需要先打开「需要时补读页面摘要」并完成授权，才能读取页面摘要。");
   await expect.poll(() => page.evaluate(() => window.__permissionRequests)).toEqual([]);
 });
 

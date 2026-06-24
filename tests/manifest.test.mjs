@@ -14,7 +14,7 @@ test("extension uses a native action popup", async () => {
   assert.deepEqual(manifest.optional_host_permissions, ["https://*/*", "http://*/*"]);
 });
 
-test("store extension build strips experimental content-reading permissions", async () => {
+test("store extension build strips content-reading permissions", async () => {
   const result = spawnSync("npm", ["run", "build:extension:store"], { encoding: "utf8" });
   assert.equal(result.status, 0, result.stderr || result.stdout);
 

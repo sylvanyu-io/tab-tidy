@@ -637,14 +637,14 @@ async function attachPageSamples(chromeApi, inventory, settings, options = {}) {
   await options.onProgress?.({
     phase: "sampling",
     progress: 20 + Math.round((completed / candidates.length) * 16),
-    message: `正在读取页面摘要 ${completed}/${candidates.length}，已读到 ${sampledOk} 个`
+    message: `正在读取页面摘要 ${completed}/${candidates.length}，已读 ${sampledOk} 个`
   });
 
   const sampleOne = async (tab) => {
     await options.onProgress?.({
       phase: "sampling",
       progress: 20 + Math.round((completed / candidates.length) * 16),
-      message: `正在读取页面摘要 ${completed}/${candidates.length}，已读到 ${sampledOk} 个`
+      message: `正在读取页面摘要 ${completed}/${candidates.length}，已读 ${sampledOk} 个`
     });
     const liveTab = await getLiveTab(chromeApi, tab.tabId);
     const sampleResult = liveTab
@@ -670,7 +670,7 @@ async function attachPageSamples(chromeApi, inventory, settings, options = {}) {
     await options.onProgress?.({
       phase: "sampling",
       progress: 20 + Math.round((completed / candidates.length) * 16),
-      message: `正在读取页面摘要 ${completed}/${candidates.length}，已读到 ${sampledOk} 个`
+      message: `正在读取页面摘要 ${completed}/${candidates.length}，已读 ${sampledOk} 个`
     });
   };
 
@@ -692,8 +692,8 @@ async function attachPageSamples(chromeApi, inventory, settings, options = {}) {
     phase: "sampling",
     progress: 36,
     message: sampledBlocked
-      ? `页面摘要：读到 ${sampledOk}/${candidates.length} 个，${sampledBlocked} 个只参考标题`
-      : `页面摘要：读到 ${sampledOk}/${candidates.length} 个`
+      ? `页面摘要：已读 ${sampledOk}/${candidates.length} 个，${sampledBlocked} 个只参考标题`
+      : `页面摘要：已读 ${sampledOk}/${candidates.length} 个`
   });
   return inventory;
 }
