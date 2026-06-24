@@ -43,6 +43,8 @@ test("popup renders settings and mock preview", async ({ page }) => {
   await expect(page.locator(".actions")).toHaveCSS("position", "static");
   await expect(page.locator(".actions")).toHaveCSS("display", "grid");
   await expect(page.locator(".scroll-region")).toHaveCSS("overflow-y", "auto");
+  await expect.poll(() => page.evaluate(() => document.documentElement.getBoundingClientRect().height)).toBe(560);
+  await expect.poll(() => page.evaluate(() => document.body.getBoundingClientRect().height)).toBe(560);
   await expect(page.locator("#analyzeBtn")).toHaveCSS("background-color", "rgb(31, 85, 255)");
   await expect(page.locator("#analyzeBtn")).toHaveCSS("border-radius", "10px");
   await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);

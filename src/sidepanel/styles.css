@@ -70,7 +70,8 @@
 
 html {
   width: 390px;
-  height: min(620px, 100vh);
+  height: 560px;
+  min-height: 560px;
   overflow: hidden;
 }
 
@@ -82,7 +83,8 @@ body {
   margin: 0;
   width: 390px;
   min-width: 320px;
-  height: min(620px, 100vh);
+  height: 560px;
+  min-height: 560px;
   overflow: hidden;
   overscroll-behavior: contain;
   background:
@@ -186,7 +188,6 @@ h2,
   display: block;
   width: 30px;
   height: 30px;
-  box-shadow: var(--shadow-sm);
   image-rendering: auto;
 }
 
@@ -272,7 +273,7 @@ h2 {
   background: var(--surface);
   border: 1.5px solid var(--line);
   border-radius: var(--radius-lg);
-  box-shadow: var(--shadow);
+  box-shadow: none;
 }
 
 .advanced-settings {
