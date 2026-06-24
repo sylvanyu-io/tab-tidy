@@ -117,7 +117,7 @@ npm run assets:readme
 npm run build:extension:store
 ```
 
-输出文件为 `dist/tab-tidy-<version>-store.zip`。
+输出文件为 `dist/tab-tidy-<version>-store.zip`，商店版未打包目录为 `dist/extension-store`；本地调试继续使用 `dist/extension`。
 
 ## 压力测试
 

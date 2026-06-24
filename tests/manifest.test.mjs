@@ -25,7 +25,7 @@ test("store extension build strips content-reading permissions", async () => {
     });
     assert.equal(result.status, 0, result.stderr || result.stdout);
 
-    const manifest = JSON.parse(await readFile(join(tempDist, "extension/manifest.json"), "utf8"));
+    const manifest = JSON.parse(await readFile(join(tempDist, "extension-store/manifest.json"), "utf8"));
     assert.equal((manifest.permissions || []).includes("activeTab"), false);
     assert.equal((manifest.optional_permissions || []).includes("scripting"), false);
     assert.equal(manifest.optional_host_permissions, undefined);

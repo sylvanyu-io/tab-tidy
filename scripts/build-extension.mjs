@@ -5,9 +5,9 @@ import { spawnSync } from "node:child_process";
 
 const rootDir = new URL("..", import.meta.url).pathname;
 const distDir = process.env.EXTENSION_DIST_DIR ? resolve(rootDir, process.env.EXTENSION_DIST_DIR) : join(rootDir, "dist");
-const extensionDir = join(distDir, "extension");
 const manifest = JSON.parse(await readFile(join(rootDir, "manifest.json"), "utf8"));
 const channel = process.env.EXTENSION_CHANNEL === "store" ? "store" : "dev";
+const extensionDir = join(distDir, channel === "store" ? "extension-store" : "extension");
 const zipName = `tab-tidy-${manifest.version}${channel === "store" ? "-store" : ""}.zip`;
 const zipPath = join(distDir, zipName);
 
