@@ -22,7 +22,20 @@ brake for an open-source browser extension before login exists.
 ## Required Cloudflare Resources
 
 Create a Workers KV namespace and bind it as `RATE_LIMIT_KV`. Copy
-`wrangler.toml.example` to `wrangler.toml`, then fill in the KV namespace IDs.
+`wrangler.toml.example` to `wrangler.toml`, then fill in the KV namespace ID.
+
+Use a Worker route for the public extension domain:
+
+```toml
+routes = [
+  { pattern = "cliproxy.sylvanyu.io/*", zone_name = "sylvanyu.io" }
+]
+```
+
+Keep the raw LLM gateway on a separate origin host such as
+`https://cliproxy-origin.sylvanyu.io/v1`. Do not set `UPSTREAM_BASE_URL` to
+`https://cliproxy.sylvanyu.io/v1`, because that would make the Worker call
+itself recursively.
 
 Set upstream values as Worker secrets:
 
@@ -49,6 +62,10 @@ Health check:
 ```bash
 curl https://cliproxy.sylvanyu.io/healthz
 ```
+
+The Worker health response is `{"ok":true}`. The raw origin health response can
+be different; that is useful when checking whether traffic is hitting the Worker
+or bypassing it.
 
 ## Local Tests
 

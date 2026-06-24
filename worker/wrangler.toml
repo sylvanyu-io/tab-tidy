@@ -9,7 +9,7 @@ routes = [
 
 [[kv_namespaces]]
 binding = "RATE_LIMIT_KV"
-id = "replace-with-production-kv-namespace-id"
+id = "a392f7d94e1e42aebe25f7725b43f9c4"
 
 [vars]
 ALLOWED_MODELS = "gpt-5.5,claude-opus-4-8,claude-sonnet-4-6"
