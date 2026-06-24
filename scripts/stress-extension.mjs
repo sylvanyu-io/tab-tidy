@@ -4,7 +4,7 @@ import { cp, mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
-import { BUILTIN_GATEWAY_BASE_URL } from "../src/shared/settings.js";
+import { BUILTIN_GATEWAY_BASE_URL, DEFAULT_SETTINGS } from "../src/shared/settings.js";
 
 const extensionDir = resolve("dist/extension");
 const totalTabs = positiveInteger(process.env.STRESS_TABS, 240);
@@ -12,7 +12,7 @@ const windowCount = positiveInteger(process.env.STRESS_WINDOWS, 4);
 const gatewayTabs = positiveInteger(process.env.STRESS_GATEWAY_TABS, Math.min(totalTabs, 180));
 const gatewayKey = process.env.GATEWAY_API_KEY || "";
 const gatewayBaseUrl = process.env.GATEWAY_BASE_URL || BUILTIN_GATEWAY_BASE_URL;
-const gatewayModel = process.env.GATEWAY_MODEL || "gpt-5.5";
+const gatewayModel = process.env.GATEWAY_MODEL || DEFAULT_SETTINGS.gatewayModel;
 const runId = `sta-stress-${Date.now().toString(36)}`;
 
 if (!existsSync(join(extensionDir, "manifest.json"))) {
@@ -90,7 +90,13 @@ try {
     assertEqual(allJob.inventory.tabs.length, totalTabs, "all-window inventory size");
     assertEqual(allJob.preview.pageSampling.requested, 0, "metadata-only page sample count");
 
-    const allApply = await timed("fake all-window apply", () => sendRuntime(control, { type: "tabs:applyLastPlan" }));
+    const allApplyConfirmation = await timed("fake all-window confirmation gate", () =>
+      sendRuntime(control, { type: "tabs:applyLastPlan" })
+    );
+    assertEqual(allApplyConfirmation.requiresMultiWindowConfirmation, true, "all-window apply requires confirmation");
+    const allApply = await timed("fake all-window apply", () =>
+      sendRuntime(control, { type: "tabs:applyLastPlan", confirmMultiWindow: true })
+    );
     assertEqual(allApply.movedTabsCount, totalTabs, "all-window moved tab count");
     const afterAllApply = await inspectTestTabs(control, baseUrl);
     assertEqual(afterAllApply.windowsWithTestTabs.length, 1, "all-window apply target window count");
@@ -148,8 +154,8 @@ try {
     assert(uiSamplingJob.validation.ok, `UI sampling plan invalid: ${uiSamplingJob.validation.errors?.join(" ")}`);
     assertEqual(uiSamplingJob.preview.pageSampling.ok, totalTabs, "UI sampling ok count");
     assert(
-      uiSamplingJob.inventory.pageSamples.some((sample) => sample.sample?.visibleText?.includes(runId)),
-      "UI sampling did not capture generated page body text"
+      uiSamplingJob.inventory.pageSamples.every((sample) => !sample.sample?.visibleText),
+      "UI details should not persist sampled page body text"
     );
     record("UI-driven page sampling", uiSamplingJob.preview.pageSampling);
 
@@ -371,18 +377,19 @@ async function sendRuntime(page, message) {
 async function runUiSamplingAnalyze(page, options) {
   await page.evaluate(({ organizeMode }) => {
     window.__semanticTabAgentAllowFakeProvider = true;
-    const set = (selector, value) => {
+    const set = (selector, value, dispatch = true) => {
       const element = document.querySelector(selector);
       element.value = value;
-      element.dispatchEvent(new Event("change", { bubbles: true }));
+      if (dispatch) element.dispatchEvent(new Event("change", { bubbles: true }));
     };
-    set("#organizeMode", organizeMode);
-    set("#plannerProvider", "fake");
-    set("#existingGroupMode", "dissolve_existing_groups");
-    set("#pageContextMode", "all_granted_origins");
-    set("#hostPermissionRequestMode", "ask_for_all_visible_origins");
+    set("#organizeMode", organizeMode, false);
+    set("#plannerProvider", "fake", false);
+    set("#existingGroupMode", "dissolve_existing_groups", false);
+    set("#pageContextMode", "all_granted_origins", false);
+    set("#hostPermissionRequestMode", "ask_for_all_visible_origins", false);
     document.querySelector("#ackSampling").checked = true;
-    document.querySelector("#ackSampling").dispatchEvent(new Event("change", { bubbles: true }));
+    document.querySelector("#pageContextMode").dispatchEvent(new Event("change", { bubbles: true }));
+    document.querySelector("#hostPermissionRequestMode").dispatchEvent(new Event("change", { bubbles: true }));
   }, options);
   await page
     .waitForFunction(() => (window.__semanticTabAgentPageSamplingOrigins?.origins || []).length > 0, null, {
@@ -407,15 +414,28 @@ async function runUiSamplingAnalyze(page, options) {
   const job = await page.evaluate(() => JSON.parse(document.querySelector("#detailsText").textContent));
   const statuses = countBy((job.inventory.pageSamples || []).map((sample) => sample.status));
   if (job.preview.pageSampling.ok !== options.expectedSamples) {
+    const uiDebug = await page.evaluate(async () => {
+      const savedResponse = await chrome.runtime.sendMessage({ type: "settings:get" });
+      return {
+        savedSettings: savedResponse?.result || null,
+        fields: {
+          ackSampling: document.querySelector("#ackSampling")?.checked,
+          pageContextMode: document.querySelector("#pageContextMode")?.value,
+          hostPermissionRequestMode: document.querySelector("#hostPermissionRequestMode")?.value,
+          organizeMode: document.querySelector("#organizeMode")?.value
+        },
+        originCache: window.__semanticTabAgentPageSamplingOrigins || null
+      };
+    });
     throw new Error(
       `UI page sample count: expected ${options.expectedSamples}, got ${job.preview.pageSampling.ok}; summary ${JSON.stringify(
         job.preview.pageSampling
-      )}; statuses ${JSON.stringify(statuses)}`
+      )}; statuses ${JSON.stringify(statuses)}; jobSettings ${JSON.stringify(job.settings)}; ui ${JSON.stringify(uiDebug)}`
     );
   }
   assert(
-    job.inventory.pageSamples.some((sample) => sample.sample?.visibleText?.includes(options.runId)),
-    "UI details did not include sampled page body text"
+    job.inventory.pageSamples.every((sample) => !sample.sample?.visibleText),
+    "UI details should not include sampled page body text"
   );
   return job;
 }

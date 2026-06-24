@@ -34,12 +34,16 @@ Implemented:
 - Large AI gateway jobs use a coarse-then-refine planner: a low-effort coarse
   bucket pass, followed by high-effort refinement for oversized or uncertain
   buckets, then normal local validation.
+- Planner errors are restored in the popup with visible recovery UI instead of
+  being hidden in the title bar.
+- Release checks clean stale artifacts, regenerate icons, run Node and
+  Playwright tests, scan current files and git history for provider-key
+  patterns, then build both local and store packages.
 
 Not production-complete yet:
 
 - No Chrome Web Store assets or listing text.
-- No signed release package workflow.
-- No hosted account system; custom gateway keys stay in local extension storage.
+- No hosted account system.
 - No provider-specific adaptive scheduler beyond the AI gateway coarse/refine
   path.
 - No telemetry/diagnostics toggle.
@@ -69,16 +73,16 @@ Blocking gates:
 - No custom gateway key appears in git history, screenshots, test output, or
   fixtures.
 - Extension package contains no `node_modules`, test outputs, or local secrets.
+- Store packages remove `activeTab` and `scripting` so page-body sampling controls
+  are unavailable, while custom gateway host permissions can still be granted by
+  the user.
 
 Recommended before public listing:
 
 - Add export/import settings without exporting custom gateway keys by default.
 - Add first-run privacy disclosure.
-- Add error recovery UI for provider rate limit, invalid key, and invalid plan.
 - Expand adaptive planning beyond the AI gateway path if other providers become
   first-class large-session targets.
-- Add release build script that zips only manifest, src, docs/licenses needed by
-  the runtime, and static assets.
 
 ## Provider Policy
 
@@ -88,6 +92,7 @@ key. Runtime rules:
 
 - Never ship a privileged shared custom gateway key.
 - Never commit custom gateway keys.
+- Persist custom keys only when the user explicitly opts in.
 - Redact custom keys from job snapshots and logs.
 - Request gateway host permission only for the configured gateway origin.
 - Keep provider output as planning intent only; validator/executor remain local.

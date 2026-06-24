@@ -1,6 +1,6 @@
 {
   "name": "tab-tidy",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "private": true,
   "type": "module",
   "description": "Chrome extension for AI-assisted semantic tab organization.",
@@ -12,11 +12,13 @@
     "stress:extension": "node scripts/stress-extension.mjs",
     "assets:icons": "node scripts/generate-icons.mjs",
     "assets:readme": "node scripts/generate-readme-assets.mjs",
+    "clean:dist": "node scripts/clean-dist.mjs",
     "scan:secrets": "node scripts/scan-secrets.mjs",
+    "scan:secrets:history": "node scripts/scan-secrets-history.mjs",
     "build:extension": "node scripts/build-extension.mjs",
     "build:extension:store": "EXTENSION_CHANNEL=store node scripts/build-extension.mjs",
     "check": "npm test && npm run test:ui",
-    "release:check": "npm run assets:icons && npm run check && npm run scan:secrets && npm run build:extension && npm run build:extension:store"
+    "release:check": "npm run clean:dist && npm run assets:icons && npm run check && npm run scan:secrets && npm run scan:secrets:history && npm run build:extension && npm run build:extension:store"
   },
   "devDependencies": {
     "@playwright/test": "^1.56.0"

@@ -75,11 +75,11 @@ npm run build:extension
 
 AI 网关地址和密钥默认留空，表示使用内置服务。高级设置里可以改成任何兼容 Chat Completions 的网关。
 
-预设模型：
+默认模型是 `claude-sonnet-4-6`。也可以在高级设置里切换预设模型：
 
+- `claude-sonnet-4-6`
 - `gpt-5.5`
 - `claude-opus-4-8`
-- `claude-sonnet-4-6`
 
 也支持自定义模型名。兼容网关下可以使用 GLM、DeepSeek 等模型，例如 GLM 可填写 `https://open.bigmodel.cn/api/paas/v4` 和 `glm-5.2`。
 
@@ -99,7 +99,7 @@ npm test
 npm run test:ui
 ```
 
-运行完整发布检查：
+运行完整发布检查，会清理旧产物、重新生成图标、跑测试、扫描密钥痕迹，并构建本地包和商店包：
 
 ```bash
 npm run release:check
@@ -111,13 +111,13 @@ npm run release:check
 npm run assets:readme
 ```
 
-构建 Chrome Web Store 风格的安装包，移除网页读取相关权限：
+构建 Chrome Web Store 风格的安装包：
 
 ```bash
 npm run build:extension:store
 ```
 
-输出文件为 `dist/tab-tidy-<version>-store.zip`，商店版未打包目录为 `dist/extension-store`；本地调试继续使用 `dist/extension`。
+输出文件为 `dist/tab-tidy-<version>-store.zip`，未打包目录为 `dist/extension-store`；本地调试继续使用 `dist/extension`。
 
 ## 压力测试
 
