@@ -726,18 +726,26 @@ button:focus-visible {
   display: grid;
 }
 
+.advanced-list {
+  display: grid;
+  overflow: hidden;
+  background: color-mix(in srgb, var(--surface) 82%, transparent);
+  border: 1px solid color-mix(in srgb, var(--line) 38%, transparent);
+  border-radius: var(--radius-md);
+  box-shadow: var(--control-shadow);
+}
+
+.advanced-list > :not([hidden]) + :not([hidden]) {
+  border-top: 1px solid color-mix(in srgb, var(--line) 12%, transparent);
+}
+
 .advanced-settings .setting-toggle-field {
   display: block;
 }
 
-.advanced-settings .setting-toggle-field + .setting-toggle-field,
-.advanced-settings .toggles .switch-row + .switch-row {
-  border-top: 1px solid color-mix(in srgb, var(--line) 16%, transparent);
-}
-
 .advanced-settings .compact-switch {
-  min-height: 48px;
-  padding: 9px 0;
+  min-height: 50px;
+  padding: 10px 12px;
   background: transparent;
   border: 0;
   border-radius: 0;
@@ -764,6 +772,52 @@ button:focus-visible {
 
 .advanced-settings .compact-switch input[type="checkbox"]:checked::before {
   transform: translate(21px, -50%);
+}
+
+.setting-select-row,
+.setting-input-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(142px, 48%);
+  align-items: center;
+  gap: 10px;
+  min-height: 50px;
+  padding: 10px 12px;
+}
+
+.setting-select-row label,
+.setting-input-row label {
+  min-width: 0;
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 820;
+  line-height: 1.25;
+}
+
+.setting-select-row select,
+.setting-input-row input {
+  min-height: 34px;
+  padding: 6px 30px 6px 10px;
+  overflow: hidden;
+  color: var(--text);
+  border: 1px solid color-mix(in srgb, var(--line) 46%, transparent);
+  border-radius: 999px;
+  box-shadow: inset 0 -1px 0 rgba(42, 38, 31, 0.08);
+  font-size: 12px;
+  font-weight: 760;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.setting-select-row select {
+  background:
+    linear-gradient(45deg, transparent 50%, var(--muted) 50%) calc(100% - 16px) 50% / 6px 6px no-repeat,
+    linear-gradient(135deg, var(--muted) 50%, transparent 50%) calc(100% - 11px) 50% / 6px 6px no-repeat,
+    color-mix(in srgb, var(--surface-soft) 54%, var(--surface));
+}
+
+.setting-input-row input {
+  padding-right: 10px;
+  background: color-mix(in srgb, var(--surface-soft) 54%, var(--surface));
 }
 
 .setting-source {

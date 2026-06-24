@@ -102,6 +102,11 @@ test("popup renders settings and mock preview", async ({ page }) => {
   await expect(page.locator("#existingGroupMode")).toBeHidden();
   await expect(page.locator("#reviewGroupMode")).toBeHidden();
   await expect(page.locator("#undoTargetWindowMode")).toBeHidden();
+  await expect(page.locator(".advanced-switch-list .compact-switch")).toHaveCount(7);
+  await expect(page.locator(".advanced-switch-list")).toContainText("包含固定标签页");
+  await expect(page.locator(".advanced-switch-list")).toContainText("整理后收起分组");
+  await expect(page.locator(".advanced-select-list .setting-select-row")).toHaveCount(7);
+  await expect(page.locator("#urlPrivacyMode").locator("xpath=ancestor::*[contains(@class, 'advanced-select-list')]")).toHaveCount(1);
   await expect(page.locator("#dissolveExistingGroupsToggle")).toBeVisible();
   await expect(page.locator("#createReviewGroupToggle")).toBeVisible();
   await expect(page.locator("#closeEmptyTargetWindowToggle")).toBeVisible();
