@@ -30,8 +30,8 @@
   --shell-edge: color-mix(in srgb, var(--line) 18%, transparent);
   --shelf-fade: rgba(42, 38, 31, 0.018);
   --soft-rule: color-mix(in srgb, var(--line) 24%, transparent);
-  --control-shadow: 0 7px 18px rgba(42, 38, 31, 0.12), inset 0 -2px 0 rgba(42, 38, 31, 0.1);
-  --control-shadow-strong: 0 9px 20px rgba(31, 85, 255, 0.23), inset 0 -2px 0 rgba(28, 25, 20, 0.22);
+  --control-shadow: 0 3px 12px rgba(42, 38, 31, 0.1), inset 0 -1px 0 rgba(42, 38, 31, 0.1);
+  --control-shadow-strong: 0 4px 14px rgba(31, 85, 255, 0.22), inset 0 -1px 0 rgba(28, 25, 20, 0.2);
   --radius-lg: 18px;
   --radius-md: 14px;
   --radius-sm: 10px;
@@ -65,8 +65,8 @@
     --shell-edge: color-mix(in srgb, var(--line) 20%, transparent);
     --shelf-fade: rgba(0, 0, 0, 0.12);
     --soft-rule: color-mix(in srgb, var(--line) 22%, transparent);
-    --control-shadow: 0 7px 18px rgba(0, 0, 0, 0.24), inset 0 -2px 0 rgba(0, 0, 0, 0.2);
-    --control-shadow-strong: 0 9px 20px rgba(126, 167, 255, 0.24), inset 0 -2px 0 rgba(0, 0, 0, 0.24);
+    --control-shadow: 0 3px 12px rgba(0, 0, 0, 0.2), inset 0 -1px 0 rgba(0, 0, 0, 0.18);
+    --control-shadow-strong: 0 4px 14px rgba(126, 167, 255, 0.22), inset 0 -1px 0 rgba(0, 0, 0, 0.22);
   }
 }
 
