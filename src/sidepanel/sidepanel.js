@@ -350,6 +350,16 @@ function renderPreview(job) {
   const reviewTabsCount = preview.reviewTabsCount || 0;
   const reviewGroupWillBeCreated = Boolean(preview.reviewGroupWillBeCreated && reviewTabsCount);
   const visibleGroupCount = groups.length + (reviewGroupWillBeCreated ? 1 : 0);
+  const groupedTabsCount = Number.isFinite(Number(preview.groupedTabsCount))
+    ? Number(preview.groupedTabsCount)
+    : groups.reduce((sum, group) => sum + (Number(group.tabCount) || 0), 0);
+  const summaryPreview = {
+    ...preview,
+    groupedTabsCount,
+    eligibleTabsCount: Number.isFinite(Number(preview.eligibleTabsCount))
+      ? Number(preview.eligibleTabsCount)
+      : groupedTabsCount + reviewTabsCount
+  };
 
   if (!groups.length && !reviewTabsCount && !preview.lockedGroupsCount) {
     nodes.previewRoot.className = "empty";
@@ -361,35 +371,40 @@ function renderPreview(job) {
   nodes.previewRoot.className = "preview-list";
   nodes.previewCount.textContent = `${visibleGroupCount} 组`;
   nodes.previewRoot.replaceChildren(
-    previewSummary(groups.length, reviewTabsCount, reviewGroupWillBeCreated, preview.pageSampling),
+    previewSummary(summaryPreview, groups.length, reviewTabsCount, reviewGroupWillBeCreated),
     ...groups.map((group, index) => groupRow(group, swatchForIndex(index))),
     ...(reviewGroupWillBeCreated ? [reviewGroupRow(reviewTabsCount)] : [])
   );
 }
 
-function previewSummary(groupCount, reviewTabsCount, reviewGroupWillBeCreated, pageSampling) {
+function previewSummary(preview, groupCount, reviewTabsCount, reviewGroupWillBeCreated) {
   const summary = document.createElement("div");
   summary.className = "preview-summary";
   const main = document.createElement("span");
-  if (!groupCount && reviewTabsCount) {
-    main.textContent = reviewGroupWillBeCreated
-      ? `AI 还没找到清晰主题；${reviewTabsCount} 个标签页会单独放入「待分类」。`
-      : `AI 还没找到清晰主题；${reviewTabsCount} 个标签页暂不归类。`;
-    summary.append(main, pageSamplingLine(pageSampling));
-    return summary;
-  }
-
-  if (reviewTabsCount) {
-    main.textContent = reviewGroupWillBeCreated
-      ? `将创建 ${groupCount} 个主题分组；另有 ${reviewTabsCount} 个标签页会单独放入「待分类」。`
-      : `将创建 ${groupCount} 个主题分组；另有 ${reviewTabsCount} 个标签页暂不归类。`;
-    summary.append(main, pageSamplingLine(pageSampling));
-    return summary;
-  }
-
-  main.textContent = groupCount ? `将创建 ${groupCount} 个主题分组。` : "没有可整理的标签页。";
-  summary.append(main, pageSamplingLine(pageSampling));
+  main.textContent = previewSummaryText(preview, groupCount, reviewTabsCount, reviewGroupWillBeCreated);
+  summary.append(main, pageSamplingLine(preview.pageSampling), excludedTabsLine(preview));
   return summary;
+}
+
+function previewSummaryText(preview, groupCount, reviewTabsCount, reviewGroupWillBeCreated) {
+  const handledTabs = preview.eligibleTabsCount || (preview.groupedTabsCount || 0) + reviewTabsCount;
+  const groupedTabs = preview.groupedTabsCount || 0;
+  const subjectText = groupCount ? `识别出 ${groupCount} 个主题` : "没有找到足够稳定的主题";
+  const reviewText = reviewTabsCount
+    ? reviewGroupWillBeCreated
+      ? `，${reviewTabsCount} 个留到「待分类」`
+      : `，${reviewTabsCount} 个暂不归类`
+    : "";
+
+  if (!handledTabs) {
+    return "没有可整理的标签页。";
+  }
+
+  if (!groupCount && reviewTabsCount) {
+    return `AI 已梳理 ${handledTabs} 个标签页，${subjectText}${reviewText}。`;
+  }
+
+  return `AI 已梳理 ${handledTabs} 个标签页，${subjectText}；${groupedTabs} 个已自动归类${reviewText}。`;
 }
 
 function pageSamplingLine(pageSampling) {
@@ -400,6 +415,13 @@ function pageSamplingLine(pageSampling) {
   line.textContent = missed
     ? `页面摘要读到 ${pageSampling.ok}/${pageSampling.requested} 个标签页；${missed} 个只参考标题和网址。`
     : `页面摘要读到 ${pageSampling.ok}/${pageSampling.requested} 个标签页。`;
+  return line;
+}
+
+function excludedTabsLine(preview) {
+  const line = document.createElement("small");
+  if (!preview?.excludedTabsCount) return line;
+  line.textContent = `另有 ${preview.excludedTabsCount} 个固定、无痕或受限标签页未参与整理。`;
   return line;
 }
 
@@ -960,6 +982,10 @@ function mockAnalysisJob() {
           { title: "AI 研究", reason: "模型、论文和文档", tabCount: 12 },
           { title: "当前项目", reason: "Issue、PR 和本地应用", tabCount: 8 }
         ],
+        totalTabsCount: 24,
+        eligibleTabsCount: 23,
+        windowCount: 1,
+        groupedTabsCount: 20,
         reviewTabsCount: 3,
         reviewGroupWillBeCreated: true,
         excludedTabsCount: 1,

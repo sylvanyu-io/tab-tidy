@@ -49,6 +49,10 @@ test("analyze/apply/undo groups only the current window by default", async () =>
 
   const job = await analyzeTabs(chrome, FAKE_PLANNER_SETTINGS, { windowId: 1 });
   assert.equal(job.validation.ok, true);
+  assert.equal(job.preview.totalTabsCount, 3);
+  assert.equal(job.preview.eligibleTabsCount, 2);
+  assert.equal(job.preview.windowCount, 1);
+  assert.equal(job.preview.groupedTabsCount + job.preview.reviewTabsCount, 2);
   assert.equal(job.preview.excludedTabsCount, 1);
   assert.deepEqual(
     job.inventory.plannerTabs.map((tab) => tab.tabId).sort(),

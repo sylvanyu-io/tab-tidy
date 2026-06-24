@@ -113,8 +113,11 @@ test("floating window renders settings and mock preview", async ({ page }) => {
   await expect(page.locator(".preview").getByText("AI 研究", { exact: true })).toBeVisible();
   await expect(page.locator(".preview").getByText("当前项目", { exact: true })).toBeVisible();
   await expect(page.locator(".preview").getByText("待分类", { exact: true })).toBeVisible();
-  await expect(page.locator(".preview").getByText("另有 3 个标签页会单独放入「待分类」")).toBeVisible();
+  await expect(
+    page.locator(".preview").getByText("AI 已梳理 23 个标签页，识别出 2 个主题；20 个已自动归类，3 个留到「待分类」。")
+  ).toBeVisible();
   await expect(page.locator(".preview").getByText("页面摘要读到 2/3 个标签页；1 个只参考标题和网址。")).toBeVisible();
+  await expect(page.locator(".preview").getByText("另有 1 个固定、无痕或受限标签页未参与整理。")).toBeVisible();
   await expect(page.getByText("待确认")).toHaveCount(0);
   await expect(page.locator(".preview-stats")).toHaveCount(0);
   await expect(page.locator(".stat-chip")).toHaveCount(0);
@@ -499,7 +502,7 @@ test("review-only previews are shown as a pending classification group", async (
   await page.goto(`${baseUrl}/src/sidepanel/index.html`);
   await page.getByRole("button", { name: "生成方案" }).click();
   await expect(page.locator("#previewCount")).toHaveText("1 组");
-  await expect(page.locator(".preview").getByText("AI 还没找到清晰主题；3 个标签页会单独放入「待分类」。")).toBeVisible();
+  await expect(page.locator(".preview").getByText("AI 已梳理 3 个标签页，没有找到足够稳定的主题，3 个留到「待分类」。")).toBeVisible();
   await expect(page.locator(".preview").getByText("待分类", { exact: true })).toBeVisible();
   await expect(page.locator(".preview").getByText("AI 暂时拿不准这些页面的共同主题，不会硬塞进其他分组。")).toBeVisible();
   await expect(page.getByText("不会创建新分组")).toHaveCount(0);
