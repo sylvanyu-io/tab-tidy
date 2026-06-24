@@ -112,7 +112,7 @@ const UI_COPY = Object.freeze({
     "option.langZh": "简体中文",
     "option.langEn": "English",
     "option.presetConservative": "智能整理",
-    "option.presetPlatform": "媒体类型",
+    "option.presetMedia": "媒体类型",
     "option.presetReadLater": "稍后阅读",
     "option.presetAggressive": "强力归纳",
     "option.customModel": "自定义模型名",
@@ -246,7 +246,7 @@ const UI_COPY = Object.freeze({
     "option.langZh": "Simplified Chinese",
     "option.langEn": "English",
     "option.presetConservative": "Smart organize",
-    "option.presetPlatform": "Media type",
+    "option.presetMedia": "Media type",
     "option.presetReadLater": "Read later",
     "option.presetAggressive": "Bold grouping",
     "option.customModel": "Custom model name",
@@ -526,7 +526,7 @@ function applyUiLanguage() {
   setOptionText("#languageMode", "zh-CN", t("option.langZh"));
   setOptionText("#languageMode", "en-US", t("option.langEn"));
   setOptionText("#promptPreset", "conservative", t("option.presetConservative"));
-  setOptionText("#promptPreset", "platform_source", t("option.presetPlatform"));
+  setOptionText("#promptPreset", "media_type", t("option.presetMedia"));
   setOptionText("#promptPreset", "read_later", t("option.presetReadLater"));
   setOptionText("#promptPreset", "aggressive_cleanup", t("option.presetAggressive"));
   setOptionText("#gatewayModel", "custom", t("option.customModel"));

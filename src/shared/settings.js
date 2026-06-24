@@ -55,7 +55,7 @@ export const URL_PRIVACY_MODES = Object.freeze({
 
 export const PROMPT_PRESETS = Object.freeze({
   CONSERVATIVE: "conservative",
-  MEDIA_TYPE: "platform_source",
+  MEDIA_TYPE: "media_type",
   READ_LATER: "read_later",
   AGGRESSIVE_CLEANUP: "aggressive_cleanup"
 });
@@ -87,7 +87,7 @@ export const THINKING_INTENSITIES = Object.freeze({
 export const PROMPT_PRESET_TEXT = Object.freeze({
   conservative:
     "Default smart organization. Group by semantic topic, current task, and user intent. Use original tab adjacency as context. Avoid domain-only groups unless the platform itself is the task. Keep unknown or mixed pages in Review.",
-  platform_source:
+  media_type:
     "Group primarily by media type when that is more useful than topic: docs, code/issues/PRs, papers, videos, articles/news, dashboards, shopping/finance, search results, mail/chat, and local tools. Still split unrelated work inside a large media type.",
   read_later:
     "Best for reading queues. Group articles, videos, papers, docs, newsletters, and tutorials by topic and intended action. Separate quick reads, deep reads, watch later, reference docs, and items that look like follow-up tasks.",

@@ -41,7 +41,7 @@ type HostPermissionRequestMode = "never" | "ask_per_origin" | "ask_for_all_visib
 type PageSamplingConsentMode = "not_acknowledged" | "acknowledged_for_session" | "acknowledged_persistently";
 type UrlPrivacyMode = "title_only" | "sanitized_url" | "full_url";
 type UndoTargetWindowMode = "leave_empty_target_window" | "close_empty_created_target_window";
-type PromptPreset = "conservative" | "platform_source" | "read_later" | "aggressive_cleanup";
+type PromptPreset = "conservative" | "media_type" | "read_later" | "aggressive_cleanup";
 ```
 
 Recommended settings:
@@ -159,7 +159,7 @@ Presets should be short, opinionated clauses appended to the planner prompt.
 - avoid moving pinned tabs;
 - avoid merging tabs with weak semantic evidence.
 
-`platform_source`:
+`media_type`:
 
 - group by media type when that helps more than topic;
 - keep docs, code/issues/PRs, papers, videos, articles, dashboards, search results, mail/chat, shopping/finance, and local tools distinct;

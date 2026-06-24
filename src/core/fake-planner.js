@@ -226,7 +226,7 @@ function localizedRuleTitle(rule, languageMode) {
 function adjustConfidence(base, settings, haystack) {
   let confidence = base;
   if (settings.promptPreset === "aggressive_cleanup") confidence += 0.05;
-  if (settings.promptPreset === "platform_source" && /github|youtube|bilibili|docs|arxiv|mail|notion|figma|dashboard|article|blog/.test(haystack)) {
+  if (settings.promptPreset === "media_type" && /github|youtube|bilibili|docs|arxiv|mail|notion|figma|dashboard|article|blog/.test(haystack)) {
     confidence += 0.03;
   }
   if (settings.promptPreset === "read_later" && /article|blog|paper|arxiv|video|youtube|tutorial|newsletter/.test(haystack)) confidence += 0.04;
