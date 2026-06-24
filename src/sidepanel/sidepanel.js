@@ -2,6 +2,287 @@ import { BUILTIN_GATEWAY_BASE_URL, GATEWAY_CUSTOM_MODEL_VALUE } from "../shared/
 import { localizedText, reviewGroupReason, reviewGroupTitle } from "../shared/language.js";
 import { shouldShowPageSampleCount } from "../shared/page-sampling-copy.js";
 
+const UI_LANGUAGE_STORAGE_KEY = "tabTidy.uiLanguage";
+const UI_LANGUAGES = Object.freeze(["zh-CN", "en-US"]);
+const UI_COPY = Object.freeze({
+  "zh-CN": {
+    "document.title": "Tab Tidy",
+    "status.default": "AI 标签页整理",
+    "status.saved": "偏好已保存",
+    "status.requestingPageSummaryPermission": "正在请求页面摘要权限",
+    "status.pageSummaryEnabled": "页面摘要已开启",
+    "status.preparing": "正在准备整理",
+    "status.checkingPermissions": "正在检查权限",
+    "status.checkingPageSummaryPermissions": "正在检查页面摘要权限",
+    "status.resolvingWindow": "正在确认当前窗口",
+    "status.startingBackground": "正在启动后台整理",
+    "status.planReady": "方案好了，可以先检查",
+    "status.planNeedsReview": "方案需要检查",
+    "status.canceled": "已取消整理。",
+    "status.canceling": "正在取消整理",
+    "status.organizing": "正在整理标签页",
+    "status.organizingChanged": "正在整理变化后的标签页",
+    "status.undoing": "正在撤销",
+    "status.previousFailed": "上次生成失败，请重新生成",
+    "status.previousCanceled": "上次整理已取消",
+    "status.noTabs": "没有可整理的标签页。",
+    "status.generatedButMissingPreview": "方案已生成，但预览数据没有保存成功。",
+    "status.backgroundNotStarted": "后台整理任务没有启动，请重试。",
+    "status.anotherJobRunning": "后台已有另一个整理任务，请先取消或等待它完成。",
+    "status.notComplete": "整理没有完成。",
+    "status.permissionAiGateway": "需要授权这个 AI 服务地址，才能发送整理请求。",
+    "status.permissionContinuousSummary": "需要授权网页读取权限后，才能持续积累页面摘要。",
+    "status.permissionPageSummary": "需要授权页面摘要权限，才能读取网页文字摘要。",
+    "status.permissionFirstEnablePageSummary": "需要先打开「需要时补读页面摘要」并完成授权，才能读取页面摘要。",
+    "status.unsupportedContinuousSummary": "当前版本不支持持续积累页面摘要。",
+    "status.unsupportedPageSummary": "当前构建不包含页面摘要功能。",
+    "status.customModelNeedsGateway": "自定义模型名需要先填写自定义 AI 网关地址。",
+    "status.customModelMissing": "请填写自定义模型名，或者选择一个预设模型。",
+    "status.applyChanged": "已创建 {groupCount} 个分组；已处理 {changedTabs} 个变化标签页{reviewText}",
+    "status.applyDone": "已创建 {groupCount} 个分组",
+    "status.applyReviewSuffix": "，{reviewCount} 个放进「{reviewTitle}」",
+    "status.undoDone": "已恢复 {count} 个标签页",
+    "button.generate": "生成方案",
+    "button.regenerate": "重新生成",
+    "button.cancel": "取消",
+    "button.apply": "开始整理",
+    "button.undo": "撤销",
+    "button.language": "EN",
+    "button.languageAria": "Switch UI to English",
+    "scope.label": "范围",
+    "scope.currentWindow": "当前窗口",
+    "scope.allWindows": "所有窗口",
+    "scope.nativeLabel": "整理范围",
+    "scope.optionCurrent": "只整理当前窗口",
+    "scope.optionAll": "合并并整理所有窗口",
+    "sampling.title": "需要时补读页面摘要",
+    "sampling.subtitle": "默认只读拿不准的可访问页面",
+    "sampling.tooltip": "只读取标题、描述、标题层级和一小段可见文字；不会读取密码、表单内容、Cookie、本地存储或完整 HTML。休眠标签页不会被唤醒。",
+    "sampling.aria": "页面摘要说明",
+    "continuous.title": "持续积累页面摘要",
+    "continuous.subtitle": "后台缓存已授权页面，之后整理更准",
+    "continuous.tooltip": "开启后会请求一次性网页读取权限；之后只在已授权、未休眠、非无痕页面上保存短摘要，方便下次更快、更准地分类。不会主动唤醒标签页。",
+    "continuous.aria": "持续摘要说明",
+    "customPrompt.label": "自定义要求",
+    "customPrompt.placeholder": "例如：找工作、AI 论文、当前项目分开；拿不准的先放到待分类。",
+    "advanced.summary": "更多选项",
+    "switch.targetCurrent.title": "合并到当前窗口",
+    "switch.targetCurrent.subtitle": "关闭时会新开一个窗口",
+    "switch.dissolve.title": "重新整理已有分组",
+    "switch.dissolve.subtitle": "关闭时保留现有分组",
+    "switch.review.title": "拿不准的单独待分类",
+    "switch.review.subtitle": "关闭时保持不分组",
+    "switch.closeEmpty.title": "撤销后关闭空窗口",
+    "switch.closeEmpty.subtitle": "关闭时保留空窗口",
+    "switch.pinned.title": "包含固定标签页",
+    "switch.pinned.subtitle": "会参与移动和分组",
+    "switch.incognito.title": "包含无痕标签页",
+    "switch.incognito.subtitle": "只在浏览器允许时生效",
+    "switch.collapse.title": "整理后收起分组",
+    "switch.collapse.subtitle": "新分组默认折叠",
+    "field.urlPrivacy": "发送给 AI 的网址信息",
+    "field.pageContext": "补读范围",
+    "field.hostPermission": "站点授权",
+    "field.resultLanguage": "结果语言",
+    "field.promptPreset": "整理风格",
+    "field.gatewayModel": "AI 模型",
+    "field.thinking": "思考强度",
+    "field.customModel": "自定义模型名",
+    "field.gatewayUrl": "AI 网关地址（可选）",
+    "field.gatewayKey": "AI 网关密钥（可选）",
+    "field.minConfidence": "最低置信度",
+    "field.maxTabs": "单组最大数量",
+    "placeholder.customModel": "例如：glm-5.2、deepseek-v4-pro",
+    "placeholder.gatewayUrl": "不填则使用默认服务",
+    "placeholder.gatewayKey": "默认服务无需填写",
+    "option.newWindow": "新窗口",
+    "option.currentWindow": "当前窗口",
+    "option.preserveGroups": "保留",
+    "option.dissolveGroups": "重新整理",
+    "option.reviewCreate": "单独放到待分类",
+    "option.reviewUngrouped": "保持不分组",
+    "option.leaveEmpty": "保留空窗口",
+    "option.closeEmpty": "关闭本次创建的空窗口",
+    "option.urlTitleOnly": "只发标题",
+    "option.urlSanitized": "精简网址",
+    "option.urlFull": "完整网址",
+    "option.pageOff": "不补读页面摘要",
+    "option.pageAmbiguous": "默认：只读拿不准的页面",
+    "option.pageGranted": "尽量读取已授权页面",
+    "option.permissionNever": "整理时不弹授权",
+    "option.permissionOrigin": "按站点询问",
+    "option.permissionVisible": "一次授权可见站点",
+    "option.langAuto": "自动判断",
+    "option.langZh": "简体中文",
+    "option.langEn": "English",
+    "option.presetConservative": "稳妥",
+    "option.presetResearch": "研究资料",
+    "option.presetProject": "项目工作",
+    "option.presetAggressive": "强力清理",
+    "option.customModel": "自定义模型名",
+    "option.thinkingLow": "低",
+    "option.thinkingMedium": "中",
+    "option.thinkingHigh": "高",
+    "option.thinkingUltra": "超高",
+    "preview.step": "整理预览",
+    "preview.heading": "即将创建的分组",
+    "preview.pending": "待生成",
+    "preview.empty": "还没有方案。",
+    "preview.error": "出错",
+    "preview.emptyCount": "空",
+    "details.summary": "诊断信息",
+    "confirm.applyMultiWindow": "这会移动多个窗口里的标签页，并创建浏览器分组。确认开始整理吗？",
+    "confirm.changedHeader": "标签页在预览后发生了变化。",
+    "confirm.newToReview": "{count} 个新增标签页会放进「{reviewTitle}」。",
+    "confirm.newUngrouped": "{count} 个新增标签页会保持未分组。",
+    "confirm.removed": "{count} 个已关闭的标签页会跳过。",
+    "confirm.duplicate": "{count} 个重复引用会跳过。",
+    "confirm.continue": "确认继续整理吗？",
+    "aiWait.planning": ["理解标题线索", "寻找相邻任务", "避开域名硬分组", "检查不确定页", "整理分组边界"],
+    "aiWait.coarse_planning": ["快速扫一遍", "寻找跨窗口主题", "切出候选大组", "标记模糊标签"],
+    "aiWait.refining": ["拆开过大的组", "复核模糊边界", "合并同一任务", "保留原始顺序"],
+    "aiWait.retrying": ["修正校验问题", "补齐遗漏标签", "移除重复分配", "重新检查结构"]
+  },
+  "en-US": {
+    "document.title": "Tab Tidy",
+    "status.default": "AI tab organizer",
+    "status.saved": "Preferences saved",
+    "status.requestingPageSummaryPermission": "Requesting page-summary access",
+    "status.pageSummaryEnabled": "Page summaries enabled",
+    "status.preparing": "Preparing cleanup",
+    "status.checkingPermissions": "Checking permissions",
+    "status.checkingPageSummaryPermissions": "Checking page-summary access",
+    "status.resolvingWindow": "Finding the current window",
+    "status.startingBackground": "Starting background cleanup",
+    "status.planReady": "Plan ready to review",
+    "status.planNeedsReview": "Plan needs review",
+    "status.canceled": "Cleanup canceled.",
+    "status.canceling": "Canceling cleanup",
+    "status.organizing": "Organizing tabs",
+    "status.organizingChanged": "Organizing changed tabs",
+    "status.undoing": "Undoing changes",
+    "status.previousFailed": "Last generation failed. Try again.",
+    "status.previousCanceled": "Last cleanup was canceled",
+    "status.noTabs": "No tabs to organize.",
+    "status.generatedButMissingPreview": "The plan finished, but the preview was not saved.",
+    "status.backgroundNotStarted": "The background cleanup did not start. Try again.",
+    "status.anotherJobRunning": "Another cleanup is running. Cancel it or wait for it to finish.",
+    "status.notComplete": "Cleanup did not finish.",
+    "status.permissionAiGateway": "Allow access to this AI gateway before sending the cleanup request.",
+    "status.permissionContinuousSummary": "Allow page-reading access before accumulating page summaries.",
+    "status.permissionPageSummary": "Allow page-summary access before reading page text summaries.",
+    "status.permissionFirstEnablePageSummary": "Turn on page summaries and grant access before reading page summaries.",
+    "status.unsupportedContinuousSummary": "This build does not support accumulated page summaries.",
+    "status.unsupportedPageSummary": "This build does not include page summaries.",
+    "status.customModelNeedsGateway": "Custom model names require a custom AI gateway URL.",
+    "status.customModelMissing": "Enter a custom model name, or choose a preset model.",
+    "status.applyChanged": "Created {groupCount} groups; handled {changedTabs} changed tabs{reviewText}",
+    "status.applyDone": "Created {groupCount} groups",
+    "status.applyReviewSuffix": ", {reviewCount} added to \"{reviewTitle}\"",
+    "status.undoDone": "Restored {count} tabs",
+    "button.generate": "Generate plan",
+    "button.regenerate": "Regenerate",
+    "button.cancel": "Cancel",
+    "button.apply": "Organize",
+    "button.undo": "Undo",
+    "button.language": "中",
+    "button.languageAria": "切换界面为中文",
+    "scope.label": "Scope",
+    "scope.currentWindow": "Current window",
+    "scope.allWindows": "All windows",
+    "scope.nativeLabel": "Organization scope",
+    "scope.optionCurrent": "Organize current window only",
+    "scope.optionAll": "Merge and organize all windows",
+    "sampling.title": "Read page summaries when useful",
+    "sampling.subtitle": "Default: only unclear accessible pages",
+    "sampling.tooltip": "Reads only title, description, headings, and a short visible-text excerpt. It will not read passwords, form values, cookies, local storage, or full HTML. Sleeping tabs are not awakened.",
+    "sampling.aria": "Page summary details",
+    "continuous.title": "Accumulate page summaries",
+    "continuous.subtitle": "Cache authorized pages for better future cleanup",
+    "continuous.tooltip": "Requests one-time page-reading access. After that, it stores short summaries only for authorized, awake, non-incognito pages so future cleanup is faster and more accurate. It will not wake sleeping tabs.",
+    "continuous.aria": "Accumulated summary details",
+    "customPrompt.label": "Custom instructions",
+    "customPrompt.placeholder": "Example: keep job search, AI papers, and current projects separate; put uncertain pages in review.",
+    "advanced.summary": "More options",
+    "switch.targetCurrent.title": "Merge into current window",
+    "switch.targetCurrent.subtitle": "Off opens a new window",
+    "switch.dissolve.title": "Regroup existing groups",
+    "switch.dissolve.subtitle": "Off keeps current groups",
+    "switch.review.title": "Put uncertain tabs in review",
+    "switch.review.subtitle": "Off leaves them ungrouped",
+    "switch.closeEmpty.title": "Close empty window after undo",
+    "switch.closeEmpty.subtitle": "Off keeps the empty window",
+    "switch.pinned.title": "Include pinned tabs",
+    "switch.pinned.subtitle": "They may be moved and grouped",
+    "switch.incognito.title": "Include incognito tabs",
+    "switch.incognito.subtitle": "Only when the browser allows it",
+    "switch.collapse.title": "Collapse groups after organizing",
+    "switch.collapse.subtitle": "New groups start collapsed",
+    "field.urlPrivacy": "URLs sent to AI",
+    "field.pageContext": "Page summary range",
+    "field.hostPermission": "Site access",
+    "field.resultLanguage": "Result language",
+    "field.promptPreset": "Cleanup style",
+    "field.gatewayModel": "AI model",
+    "field.thinking": "Reasoning effort",
+    "field.customModel": "Custom model name",
+    "field.gatewayUrl": "AI gateway URL (optional)",
+    "field.gatewayKey": "AI gateway key (optional)",
+    "field.minConfidence": "Minimum confidence",
+    "field.maxTabs": "Max tabs per group",
+    "placeholder.customModel": "Example: glm-5.2, deepseek-v4-pro",
+    "placeholder.gatewayUrl": "Leave blank to use the default service",
+    "placeholder.gatewayKey": "Default service does not need a key",
+    "option.newWindow": "New window",
+    "option.currentWindow": "Current window",
+    "option.preserveGroups": "Preserve",
+    "option.dissolveGroups": "Regroup",
+    "option.reviewCreate": "Put in review",
+    "option.reviewUngrouped": "Leave ungrouped",
+    "option.leaveEmpty": "Keep empty window",
+    "option.closeEmpty": "Close the empty window created this time",
+    "option.urlTitleOnly": "Titles only",
+    "option.urlSanitized": "Short URLs",
+    "option.urlFull": "Full URLs",
+    "option.pageOff": "Do not read page summaries",
+    "option.pageAmbiguous": "Default: only unclear pages",
+    "option.pageGranted": "Read authorized pages when possible",
+    "option.permissionNever": "Do not ask while organizing",
+    "option.permissionOrigin": "Ask per site",
+    "option.permissionVisible": "Allow visible sites once",
+    "option.langAuto": "Auto",
+    "option.langZh": "Simplified Chinese",
+    "option.langEn": "English",
+    "option.presetConservative": "Conservative",
+    "option.presetResearch": "Research",
+    "option.presetProject": "Project work",
+    "option.presetAggressive": "Aggressive cleanup",
+    "option.customModel": "Custom model name",
+    "option.thinkingLow": "Low",
+    "option.thinkingMedium": "Medium",
+    "option.thinkingHigh": "High",
+    "option.thinkingUltra": "Ultra",
+    "preview.step": "Preview",
+    "preview.heading": "Groups to be created",
+    "preview.pending": "Pending",
+    "preview.empty": "No plan yet.",
+    "preview.error": "Error",
+    "preview.emptyCount": "Empty",
+    "details.summary": "Diagnostics",
+    "confirm.applyMultiWindow": "This will move tabs across windows and create browser tab groups. Continue?",
+    "confirm.changedHeader": "Tabs changed after the preview.",
+    "confirm.newToReview": "{count} new tabs will be added to \"{reviewTitle}\".",
+    "confirm.newUngrouped": "{count} new tabs will stay ungrouped.",
+    "confirm.removed": "{count} closed tabs will be skipped.",
+    "confirm.duplicate": "{count} duplicate references will be skipped.",
+    "confirm.continue": "Continue organizing?",
+    "aiWait.planning": ["Reading title clues", "Finding neighboring tasks", "Avoiding domain-only groups", "Checking uncertain pages", "Tightening group edges"],
+    "aiWait.coarse_planning": ["Scanning the tab set", "Finding cross-window topics", "Splitting candidate buckets", "Marking fuzzy tabs"],
+    "aiWait.refining": ["Breaking up large groups", "Reviewing fuzzy edges", "Merging one task", "Keeping tab order"],
+    "aiWait.retrying": ["Fixing validation issues", "Filling missing tabs", "Removing duplicates", "Checking structure again"]
+  }
+});
+
 const fields = {
   organizeMode: document.querySelector("#organizeMode"),
   targetWindowMode: document.querySelector("#targetWindowMode"),
@@ -61,12 +342,6 @@ const AI_WAIT_RAMP_MS = 45000;
 const AI_WAIT_COPY_INTERVAL_SECONDS = 4;
 const ACTIVE_JOB_POLL_MS = 600;
 const GENERATED_COPY_CACHE_LIMIT = 4;
-const AI_WAIT_COPY = Object.freeze({
-  planning: ["理解标题线索", "寻找相邻任务", "避开域名硬分组", "检查不确定页", "整理分组边界"],
-  coarse_planning: ["快速扫一遍", "寻找跨窗口主题", "切出候选大组", "标记模糊标签"],
-  refining: ["拆开过大的组", "复核模糊边界", "合并同一任务", "保留原始顺序"],
-  retrying: ["修正校验问题", "补齐遗漏标签", "移除重复分配", "重新检查结构"]
-});
 
 const nodes = {
   appShell: document.querySelector(".app-shell"),
@@ -79,7 +354,7 @@ const nodes = {
   progressFill: document.querySelector("#progressFill"),
   progressLabel: document.querySelector("#progressLabel"),
   progressPercent: document.querySelector("#progressPercent"),
-  closeWindowBtn: document.querySelector("#closeWindowBtn"),
+  uiLanguageToggle: document.querySelector("#uiLanguageToggle"),
   actions: document.querySelector(".actions"),
   analyzeBtn: document.querySelector("#analyzeBtn"),
   cancelBtn: document.querySelector("#cancelBtn"),
@@ -93,6 +368,8 @@ const nodes = {
   gatewayCustomModelField: document.querySelector("#gatewayCustomModelField")
 };
 
+let uiLanguage = readStoredUiLanguage() || browserUiLanguage();
+let currentStatus = { key: "status.default", params: {}, text: "", isError: false };
 let lastPreview = null;
 let lastCanApply = false;
 let canUndo = false;
@@ -107,6 +384,7 @@ const generatedCopyRequests = new Set();
 init().catch((error) => setStatus(error.message, true));
 
 async function init() {
+  applyUiLanguage();
   bindEvents();
   bindSettingSwitches();
   bindChoiceGroups();
@@ -134,7 +412,7 @@ function bindEvents() {
       }
       updateConditionalUi();
       await persistSettings();
-      setStatus("正在请求页面摘要权限");
+      setStatusKey("status.requestingPageSummaryPermission");
       try {
         await ensurePageSamplingPermissions(readSettings(), { requestMissing: true });
       } catch (error) {
@@ -147,7 +425,7 @@ function bindEvents() {
         return;
       }
       await persistSettings();
-      setStatus("页面摘要已开启");
+      setStatusKey("status.pageSummaryEnabled");
       return;
     } else {
       fields.pageContextMode.value = "off";
@@ -177,7 +455,166 @@ function bindEvents() {
   nodes.cancelBtn.addEventListener("click", cancelAnalyze);
   nodes.applyBtn.addEventListener("click", applyLastPlan);
   nodes.undoBtn.addEventListener("click", undoLastApply);
-  nodes.closeWindowBtn?.addEventListener("click", () => window.close());
+  nodes.uiLanguageToggle?.addEventListener("click", toggleUiLanguage);
+}
+
+function t(key, params = {}) {
+  const template = UI_COPY[uiLanguage]?.[key] ?? UI_COPY["zh-CN"][key] ?? key;
+  if (Array.isArray(template)) return template;
+  return String(template).replace(/\{(\w+)\}/g, (_, name) => String(params[name] ?? ""));
+}
+
+function readStoredUiLanguage() {
+  try {
+    const stored = localStorage.getItem(UI_LANGUAGE_STORAGE_KEY);
+    return UI_LANGUAGES.includes(stored) ? stored : null;
+  } catch {
+    return null;
+  }
+}
+
+function browserUiLanguage() {
+  const languages = [navigator.language, ...(navigator.languages || [])].filter(Boolean);
+  return languages.some((language) => String(language).toLowerCase().startsWith("zh")) ? "zh-CN" : "en-US";
+}
+
+function toggleUiLanguage() {
+  uiLanguage = uiLanguage === "zh-CN" ? "en-US" : "zh-CN";
+  try {
+    localStorage.setItem(UI_LANGUAGE_STORAGE_KEY, uiLanguage);
+  } catch {}
+  applyUiLanguage();
+}
+
+function applyUiLanguage() {
+  document.documentElement.lang = uiLanguage;
+  document.title = t("document.title");
+  setText(".control-group .control-label span", t("scope.label"));
+  setText('.choice-card[data-value="current_window"] .button-label', t("scope.currentWindow"));
+  setText('.choice-card[data-value="consolidate_one_window"] .button-label', t("scope.allWindows"));
+  setAttribute("#organizeMode", "aria-label", t("scope.nativeLabel"));
+  setOptionText("#organizeMode", "current_window", t("scope.optionCurrent"));
+  setOptionText("#organizeMode", "consolidate_one_window", t("scope.optionAll"));
+
+  setSwitchText("#ackSampling", "sampling.title", "sampling.subtitle");
+  setSwitchText("#continuousPageSummaries", "continuous.title", "continuous.subtitle");
+  setTooltip("#ackSampling", "sampling.tooltip");
+  setTooltip("#continuousPageSummaries", "continuous.tooltip");
+  setAttribute("#samplingRisk", "aria-label", t("sampling.aria"));
+  setAttribute("#continuousSummaryRisk", "aria-label", t("continuous.aria"));
+
+  setText('label[for="customPrompt"]', t("customPrompt.label"));
+  setAttribute("#customPrompt", "placeholder", t("customPrompt.placeholder"));
+  setText(".advanced-settings > summary", t("advanced.summary"));
+
+  setSwitchText("#targetWindowCurrentToggle", "switch.targetCurrent.title", "switch.targetCurrent.subtitle");
+  setSwitchText("#dissolveExistingGroupsToggle", "switch.dissolve.title", "switch.dissolve.subtitle");
+  setSwitchText("#createReviewGroupToggle", "switch.review.title", "switch.review.subtitle");
+  setSwitchText("#closeEmptyTargetWindowToggle", "switch.closeEmpty.title", "switch.closeEmpty.subtitle");
+  setSwitchText("#includePinnedTabs", "switch.pinned.title", "switch.pinned.subtitle");
+  setSwitchText("#includeIncognitoTabs", "switch.incognito.title", "switch.incognito.subtitle");
+  setSwitchText("#collapseGroupsAfterApply", "switch.collapse.title", "switch.collapse.subtitle");
+
+  setText('label[for="urlPrivacyMode"]', t("field.urlPrivacy"));
+  setText('label[for="pageContextMode"]', t("field.pageContext"));
+  setText('label[for="hostPermissionRequestMode"]', t("field.hostPermission"));
+  setText('label[for="languageMode"]', t("field.resultLanguage"));
+  setText('label[for="promptPreset"]', t("field.promptPreset"));
+  setText('label[for="gatewayModel"]', t("field.gatewayModel"));
+  setText('label[for="gatewayThinkingIntensity"]', t("field.thinking"));
+  setText('label[for="gatewayCustomModel"]', t("field.customModel"));
+  setText('label[for="gatewayBaseUrl"]', t("field.gatewayUrl"));
+  setText('label[for="gatewayApiKey"]', t("field.gatewayKey"));
+  setText('label[for="minConfidenceToApply"]', t("field.minConfidence"));
+  setText('label[for="maxTabsPerGroup"]', t("field.maxTabs"));
+  setAttribute("#gatewayCustomModel", "placeholder", t("placeholder.customModel"));
+  setAttribute("#gatewayBaseUrl", "placeholder", t("placeholder.gatewayUrl"));
+  setAttribute("#gatewayApiKey", "placeholder", t("placeholder.gatewayKey"));
+
+  setOptionText("#targetWindowMode", "new_window", t("option.newWindow"));
+  setOptionText("#targetWindowMode", "current_window", t("option.currentWindow"));
+  setOptionText("#existingGroupMode", "preserve_existing_groups", t("option.preserveGroups"));
+  setOptionText("#existingGroupMode", "dissolve_existing_groups", t("option.dissolveGroups"));
+  setOptionText("#reviewGroupMode", "create_review_group", t("option.reviewCreate"));
+  setOptionText("#reviewGroupMode", "leave_review_ungrouped", t("option.reviewUngrouped"));
+  setOptionText("#undoTargetWindowMode", "leave_empty_target_window", t("option.leaveEmpty"));
+  setOptionText("#undoTargetWindowMode", "close_empty_created_target_window", t("option.closeEmpty"));
+  setOptionText("#urlPrivacyMode", "title_only", t("option.urlTitleOnly"));
+  setOptionText("#urlPrivacyMode", "sanitized_url", t("option.urlSanitized"));
+  setOptionText("#urlPrivacyMode", "full_url", t("option.urlFull"));
+  setOptionText("#pageContextMode", "off", t("option.pageOff"));
+  setOptionText("#pageContextMode", "ambiguous_with_permission", t("option.pageAmbiguous"));
+  setOptionText("#pageContextMode", "all_granted_origins", t("option.pageGranted"));
+  setOptionText("#hostPermissionRequestMode", "never", t("option.permissionNever"));
+  setOptionText("#hostPermissionRequestMode", "ask_per_origin", t("option.permissionOrigin"));
+  setOptionText("#hostPermissionRequestMode", "ask_for_all_visible_origins", t("option.permissionVisible"));
+  setOptionText("#languageMode", "auto", t("option.langAuto"));
+  setOptionText("#languageMode", "zh-CN", t("option.langZh"));
+  setOptionText("#languageMode", "en-US", t("option.langEn"));
+  setOptionText("#promptPreset", "conservative", t("option.presetConservative"));
+  setOptionText("#promptPreset", "research", t("option.presetResearch"));
+  setOptionText("#promptPreset", "project_work", t("option.presetProject"));
+  setOptionText("#promptPreset", "aggressive_cleanup", t("option.presetAggressive"));
+  setOptionText("#gatewayModel", "custom", t("option.customModel"));
+  setOptionText("#gatewayThinkingIntensity", "low", t("option.thinkingLow"));
+  setOptionText("#gatewayThinkingIntensity", "medium", t("option.thinkingMedium"));
+  setOptionText("#gatewayThinkingIntensity", "high", t("option.thinkingHigh"));
+  setOptionText("#gatewayThinkingIntensity", "ultra", t("option.thinkingUltra"));
+
+  setText(".step-label", t("preview.step"));
+  setText(".section-heading h2", t("preview.heading"));
+  setText("#detailsRoot > summary", t("details.summary"));
+  setButtonLabel(nodes.cancelBtn, t("button.cancel"));
+  setButtonLabel(nodes.applyBtn, t("button.apply"));
+  setButtonLabel(nodes.undoBtn, t("button.undo"));
+  if (nodes.uiLanguageToggle) {
+    nodes.uiLanguageToggle.textContent = t("button.language");
+    nodes.uiLanguageToggle.setAttribute("aria-label", t("button.languageAria"));
+  }
+  if (lastPreview) {
+    renderPreview({ preview: lastPreview, validation: { ok: lastCanApply }, settings: { languageMode: fields.languageMode.value } });
+  } else {
+    nodes.previewCount.textContent = t("preview.pending");
+    nodes.previewRoot.textContent = t("preview.empty");
+  }
+  syncActionState();
+  renderStatus();
+}
+
+function setText(selector, text) {
+  const element = document.querySelector(selector);
+  if (element) element.textContent = text;
+}
+
+function setAttribute(selector, name, value) {
+  const element = document.querySelector(selector);
+  if (element) element.setAttribute(name, value);
+}
+
+function setOptionText(selectSelector, value, text) {
+  const option = document.querySelector(`${selectSelector} option[value="${value}"]`);
+  if (option) option.textContent = text;
+}
+
+function setSwitchText(inputSelector, titleKey, subtitleKey) {
+  const label = document.querySelector(inputSelector)?.closest("label");
+  if (!label) return;
+  const strong = label.querySelector("strong");
+  const helpTip = strong?.querySelector(".help-tip") || null;
+  if (strong) {
+    strong.replaceChildren(document.createTextNode(t(titleKey)));
+    if (helpTip) strong.append(" ", helpTip);
+  }
+  const small = label.querySelector("small");
+  if (small) small.textContent = t(subtitleKey);
+}
+
+function setTooltip(inputSelector, tooltipKey) {
+  const label = document.querySelector(inputSelector)?.closest("label");
+  const tooltip = t(tooltipKey);
+  if (label) label.dataset.tooltip = tooltip;
+  const helpTip = label?.querySelector(".help-tip");
+  if (helpTip) helpTip.dataset.tooltip = tooltip;
 }
 
 function bindChoiceGroups() {
@@ -296,7 +733,7 @@ async function persistSettings() {
   const settings = await sendMessage({ type: "settings:save", settings: readSettings() });
   writeSettings(settings);
   updateConditionalUi();
-  setStatus("偏好已保存");
+  setStatusKey("status.saved");
 }
 
 function updateConditionalUi() {
@@ -317,27 +754,27 @@ async function handleAnalyzeClick() {
   if (lastPreview) {
     await clearAnalysisState();
     resetToSetup();
-    setStatus("AI 标签页整理");
+    setStatusKey("status.default");
     return;
   }
   analyze();
 }
 
 async function analyze() {
-  setBusy(true, "正在准备整理", { cancelable: true, progress: 4 });
+  setBusy(true, t("status.preparing"), { cancelable: true, progress: 4 });
   try {
     const settings = readSettings();
     validateGatewaySettingsForAnalyze(settings);
-    updateLocalProgress("正在检查权限", 8);
+    updateLocalProgress(t("status.checkingPermissions"), 8);
     await ensurePlannerHostPermission(settings);
     if (settings.pageContextMode !== "off" && settings.pageSamplingConsentMode !== "not_acknowledged") {
-      updateLocalProgress("正在检查页面摘要权限", 12);
+      updateLocalProgress(t("status.checkingPageSummaryPermissions"), 12);
       await ensurePageSamplingPermissions(settings, { requestMissing: false });
       settings.hostPermissionRequestMode = "never";
     }
-    updateLocalProgress("正在确认当前窗口", 14);
+    updateLocalProgress(t("status.resolvingWindow"), 14);
     const windowId = await resolveInvocationWindowId();
-    updateLocalProgress("正在启动后台整理", 16);
+    updateLocalProgress(t("status.startingBackground"), 16);
     const started = await sendMessage({ type: "tabs:startAnalyze", settings, windowId });
     const job = await waitForAnalysisCompletion(started?.operationId);
     lastPreview = job.preview;
@@ -346,10 +783,10 @@ async function analyze() {
     renderDetails(job);
     nodes.applyBtn.disabled = !lastCanApply;
     syncActionState();
-    setStatus(job.validation?.ok ? "方案好了，可以先检查" : "方案需要检查", !job.validation?.ok);
+    setStatusKey(job.validation?.ok ? "status.planReady" : "status.planNeedsReview", {}, !job.validation?.ok);
   } catch (error) {
     if (isCancellationError(error)) {
-      setStatus("已取消整理。");
+      setStatusKey("status.canceled");
     } else {
       setStatus(error.message, true);
       renderError(error);
@@ -363,27 +800,27 @@ async function analyze() {
 function validateGatewaySettingsForAnalyze(settings) {
   if (settings.plannerProvider !== "gateway" || settings.gatewayModel !== GATEWAY_CUSTOM_MODEL_VALUE) return;
   if (!settings.gatewayBaseUrl.trim()) {
-    throw new Error("自定义模型名需要先填写自定义 AI 网关地址。");
+    throw new Error(t("status.customModelNeedsGateway"));
   }
   if (!settings.gatewayCustomModel.trim()) {
-    throw new Error("请填写自定义模型名，或者选择一个预设模型。");
+    throw new Error(t("status.customModelMissing"));
   }
 }
 
 function isCancellationError(error) {
-  return /已取消整理/.test(String(error?.message || ""));
+  return /已取消整理|Cleanup canceled|canceled/i.test(String(error?.message || ""));
 }
 
 async function cancelAnalyze() {
   nodes.cancelBtn.disabled = true;
-  setStatus("正在取消整理");
+  setStatusKey("status.canceling");
   try {
     const result = await sendMessage({ type: "tabs:cancelActiveJob" });
     if (result?.job) updateProgressFromJob(result.job);
     if (result?.job?.status === "canceled") {
       stopProgressPolling();
       setBusy(false);
-      setStatus("已取消整理。");
+      setStatusKey("status.canceled");
     }
   } catch (error) {
     setStatus(error.message, true);
@@ -393,20 +830,20 @@ async function cancelAnalyze() {
 
 async function applyLastPlan() {
   if (lastPreview?.requiresConfirmation) {
-    const confirmed = confirm("这会移动多个窗口里的标签页，并创建浏览器分组。确认开始整理吗？");
+    const confirmed = confirm(t("confirm.applyMultiWindow"));
     if (!confirmed) return;
   }
 
-  setBusy(true, "正在整理标签页");
+  setBusy(true, t("status.organizing"));
   try {
     let result = await sendMessage({ type: "tabs:applyLastPlan" });
     if (result?.requiresChangedTabsConfirmation) {
       const confirmed = confirm(changedTabsConfirmationText(result.rebasedPlan));
       if (!confirmed) {
-        setStatus("已取消整理");
+        setStatusKey("status.canceled");
         return;
       }
-      setStatus("正在整理变化后的标签页");
+      setStatusKey("status.organizingChanged");
       result = await sendMessage({ type: "tabs:applyLastPlan", confirmChangedTabs: true });
     }
     canUndo = true;
@@ -426,18 +863,18 @@ function changedTabsConfirmationText(summary = {}) {
   const removedCount = (summary.removedTabIds || []).length;
   const duplicateCount = (summary.duplicateTabIds || []).length;
   const reviewTitle = reviewGroupTitle(fields.languageMode.value);
-  const lines = ["标签页在预览后发生了变化。"];
+  const lines = [t("confirm.changedHeader")];
 
   if (newCount) {
     if (fields.reviewGroupMode.value === "create_review_group") {
-      lines.push(`${newCount} 个新增标签页会放进「${reviewTitle}」。`);
+      lines.push(t("confirm.newToReview", { count: newCount, reviewTitle }));
     } else {
-      lines.push(`${newCount} 个新增标签页会保持未分组。`);
+      lines.push(t("confirm.newUngrouped", { count: newCount }));
     }
   }
-  if (removedCount) lines.push(`${removedCount} 个已关闭的标签页会跳过。`);
-  if (duplicateCount) lines.push(`${duplicateCount} 个重复引用会跳过。`);
-  lines.push("确认继续整理吗？");
+  if (removedCount) lines.push(t("confirm.removed", { count: removedCount }));
+  if (duplicateCount) lines.push(t("confirm.duplicate", { count: duplicateCount }));
+  lines.push(t("confirm.continue"));
   return lines.join("\n");
 }
 
@@ -446,18 +883,20 @@ function applyResultStatus(result) {
   const changedTabs = result.rebasedPlan?.changedTabsCount || 0;
   if (changedTabs) {
     const reviewCount = result.rebasedPlan?.addedReviewTabIds?.length || 0;
-    const reviewText = reviewCount ? `，${reviewCount} 个放进「${reviewGroupTitle(fields.languageMode.value)}」` : "";
-    return `已创建 ${groupCount} 个分组；已处理 ${changedTabs} 个变化标签页${reviewText}`;
+    const reviewText = reviewCount
+      ? t("status.applyReviewSuffix", { reviewCount, reviewTitle: reviewGroupTitle(fields.languageMode.value) })
+      : "";
+    return t("status.applyChanged", { groupCount, changedTabs, reviewText });
   }
-  return `已创建 ${groupCount} 个分组`;
+  return t("status.applyDone", { groupCount });
 }
 
 async function undoLastApply() {
-  setBusy(true, "正在撤销");
+  setBusy(true, t("status.undoing"));
   try {
     const result = await sendMessage({ type: "tabs:undoLastApply" });
     canUndo = false;
-    setStatus(`已恢复 ${result.restoredTabs || 0} 个标签页`);
+    setStatus(t("status.undoDone", { count: result.restoredTabs || 0 }));
     renderDetails({ undoResult: result });
   } catch (error) {
     setStatus(error.message, true);
@@ -469,8 +908,8 @@ async function undoLastApply() {
 function renderPreview(job) {
   nodes.previewSection.hidden = false;
   const preview = job.preview;
-  const languageMode = preview.languageMode || job.settings?.languageMode || fields.languageMode.value;
-  const groups = orderPreviewGroups(preview.groups || [], languageMode);
+  const resultLanguageMode = preview.languageMode || job.settings?.languageMode || fields.languageMode.value;
+  const groups = orderPreviewGroups(preview.groups || [], resultLanguageMode);
   const reviewTabsCount = preview.reviewTabsCount || 0;
   const reviewGroupWillBeCreated = Boolean(preview.reviewGroupWillBeCreated && reviewTabsCount);
   const visibleGroupCount = groups.length + (reviewGroupWillBeCreated ? 1 : 0);
@@ -487,17 +926,17 @@ function renderPreview(job) {
 
   if (!groups.length && !reviewTabsCount && !preview.lockedGroupsCount) {
     nodes.previewRoot.className = "empty";
-    nodes.previewRoot.textContent = localizedText(languageMode, "没有可整理的标签页。", "No tabs to organize.");
-    nodes.previewCount.textContent = localizedText(languageMode, "空", "Empty");
+    nodes.previewRoot.textContent = t("status.noTabs");
+    nodes.previewCount.textContent = t("preview.emptyCount");
     return;
   }
 
   nodes.previewRoot.className = "preview-list";
-  nodes.previewCount.textContent = localizedText(languageMode, `${visibleGroupCount} 组`, formatCount(visibleGroupCount, "group"));
+  nodes.previewCount.textContent = localizedText(uiLanguage, `${visibleGroupCount} 组`, formatCount(visibleGroupCount, "group"));
   nodes.previewRoot.replaceChildren(
-    previewSummary(summaryPreview, groups.length, reviewTabsCount, reviewGroupWillBeCreated, languageMode),
-    ...groups.map((group, index) => groupRow(group, swatchForIndex(index), languageMode)),
-    ...(reviewGroupWillBeCreated ? [reviewGroupRow(reviewTabsCount, languageMode, preview)] : [])
+    previewSummary(summaryPreview, groups.length, reviewTabsCount, reviewGroupWillBeCreated, resultLanguageMode),
+    ...groups.map((group, index) => groupRow(group, swatchForIndex(index), uiLanguage)),
+    ...(reviewGroupWillBeCreated ? [reviewGroupRow(reviewTabsCount, resultLanguageMode, preview)] : [])
   );
 }
 
@@ -534,23 +973,24 @@ function previewSummary(preview, groupCount, reviewTabsCount, reviewGroupWillBeC
   summary.className = "preview-summary";
   const main = document.createElement("span");
   main.textContent = previewSummaryText(preview, groupCount, reviewTabsCount, reviewGroupWillBeCreated, languageMode);
-  summary.append(main, pageSamplingLine(preview, languageMode), excludedTabsLine(preview, languageMode));
+  summary.append(main, pageSamplingLine(preview), excludedTabsLine(preview));
   return summary;
 }
 
-function previewSummaryText(preview, groupCount, reviewTabsCount, reviewGroupWillBeCreated, languageMode) {
+function previewSummaryText(preview, groupCount, reviewTabsCount, reviewGroupWillBeCreated, resultLanguageMode) {
   const handledTabs = preview.eligibleTabsCount || (preview.groupedTabsCount || 0) + reviewTabsCount;
   const groupedTabs = preview.groupedTabsCount || 0;
 
   if (!handledTabs) {
-    return localizedText(languageMode, "没有可整理的标签页。", "No tabs to organize.");
+    return t("status.noTabs");
   }
 
-  if (languageMode === "en-US") {
+  if (uiLanguage === "en-US") {
     const subjectText = groupCount ? `found ${formatCount(groupCount, "topic group")}` : "found no stable topic groups";
+    const reviewTitle = preview.reviewGroupTitle || reviewGroupTitle(resultLanguageMode);
     const reviewText = reviewTabsCount
       ? reviewGroupWillBeCreated
-        ? `, with ${formatCount(reviewTabsCount, "tab")} set aside for Needs Review`
+        ? `, with ${formatCount(reviewTabsCount, "tab")} set aside for "${reviewTitle}"`
         : `, with ${formatCount(reviewTabsCount, "tab")} left ungrouped`
       : "";
 
@@ -564,7 +1004,7 @@ function previewSummaryText(preview, groupCount, reviewTabsCount, reviewGroupWil
   const subjectText = groupCount ? `识别出 ${groupCount} 个主题` : "没有找到足够稳定的主题";
   const reviewText = reviewTabsCount
     ? reviewGroupWillBeCreated
-      ? `，${reviewTabsCount} 个留到「${reviewGroupTitle(languageMode)}」`
+      ? `，${reviewTabsCount} 个留到「${preview.reviewGroupTitle || reviewGroupTitle(resultLanguageMode)}」`
       : `，${reviewTabsCount} 个暂不归类`
     : "";
 
@@ -575,7 +1015,7 @@ function previewSummaryText(preview, groupCount, reviewTabsCount, reviewGroupWil
   return `AI 已梳理 ${handledTabs} 个标签页，${subjectText}；${groupedTabs} 个已自动归类${reviewText}。`;
 }
 
-function pageSamplingLine(preview, languageMode) {
+function pageSamplingLine(preview) {
   const line = document.createElement("small");
   const pageSampling = preview?.pageSampling;
   if (!pageSampling?.requested || !pageSampling.ok) return line;
@@ -583,7 +1023,7 @@ function pageSamplingLine(preview, languageMode) {
   const totalTabsForCopy = preview?.eligibleTabsCount || preview?.totalTabsCount || pageSampling.requested;
   const shouldShowCount = shouldShowPageSampleCount(pageSampling.ok, totalTabsForCopy);
   line.textContent =
-    languageMode === "en-US"
+    uiLanguage === "en-US"
       ? shouldShowCount
         ? `Referenced ${pageSampling.ok} page summaries plus titles, URLs, and tab order.`
         : "Added extra page context where available, then organized with titles, URLs, and tab order."
@@ -593,11 +1033,11 @@ function pageSamplingLine(preview, languageMode) {
   return line;
 }
 
-function excludedTabsLine(preview, languageMode) {
+function excludedTabsLine(preview) {
   const line = document.createElement("small");
   if (!preview?.excludedTabsCount) return line;
   line.textContent = localizedText(
-    languageMode,
+    uiLanguage,
     `另有 ${preview.excludedTabsCount} 个固定、无痕或受限标签页未参与整理。`,
     `${preview.excludedTabsCount} pinned, incognito, or restricted tabs were not included.`
   );
@@ -634,15 +1074,15 @@ function formatCount(count, noun) {
   return `${numeric} ${noun}${numeric === 1 ? "" : "s"}`;
 }
 
-function reviewGroupRow(tabCount, languageMode, preview) {
+function reviewGroupRow(tabCount, resultLanguageMode, preview) {
   return groupRow(
     {
-      title: preview.reviewGroupTitle || reviewGroupTitle(languageMode),
-      reason: preview.reviewGroupReason || reviewGroupReason(languageMode),
+      title: preview.reviewGroupTitle || reviewGroupTitle(resultLanguageMode),
+      reason: preview.reviewGroupReason || reviewGroupReason(resultLanguageMode),
       tabCount
     },
     "var(--muted)",
-    languageMode
+    uiLanguage
   );
 }
 
@@ -660,7 +1100,7 @@ function renderDetails(payload) {
 function renderError(error) {
   nodes.previewSection.hidden = false;
   nodes.detailsRoot.hidden = false;
-  nodes.previewCount.textContent = "出错";
+  nodes.previewCount.textContent = t("preview.error");
   nodes.detailsText.textContent = JSON.stringify({ error: error.message }, null, 2);
 }
 
@@ -668,9 +1108,9 @@ function resetToSetup() {
   lastPreview = null;
   lastCanApply = false;
   nodes.previewSection.hidden = true;
-  nodes.previewCount.textContent = "待生成";
+  nodes.previewCount.textContent = t("preview.pending");
   nodes.previewRoot.className = "empty";
-  nodes.previewRoot.textContent = "还没有方案。";
+  nodes.previewRoot.textContent = t("preview.empty");
   nodes.detailsRoot.hidden = true;
   nodes.detailsText.textContent = "";
   syncActionState();
@@ -714,7 +1154,7 @@ async function hydrateActiveJob() {
   if (!job) return;
   if (isLiveJob(job)) {
     updateProgressFromJob(job);
-    setBusy(true, job.message || "正在整理", { cancelable: true, progress: job.progress || 8 });
+    setBusy(true, localizeKnownMessage(job.message || t("status.organizing")), { cancelable: true, progress: job.progress || 8 });
     startProgressPolling();
   } else if (job.status === "complete") {
     await restoreCompletedJob(job);
@@ -727,8 +1167,8 @@ async function restoreCompletedJob(activeJob = {}) {
   stopProgressPolling();
   const job = await sendMessage({ type: "tabs:getLastJob" }).catch(() => null);
   if (!job?.preview) {
-    const message = "方案已生成，但预览数据没有保存成功。";
-    setStatus(message, true);
+    const message = t("status.generatedButMissingPreview");
+    setStatusKey("status.generatedButMissingPreview", {}, true);
     renderError(new Error(message));
     setBusy(false);
     return;
@@ -742,7 +1182,7 @@ async function restoreCompletedJob(activeJob = {}) {
   renderPreview(job);
   renderDetails(job);
   nodes.applyBtn.disabled = !lastCanApply;
-  setStatus(job.validation?.ok ? "方案好了，可以先检查" : "方案需要检查", !job.validation?.ok);
+  setStatusKey(job.validation?.ok ? "status.planReady" : "status.planNeedsReview", {}, !job.validation?.ok);
   setBusy(false);
 }
 
@@ -750,7 +1190,7 @@ function restoreTerminalJob(job = {}) {
   stopProgressPolling();
   setBusy(false);
   const isError = job.status === "error";
-  const message = job.message || (isError ? "上次生成失败，请重新生成" : "上次整理已取消");
+  const message = job.message || t(isError ? "status.previousFailed" : "status.previousCanceled");
   setStatus(message, isError);
   if (isError) renderError(new Error(message));
 }
@@ -789,18 +1229,18 @@ async function waitForAnalysisCompletion(operationId) {
     updateProgressFromJob(activeJob);
 
     if (!activeJob) {
-      throw new Error("后台整理任务没有启动，请重试。");
+      throw new Error(t("status.backgroundNotStarted"));
     }
     if (operationId && activeJob.operationId && activeJob.operationId !== operationId) {
-      throw new Error("后台已有另一个整理任务，请先取消或等待它完成。");
+      throw new Error(t("status.anotherJobRunning"));
     }
     if (activeJob.status === "complete") {
       const job = await sendMessage({ type: "tabs:getLastJob" });
-      if (!job?.preview) throw new Error("方案已生成，但预览数据没有保存成功。");
+      if (!job?.preview) throw new Error(t("status.generatedButMissingPreview"));
       return job;
     }
     if (activeJob.status === "error" || activeJob.status === "canceled") {
-      throw new Error(activeJob.message || "整理没有完成。");
+      throw new Error(activeJob.message || t("status.notComplete"));
     }
 
     await delay(ACTIVE_JOB_POLL_MS);
@@ -835,7 +1275,7 @@ function showProgress(value) {
 }
 
 function setProgressLabel(text) {
-  if (nodes.progressLabel) nodes.progressLabel.textContent = text;
+  if (nodes.progressLabel) nodes.progressLabel.textContent = localizeKnownMessage(text);
 }
 
 function updateLocalProgress(label, progress) {
@@ -858,7 +1298,7 @@ function displayProgressForJob(job) {
 function displayMessageForJob(job) {
   if (!isLiveAiWait(job)) return job.message;
   const elapsedSeconds = Math.floor(elapsedSinceJobUpdate(job) / 1000);
-  if (elapsedSeconds < 3) return job.message;
+  if (elapsedSeconds < 3) return localizeKnownMessage(job.message);
   return `${aiWaitCopy(job, elapsedSeconds)} · ${formatElapsedSeconds(elapsedSeconds)}`;
 }
 
@@ -884,7 +1324,7 @@ function isLiveAiWait(job) {
 }
 
 function aiWaitCopy(job, elapsedSeconds) {
-  const copies = generatedProgressCopyForJob(job) || AI_WAIT_COPY[job.phase] || AI_WAIT_COPY.planning;
+  const copies = generatedProgressCopyForJob(job) || t(`aiWait.${job.phase}`) || t("aiWait.planning");
   const index = Math.floor(elapsedSeconds / AI_WAIT_COPY_INTERVAL_SECONDS) % copies.length;
   return copies[index];
 }
@@ -901,7 +1341,7 @@ function requestGeneratedProgressCopy(job) {
     phase: job.phase,
     tabCount: job.tabCount || 0,
     windowCount: job.windowCount || 0,
-    languageMode: fields.languageMode.value
+    languageMode: uiLanguage
   })
     .then((result) => {
       const messages = Array.isArray(result?.messages) ? result.messages.filter(Boolean) : [];
@@ -930,9 +1370,10 @@ function rememberGeneratedProgressCopy(operationId, messages) {
 }
 
 function formatElapsedSeconds(totalSeconds) {
-  if (totalSeconds < 60) return `${totalSeconds}秒`;
+  if (totalSeconds < 60) return uiLanguage === "en-US" ? `${totalSeconds}s` : `${totalSeconds}秒`;
   const minutes = Math.floor(totalSeconds / 60);
   const seconds = totalSeconds % 60;
+  if (uiLanguage === "en-US") return seconds ? `${minutes}m ${seconds}s` : `${minutes}m`;
   return seconds ? `${minutes}分${seconds}秒` : `${minutes}分`;
 }
 
@@ -940,9 +1381,70 @@ function isLiveJob(job) {
   return job?.status === "running" || job?.status === "canceling";
 }
 
+function setStatusKey(key, params = {}, isError = false) {
+  currentStatus = { key, params, text: "", isError };
+  renderStatus();
+}
+
 function setStatus(text, isError = false) {
+  currentStatus = { key: "", params: {}, text: String(text || ""), isError };
+  renderStatus();
+}
+
+function renderStatus() {
+  const text = currentStatus.key ? t(currentStatus.key, currentStatus.params) : localizeKnownMessage(currentStatus.text);
   nodes.statusText.textContent = text;
-  nodes.statusText.dataset.tone = isError ? "error" : "";
+  nodes.statusText.dataset.tone = currentStatus.isError ? "error" : "";
+}
+
+function localizeKnownMessage(message = "") {
+  const text = String(message || "");
+  if (uiLanguage !== "en-US") return text;
+
+  const exact = new Map([
+    ["正在准备整理", t("status.preparing")],
+    ["正在保存偏好", "Saving preferences"],
+    ["正在读取标签页", "Reading tabs"],
+    ["正在生成 AI 方案", "Building AI plan"],
+    ["正在生成预览", "Preparing preview"],
+    ["方案好了，可以先检查", t("status.planReady")],
+    ["方案需要检查", t("status.planNeedsReview")],
+    ["已取消整理。", t("status.canceled")],
+    ["后台任务已停止，请重新生成。", t("status.previousFailed")],
+    ["正在校验 AI 方案", "Checking AI plan"],
+    ["方案未通过校验，正在要求 AI 修正", "Asking AI to fix the plan"],
+    ["正在校验修正方案", "Checking the revised plan"],
+    ["页面摘要已关闭", "Page summaries are off"],
+    ["没有需要补充页面线索", "No extra page clues needed"],
+    ["正在补充页面线索", "Adding page clues"],
+    ["使用已缓存页面线索", "Using cached page clues"],
+    ["已补充部分页面线索", "Added some page clues"],
+    ["继续参考标题、网址和原始顺序", "Continuing with titles, URLs, and tab order"],
+    ["正在请求 AI 规划", "Asking AI to plan"],
+    ["AI 已返回，正在解析方案", "AI returned a plan; parsing it"],
+    ["正在快速粗分标签页", "Quickly grouping tabs"],
+    ["正在细分不确定标签页", "Refining uncertain tabs"],
+    ["不确定标签页已细分", "Uncertain tabs refined"],
+    ["正在合并精分结果", "Merging refined results"],
+    ["正在取消整理", t("status.canceling")]
+  ]);
+  if (exact.has(text)) return exact.get(text);
+
+  let match = text.match(/^已读取 (\d+) 个可整理标签页$/);
+  if (match) return `Read ${match[1]} tabs to organize`;
+  match = text.match(/^使用已缓存页面摘要 (\d+) 个$/);
+  if (match) return `Using ${match[1]} cached page summaries`;
+  match = text.match(/^正在补充页面线索，已补充 (\d+) 个$/);
+  if (match) return `Adding page clues, ${match[1]} added`;
+  match = text.match(/^已补充 (\d+) 个页面摘要$/);
+  if (match) return `Added ${match[1]} page summaries`;
+  match = text.match(/^粗分完成：(\d+) 个候选主题$/);
+  if (match) return `Coarse pass found ${match[1]} candidate topics`;
+  match = text.match(/^正在精分「(.+)」$/);
+  if (match) return `Refining "${match[1]}"`;
+  match = text.match(/^已精分「(.+)」$/);
+  if (match) return `Refined "${match[1]}"`;
+  return text;
 }
 
 function syncChoiceGroups() {
@@ -962,7 +1464,7 @@ function syncActionState() {
   nodes.actions.dataset.canUndo = canUndo ? "true" : "false";
   nodes.applyBtn.hidden = !lastPreview;
   nodes.undoBtn.hidden = !canUndo;
-  setButtonLabel(nodes.analyzeBtn, lastPreview ? "重新生成" : "生成方案");
+  setButtonLabel(nodes.analyzeBtn, t(lastPreview ? "button.regenerate" : "button.generate"));
   nodes.applyBtn.dataset.role = lastPreview && lastCanApply ? "primary" : "";
 }
 
@@ -987,13 +1489,13 @@ async function ensurePlannerHostPermission(settings) {
 
   const granted = await chrome.permissions.request({ origins: [pattern] });
   if (!granted) {
-    throw new Error("需要授权这个 AI 服务地址，才能发送整理请求。");
+    throw new Error(t("status.permissionAiGateway"));
   }
 }
 
 async function ensureContinuousSummaryPermissions() {
   if (!hasContentAccessFeature()) {
-    throw new Error("当前版本不支持持续积累页面摘要。");
+    throw new Error(t("status.unsupportedContinuousSummary"));
   }
   if (!globalThis.chrome?.permissions?.contains || !globalThis.chrome?.permissions?.request) return;
 
@@ -1002,14 +1504,14 @@ async function ensureContinuousSummaryPermissions() {
       permissions: ["scripting"],
       origins: ["https://*/*", "http://*/*"]
     },
-    "需要授权网页读取权限后，才能持续积累页面摘要。"
+    t("status.permissionContinuousSummary")
   );
 }
 
 async function ensurePageSamplingPermissions(settings, options = {}) {
   if (settings.pageContextMode === "off" || settings.pageSamplingConsentMode === "not_acknowledged") return;
   if (!hasContentAccessFeature()) {
-    throw new Error("当前构建不包含页面摘要功能。");
+    throw new Error(t("status.unsupportedPageSummary"));
   }
   if (!globalThis.chrome?.permissions?.contains || !globalThis.chrome?.permissions?.request) return;
   const requestMissing = Boolean(options.requestMissing);
@@ -1027,7 +1529,7 @@ async function ensurePageSamplingPermissions(settings, options = {}) {
 
   if (!requestMissing) {
     if (missingPermissions.length) {
-      throw new Error("需要先打开「需要时补读页面摘要」并完成授权，才能读取页面摘要。");
+      throw new Error(t("status.permissionFirstEnablePageSummary"));
     }
     return;
   }
@@ -1039,10 +1541,10 @@ async function ensurePageSamplingPermissions(settings, options = {}) {
         permissions: missingPermissions,
         origins: firstOrigin ? [firstOrigin] : []
       },
-      "需要授权页面摘要权限，才能读取网页文字摘要。"
+      t("status.permissionPageSummary")
     );
     for (const origin of remainingOrigins) {
-      await requireOptionalPermission({ origins: [origin] }, "需要授权页面摘要权限，才能读取网页文字摘要。");
+      await requireOptionalPermission({ origins: [origin] }, t("status.permissionPageSummary"));
     }
     return;
   }
@@ -1053,7 +1555,7 @@ async function ensurePageSamplingPermissions(settings, options = {}) {
         permissions: missingPermissions,
         origins: missingOrigins
       },
-      "需要授权页面摘要权限，才能读取网页文字摘要。"
+      t("status.permissionPageSummary")
     );
   }
 }
@@ -1116,7 +1618,7 @@ async function requestOptionalPermission(request) {
 async function requireOptionalPermission(request, errorMessage) {
   const granted = await requestOptionalPermission(request);
   if (!granted) {
-    throw new Error(errorMessage || "需要授权后才能继续。");
+    throw new Error(errorMessage || t("status.permissionPageSummary"));
   }
 }
 

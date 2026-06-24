@@ -32,8 +32,13 @@ test.afterAll(async () => {
   await new Promise((resolveClose) => server.close(resolveClose));
 });
 
-test.beforeEach(async ({ page }) => {
+test.beforeEach(async ({ page }, testInfo) => {
   await page.setViewportSize({ width: 390, height: 680 });
+  if (!testInfo.title.includes("auto-selects English UI")) {
+    await page.addInitScript(() => {
+      localStorage.setItem("tabTidy.uiLanguage", "zh-CN");
+    });
+  }
 });
 
 test("popup renders settings and mock preview", async ({ page }) => {
@@ -73,6 +78,8 @@ test("popup renders settings and mock preview", async ({ page }) => {
   await expect(page.getByText("商店版")).toHaveCount(0);
   await expect(page.getByText("调整", { exact: true })).toHaveCount(0);
   await expect(page.locator("#settingsSummaryBtn")).toHaveCount(0);
+  await expect(page.locator("#closeWindowBtn")).toHaveCount(0);
+  await expect(page.locator("#uiLanguageToggle")).toHaveText("EN");
 
   await page.locator("#ackSampling").check();
   await expect(page.locator("#samplingRisk")).toBeVisible();
@@ -150,6 +157,15 @@ test("popup renders settings and mock preview", async ({ page }) => {
   await expect(page.getByText("待确认")).toHaveCount(0);
   await expect(page.locator(".preview-stats")).toHaveCount(0);
   await expect(page.locator(".stat-chip")).toHaveCount(0);
+  await page.locator("#uiLanguageToggle").click();
+  await expect(page.locator("#previewCount")).toHaveText("3 groups");
+  await expect(
+    page
+      .locator(".preview")
+      .getByText('AI reviewed 23 tabs, found 2 topic groups; 20 tabs will be grouped automatically, with 3 tabs set aside for "待分类".')
+  ).toBeVisible();
+  await page.locator("#uiLanguageToggle").click();
+  await expect(page.locator("#previewCount")).toHaveText("3 组");
   await expect(page.getByRole("button", { name: "开始整理" })).toBeEnabled();
   await expect(page.getByRole("button", { name: "撤销" })).toBeHidden();
   await expect(page.getByText("调整", { exact: true })).toHaveCount(0);
@@ -167,6 +183,32 @@ test("popup renders settings and mock preview", async ({ page }) => {
   await expect(page.locator("#previewSection")).toBeHidden();
   await expect(page.getByRole("button", { name: "生成方案" })).toBeVisible();
   await expect(page.getByRole("button", { name: "撤销" })).toBeVisible();
+});
+
+test("auto-selects English UI and can manually switch back", async ({ page }) => {
+  await page.addInitScript(() => {
+    localStorage.removeItem("tabTidy.uiLanguage");
+    Object.defineProperty(navigator, "language", { get: () => "en-US" });
+    Object.defineProperty(navigator, "languages", { get: () => ["en-US"] });
+  });
+
+  await page.goto(`${baseUrl}/src/sidepanel/index.html`);
+
+  await expect(page.locator("#statusText")).toHaveText("AI tab organizer");
+  await expect(page.getByText("Scope", { exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Generate plan" })).toBeVisible();
+  await expect(page.locator("#customPrompt")).toHaveAttribute(
+    "placeholder",
+    "Example: keep job search, AI papers, and current projects separate; put uncertain pages in review."
+  );
+  await expect(page.locator("#uiLanguageToggle")).toHaveText("中");
+  await expect(page.locator("#uiLanguageToggle")).toHaveAttribute("aria-label", "切换界面为中文");
+  await expect(page.locator("#closeWindowBtn")).toHaveCount(0);
+
+  await page.locator("#uiLanguageToggle").click();
+  await expect(page.locator("#statusText")).toHaveText("AI 标签页整理");
+  await expect(page.getByRole("button", { name: "生成方案" })).toBeVisible();
+  await expect(page.locator("#uiLanguageToggle")).toHaveText("EN");
 });
 
 test("popup restores a completed background preview after reopening", async ({ page }) => {
@@ -253,13 +295,13 @@ test("popup restores a completed background preview after reopening", async ({ p
   await page.goto(`${baseUrl}/src/sidepanel/index.html`);
   await expect(page.locator("#languageMode")).toHaveValue("en-US");
   await expect(page.getByRole("button", { name: "开始整理" })).toBeEnabled();
-  await expect(page.locator("#previewCount")).toHaveText("2 groups");
+  await expect(page.locator("#previewCount")).toHaveText("2 组");
   await expect(page.locator(".preview").getByText("AI Research", { exact: true })).toBeVisible();
   await expect(page.locator(".preview").getByText("Needs Review", { exact: true })).toBeVisible();
   await expect(
     page
       .locator(".preview")
-      .getByText("AI reviewed 3 tabs, found 1 topic group; 2 tabs will be grouped automatically, with 1 tab set aside for Needs Review.")
+      .getByText("AI 已梳理 3 个标签页，识别出 1 个主题；2 个已自动归类，1 个留到「Needs Review」。")
   ).toBeVisible();
   await expect.poll(() => page.evaluate(() => window.__messageTypes.includes("tabs:startAnalyze"))).toBe(false);
 
@@ -472,7 +514,7 @@ test("popup shows optimistic progress while waiting for AI", async ({ page }) =>
       phase: "planning",
       tabCount: 252,
       windowCount: 4,
-      languageMode: "auto"
+      languageMode: "zh-CN"
     }
   ]);
   await expect(page.locator("#progressLabel")).toHaveText(
