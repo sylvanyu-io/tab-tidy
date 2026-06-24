@@ -15,6 +15,26 @@ const REFINE_BUCKET_MIN_TABS = 50;
 const REFINE_MAX_TABS_PER_REQUEST = 80;
 const REFINE_CONFIDENCE_BELOW = 0.78;
 const COARSE_MAX_BUCKETS = 24;
+const WINDOW_FIELDS = Object.freeze(["id", "type", "focused", "incognito", "tabCount"]);
+const TAB_FIELDS = Object.freeze([
+  "id",
+  "windowId",
+  "index",
+  "sequenceIndex",
+  "title",
+  "hostname",
+  "sanitizedUrl",
+  "urlKind",
+  "audible",
+  "discarded",
+  "sampleable",
+  "existingGroup",
+  "pageSample"
+]);
+const PAGE_SAMPLE_FIELDS = Object.freeze(["status", "title", "metaDescription", "language", "headings", "visibleText", "reason"]);
+const EXCLUDED_FIELDS = Object.freeze(["id", "windowId", "title", "reason"]);
+const LOCKED_GROUP_FIELDS = Object.freeze(["id", "windowId", "title", "color", "collapsed", "tabIds"]);
+const PAGE_SAMPLE_RESULT_FIELDS = Object.freeze(["id", "windowId", "status", "origin", "reason"]);
 
 export async function createGatewayPlan(inventory, rawSettings = {}, fetchImpl = globalThis.fetch, options = {}) {
   const settings = normalizeSettings(rawSettings);
@@ -172,22 +192,23 @@ export function buildPlannerSystemPrompt(settings) {
   const presetText = PROMPT_PRESET_TEXT[settings.promptPreset] || PROMPT_PRESET_TEXT.conservative;
   const customPrompt = settings.customPrompt.trim();
   const thinkingText = thinkingIntensityText(settings.gatewayThinkingIntensity);
-  const requiredShape = JSON.stringify(exampleActionPlan());
+  const requiredShape = JSON.stringify(exampleCompactPlan());
 
   return [
     "This is a software engineering task: produce the planning JSON used by a Chrome extension runtime.",
     "You are a JSON-only planner for a Chrome tab organization extension.",
     "Return exactly one JSON object. Do not include markdown, prose, comments, or explanations outside JSON.",
-    `Required JSON shape example: ${requiredShape}`,
-    "tabRefs and reviewTabs must contain objects with tabId and windowId, not bare ids.",
+    `Required compact JSON shape example: ${requiredShape}`,
+    "The user payload is compact: field-name arrays define the meaning of each row. Do not ignore any field.",
+    "Return compact output: groups[].ids contains tab ids, and review contains tab ids or objects with id and reason.",
     `Allowed group colors: ${CHROME_GROUP_COLORS.join(", ")}.`,
     "Classify tabs by semantic topic, task, or intent. Prefer useful cross-domain groups over domain-only grouping.",
     "Do not close, discard, navigate, or execute tabs. You only produce grouping intent.",
-    "Every eligible tab must appear exactly once in either groups[].tabRefs or reviewTabs.",
+    "Every eligible tab must appear exactly once in either groups[].ids or review.",
     "Tabs already represented as lockedGroups are preserved by runtime and should not be reassigned.",
-    "Low-confidence, generic, sensitive, or mixed pages should go to reviewTabs.",
+    "Low-confidence, generic, sensitive, or mixed pages should go to review.",
     "Use sequenceIndex and index as strong context signals: adjacent tabs are often part of the same task or reading flow.",
-    "Keep tabRefs inside each group in original tab order, and order groups by the first tab they contain.",
+    "Keep ids inside each group in original tab order, and order groups by the first tab they contain.",
     "Do not create large generic catch-all groups. Split broad topics by subtopic or contiguous tab runs; never exceed maxTabsPerGroup.",
     `Thinking intensity requested by user: ${thinkingText}.`,
     `Runtime preset: ${presetText}`,
@@ -200,6 +221,7 @@ export function buildPlannerSystemPrompt(settings) {
 export function buildPlannerPayload(inventory, settings) {
   const pageSamplesByTabId = new Map((inventory.pageSamples || []).map((result) => [result.tabId, result]));
   return {
+    schema: "tab_tidy_compact_v1",
     settings: {
       organizeMode: settings.organizeMode,
       targetWindowMode: settings.targetWindowMode,
@@ -211,36 +233,50 @@ export function buildPlannerPayload(inventory, settings) {
       thinkingIntensity: settings.gatewayThinkingIntensity
     },
     scope: inventory.scope,
-    windows: inventory.windows,
-    eligibleTabs: (inventory.plannerTabs || []).map((tab) => ({
-      tabId: tab.tabId,
-      windowId: tab.windowId,
-      index: tab.index,
-      sequenceIndex: tab.sequenceIndex,
-      title: tab.title,
-      hostname: tab.hostname,
-      sanitizedUrl: tab.sanitizedUrl,
-      urlKind: tab.urlKind,
-      audible: tab.audible,
-      discarded: tab.discarded,
-      sampleable: tab.sampleable,
-      existingGroup: tab.groupTitle || "",
-      pageSample: formatPageSample(pageSamplesByTabId.get(tab.tabId))
-    })),
-    excludedTabs: (inventory.excludedTabs || []).map((tab) => ({
-      tabId: tab.tabId,
-      windowId: tab.windowId,
-      title: tab.title,
-      reason: tab.exclusionReason
-    })),
-    lockedGroups: inventory.lockedGroups || [],
-    pageSampleResults: (inventory.pageSamples || []).map((result) => ({
-      tabId: result.tabId,
-      windowId: result.windowId,
-      status: result.status,
-      origin: result.origin,
-      reason: result.reason
-    }))
+    windowFields: WINDOW_FIELDS,
+    windows: (inventory.windows || []).map((window) => [
+      window.windowId,
+      window.type,
+      Boolean(window.focused),
+      Boolean(window.incognito),
+      window.tabCount
+    ]),
+    tabFields: TAB_FIELDS,
+    tabs: (inventory.plannerTabs || []).map((tab) => [
+      tab.tabId,
+      tab.windowId,
+      tab.index,
+      tab.sequenceIndex,
+      tab.title,
+      tab.hostname,
+      tab.sanitizedUrl,
+      tab.urlKind,
+      Boolean(tab.audible),
+      Boolean(tab.discarded),
+      Boolean(tab.sampleable),
+      tab.groupTitle || "",
+      formatPageSample(pageSamplesByTabId.get(tab.tabId))
+    ]),
+    pageSampleFields: PAGE_SAMPLE_FIELDS,
+    excludedFields: EXCLUDED_FIELDS,
+    excluded: (inventory.excludedTabs || []).map((tab) => [tab.tabId, tab.windowId, tab.title, tab.exclusionReason]),
+    lockedGroupFields: LOCKED_GROUP_FIELDS,
+    lockedGroups: (inventory.lockedGroups || []).map((group) => [
+      group.groupId,
+      group.windowId,
+      group.title,
+      group.color,
+      Boolean(group.collapsed),
+      group.tabIds || []
+    ]),
+    pageSampleResultFields: PAGE_SAMPLE_RESULT_FIELDS,
+    pageSampleResults: (inventory.pageSamples || []).map((result) => [
+      result.tabId,
+      result.windowId,
+      result.status,
+      result.origin,
+      result.reason
+    ])
   };
 }
 
@@ -378,18 +414,14 @@ function buildCoarseUserPrompt(inventory, settings) {
     JSON.stringify({
       settings: payload.settings,
       scope: payload.scope,
+      windowFields: payload.windowFields,
       windows: payload.windows,
-      eligibleTabs: payload.eligibleTabs.map((tab) => ({
-        tabId: tab.tabId,
-        windowId: tab.windowId,
-        index: tab.index,
-        sequenceIndex: tab.sequenceIndex,
-        title: tab.title,
-        hostname: tab.hostname,
-        sanitizedUrl: tab.sanitizedUrl,
-        pageSample: tab.pageSample
-      })),
+      tabFields: payload.tabFields,
+      tabs: payload.tabs,
+      pageSampleFields: payload.pageSampleFields,
+      lockedGroupFields: payload.lockedGroupFields,
       lockedGroups: payload.lockedGroups,
+      pageSampleResultFields: payload.pageSampleResultFields,
       pageSampleResults: payload.pageSampleResults
     })
   ].join("\n");
@@ -599,17 +631,10 @@ function uniquifyGroupKeys(groups) {
 function formatPageSample(result) {
   if (!result) return null;
   if (result.status !== "ok") {
-    return { status: result.status, reason: result.reason || "" };
+    return [result.status, "", "", "", [], "", result.reason || ""];
   }
   const sample = result.sample || {};
-  return {
-    status: "ok",
-    title: sample.title || "",
-    metaDescription: sample.metaDescription || "",
-    language: sample.language || "",
-    headings: sample.headings || [],
-    visibleText: sample.visibleText || ""
-  };
+  return ["ok", sample.title || "", sample.metaDescription || "", sample.language || "", sample.headings || [], sample.visibleText || "", ""];
 }
 
 export function parsePlanFromResponse(data) {
@@ -659,7 +684,7 @@ function normalizeGatewayPlan(plan, inventory, settings) {
 
   for (const [index, group] of plan.groups.entries()) {
     const refs = sortRefsByOriginalOrder(
-      normalizeTabRefs(group.tabRefs || group.tabIds || group.tabs || [], tabById).filter((ref) => {
+      normalizeTabRefs(group.tabRefs || group.ids || group.tabIds || group.tabs || [], tabById).filter((ref) => {
         if (seen.has(ref.tabId)) return false;
         seen.add(ref.tabId);
         return true;
@@ -679,7 +704,7 @@ function normalizeGatewayPlan(plan, inventory, settings) {
   }
 
   const reviewTabs = sortRefsByOriginalOrder(
-    normalizeTabRefs(plan.reviewTabs || plan.ungrouped || [], tabById)
+    normalizeTabRefs(plan.reviewTabs || plan.review || plan.ungrouped || [], tabById)
     .filter((ref) => !seen.has(ref.tabId))
     .map((ref) => ({ ...ref, reason: ref.reason || "AI gateway left this tab for review." })),
     inventory
@@ -832,25 +857,20 @@ async function emitProgress(options, event) {
   }
 }
 
-function exampleActionPlan() {
+function exampleCompactPlan() {
   return {
-    schemaVersion: 1,
-    mode: "current_window",
-    scope: { kind: "current_window", windowIds: [1] },
-    targetWindow: { kind: "current_window", windowId: 1, title: "Current Window" },
-    eligibleTabs: [{ tabId: 1, windowId: 1 }],
-    excludedTabs: [],
+    schema: "tab_tidy_plan_compact_v1",
     groups: [
       {
-        groupKey: "topic",
+        key: "topic",
         title: "Topic",
         color: "blue",
         confidence: 0.8,
-        tabRefs: [{ tabId: 1, windowId: 1 }],
+        ids: [1],
         reason: "Semantic reason."
       }
     ],
-    reviewTabs: [{ tabId: 2, windowId: 1, reason: "Low confidence." }]
+    review: [{ id: 2, reason: "Low confidence." }]
   };
 }
 

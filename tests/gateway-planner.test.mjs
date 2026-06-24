@@ -59,15 +59,36 @@ test("AI gateway planner posts a chat-completions JSON request", async () => {
     assert.equal(body.response_format.type, "json_object");
     assert.equal(body.reasoning_effort, "high");
     assert.match(body.messages[0].content, /JSON-only planner/);
-    assert.match(body.messages[0].content, /tabRefs and reviewTabs/);
+    assert.match(body.messages[0].content, /compact output/);
     assert.match(body.messages[0].content, /sequenceIndex and index/);
     assert.match(body.messages[1].content, /Structured output docs/);
     assert.match(body.messages[1].content, /Software engineering task input/);
     const payload = JSON.parse(body.messages[1].content.slice(body.messages[1].content.indexOf("{")));
-    assert.equal(payload.eligibleTabs[0].sequenceIndex, 0);
-    assert.equal(payload.eligibleTabs[1].index, 1);
-    assert.equal(payload.eligibleTabs[0].pageSample.status, "ok");
-    assert.equal(payload.pageSampleResults[0].status, "ok");
+    assert.equal(payload.schema, "tab_tidy_compact_v1");
+    assert.deepEqual(payload.tabFields, [
+      "id",
+      "windowId",
+      "index",
+      "sequenceIndex",
+      "title",
+      "hostname",
+      "sanitizedUrl",
+      "urlKind",
+      "audible",
+      "discarded",
+      "sampleable",
+      "existingGroup",
+      "pageSample"
+    ]);
+    const firstTab = rowToObject(payload.tabFields, payload.tabs[0]);
+    const secondTab = rowToObject(payload.tabFields, payload.tabs[1]);
+    assert.equal(firstTab.sequenceIndex, 0);
+    assert.equal(secondTab.index, 1);
+    assert.deepEqual(payload.pageSampleFields, ["status", "title", "metaDescription", "language", "headings", "visibleText", "reason"]);
+    const firstSample = rowToObject(payload.pageSampleFields, firstTab.pageSample);
+    assert.equal(firstSample.status, "ok");
+    assert.equal(firstSample.visibleText, "JSON schema output");
+    assert.equal(rowToObject(payload.pageSampleResultFields, payload.pageSampleResults[0]).status, "ok");
     return {
       ok: true,
       async json() {
@@ -177,6 +198,50 @@ test("AI gateway planner adapts common tabIds output and strips markdown fences"
 
   assert.equal(plan.schemaVersion, 1);
   assert.equal(plan.groups[0].title, "Developer Docs");
+  assert.deepEqual(plan.groups[0].tabRefs, [
+    { tabId: 10, windowId: 1 },
+    { tabId: 11, windowId: 1 }
+  ]);
+  assert.deepEqual(plan.reviewTabs, []);
+});
+
+test("AI gateway planner adapts compact ids output", async () => {
+  const fetchImpl = async () => ({
+    ok: true,
+    async json() {
+      return {
+        choices: [
+          {
+            message: {
+              content: JSON.stringify({
+                schema: "tab_tidy_plan_compact_v1",
+                groups: [
+                  {
+                    key: "developer-docs",
+                    title: "Developer Docs",
+                    color: "cyan",
+                    confidence: 0.88,
+                    ids: [11, 10],
+                    reason: "Both tabs are developer documentation."
+                  }
+                ],
+                review: [{ id: 999, reason: "Unknown tab should be ignored." }]
+              })
+            }
+          }
+        ]
+      };
+    }
+  });
+
+  const plan = await createGatewayPlan(
+    inventory,
+    { ...DEFAULT_SETTINGS, plannerProvider: PLANNER_PROVIDERS.GATEWAY, gatewayApiKey: "gateway-test-key" },
+    fetchImpl
+  );
+
+  assert.equal(plan.schemaVersion, 1);
+  assert.equal(plan.groups[0].groupKey, "developer-docs");
   assert.deepEqual(plan.groups[0].tabRefs, [
     { tabId: 10, windowId: 1 },
     { tabId: 11, windowId: 1 }
@@ -672,4 +737,8 @@ function planForRefs(tabIds, title) {
     ],
     reviewTabs: []
   };
+}
+
+function rowToObject(fields, row) {
+  return Object.fromEntries(fields.map((field, index) => [field, row[index]]));
 }
