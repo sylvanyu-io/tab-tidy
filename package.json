@@ -11,6 +11,7 @@
     "smoke:gateway": "node scripts/live-smoke-gateway.mjs",
     "stress:extension": "node scripts/stress-extension.mjs",
     "assets:icons": "node scripts/generate-icons.mjs",
+    "assets:readme": "node scripts/generate-readme-assets.mjs",
     "scan:secrets": "node scripts/scan-secrets.mjs",
     "build:extension": "node scripts/build-extension.mjs",
     "build:extension:store": "EXTENSION_CHANNEL=store node scripts/build-extension.mjs",

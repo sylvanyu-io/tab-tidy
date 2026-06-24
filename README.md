@@ -1,125 +1,169 @@
-# Semantic Tab Agent
+# Tab Tidy
 
-AI-assisted Chrome extension for semantic tab grouping across many browser windows.
+<p align="center">
+  <img src="docs/assets/logo.svg" width="560" alt="Tab Tidy" />
+</p>
 
-Current status: runnable MV3 prototype with metadata-only planning, preview,
-apply, and best-effort undo. The default planner uses a chat-completions-compatible AI
-gateway, then runs the generated plan through the same local validator and
-executor path as every other planner.
+<h3 align="center">攒了数不清的标签页、乱成一锅粥？点一下按钮，自动归类整理好。</h3>
 
-## Local Use
+<p align="center">
+  <a href="manifest.json"><img alt="Chrome MV3" src="https://img.shields.io/badge/Chrome-MV3-1f55ff" /></a>
+  <a href="package.json"><img alt="Tests" src="https://img.shields.io/badge/tests-node%20%2B%20playwright-c9ff4a" /></a>
+  <a href="worker/README.md"><img alt="Gateway" src="https://img.shields.io/badge/AI-gateway-d94a32" /></a>
+</p>
 
-1. Open `chrome://extensions`.
-2. Enable Developer mode.
-3. Choose "Load unpacked".
-4. Select this project directory: `/Users/yuyufeng/Projects/semantic-tab-agent`.
-5. Click the extension action icon to open the persistent floating window.
+Tab Tidy 是一个 Chrome MV3 扩展。它把打开的标签页交给 LLM 按语义整理，而不是只按域名、标题关键词或手写规则分组。
 
-Default behavior is current-window only. The "All windows to one window" scope is
-an explicit switch and moves all eligible normal-window tabs into one target
-window only after preview and confirmation.
+它支持当前窗口整理、所有窗口合并到一个窗口、整理前预览、应用后回退，以及可选的页面短摘要辅助。
 
-The AI gateway address and key fields are blank by default. Leaving them blank
-uses the built-in service; filling the address switches to a custom
-chat-completions-compatible gateway. The floating window exposes `gpt-5.5`,
-`claude-opus-4-8`, and `claude-sonnet-4-6` as presets, plus a custom model-name
-field for compatible gateways such as GLM or DeepSeek. For example, GLM can use
-`https://open.bigmodel.cn/api/paas/v4` with a custom model such as `glm-5.2`.
-Thinking intensity defaults to high and can be set to low, medium, high, or
-ultra-high from advanced settings.
-Large AI gateway jobs automatically use a coarse-then-refine strategy: a fast
-low-effort pass creates broad semantic buckets, then only oversized or uncertain
-buckets are sent through the higher-effort planner before the local validator
-accepts the final plan.
-For 100+ tab jobs, refinement follows the selected thinking intensity; the
-default remains high.
-Image models can exist on the same gateway, but they are not useful planner
-models for this workflow. The built-in service does not require a key. If you
-use a custom gateway that needs one, set it in "More options"; it is stored only
-in local extension storage.
+<p align="center">
+  <img src="docs/assets/readme-hero-cn.png" width="920" alt="Tab Tidy 中文产品截图" />
+</p>
 
-Page content access is off by default and the core organizer must still work
-from tab metadata: title, URL signals, original order, windows, and existing
-groups. Development builds expose two opt-in content features:
+## 为什么做
 
-- "Deep scan uncertain pages while organizing" reads short visible-text
-  summaries only for ambiguous, accessible pages during the current run.
-- "Experimental: continuously accumulate page summaries" asks once for broad
-  optional page access, then silently caches short summaries only for already
-  authorized, live, non-incognito, non-sleeping pages. It does not wake hundreds
-  of discarded tabs.
+现有标签页整理工具通常会走两条路：按域名分组，或者套规则。遇到冷门站点、项目内工具、论文、仪表盘、Issue、PR、本地服务和杂乱资料混在一起时，这两种方式都很容易失效。
 
-The experimental continuous-summary feature is not intended for Chrome Web Store
-builds. Use the store build command below to strip content-reading optional
-permissions from the packaged manifest; the UI hides content-reading controls
-when those permissions are absent.
+Tab Tidy 会把紧凑的标签页信息发给 AI 规划器：
 
-## Tests
+- 标题、域名、精简 URL 信号、窗口、原始顺序；
+- 已有浏览器分组、固定标签页、无痕或受限标签页状态；
+- 用户显式允许时，附加少量页面可见文字摘要。
+
+AI 只负责给出分组意图。真正移动和分组前，扩展会在本地校验方案，避免漏标签、重复分配、超大兜底组或越权操作。
+
+## 功能
+
+- **语义分组**：按任务、主题、项目、研究线索或自定义要求整理。
+- **跨窗口模式**：可选择把所有符合条件的标签页移动到一个目标窗口后再分组。
+- **先预览再整理**：应用前能看到即将创建的分组和待分类标签页。
+- **可回退**：保存操作快照，尽量恢复标签页顺序、分组、固定状态和窗口位置。
+- **大规模任务规划**：100+ 标签页先粗分，再对过大或不确定分组二次精分。
+- **自定义 AI 网关**：默认使用内置免费网关；也支持 OpenAI 兼容网关、密钥、自定义模型名和思考强度。
+- **多语言结果**：分组名和说明支持自动判断、简体中文或 English。
+
+## 页面内容权限
+
+核心整理能力默认不读取页面正文，只依赖标签页元数据。
+
+开发版包含两个可选功能：
+
+- **整理时精扫不确定页**：只在本次整理里补读少量可访问页面的短摘要。
+- **实验：持续积累页面摘要**：请求一次性网页读取权限后，只在已授权、未休眠、非无痕页面上静默缓存短摘要。
+
+这两个功能都不会读取密码、表单内容、Cookie、本地存储或完整 HTML。休眠标签页不会被唤醒。
+
+Chrome Web Store 版本不包含实验性持续摘要能力。商店构建会移除 `activeTab`、`scripting` 和宽泛 optional host permissions；当这些权限不存在时，UI 也会隐藏页面读取相关开关。
+
+## 本地安装
+
+```bash
+npm install
+npm run assets:icons
+npm run build:extension
+```
+
+然后在 Chrome 中加载：
+
+1. 打开 `chrome://extensions`。
+2. 开启 Developer mode。
+3. 点击 **Load unpacked**。
+4. 选择 `dist/extension`。
+5. 点击扩展图标打开 popup。
+
+默认只整理当前窗口。“所有窗口”是显式开关，且只有在预览和确认之后才会移动标签页。
+
+## AI 网关
+
+AI 网关地址和密钥默认留空，表示使用内置服务。高级设置里可以改成任何兼容 Chat Completions 的网关。
+
+预设模型：
+
+- `gpt-5.5`
+- `claude-opus-4-8`
+- `claude-sonnet-4-6`
+
+也支持自定义模型名。兼容网关下可以使用 GLM、DeepSeek 等模型，例如 GLM 可填写 `https://open.bigmodel.cn/api/paas/v4` 和 `glm-5.2`。
+
+不要提交自定义网关密钥。任何出现在聊天、日志、截图、shell history 或测试输出里的密钥都应该轮换。
+
+## 开发
+
+运行单元测试和 Worker 测试：
 
 ```bash
 npm test
 ```
 
-The Node harness uses a fake Chrome adapter and covers inventory, validation,
-current-window grouping, consolidate-to-one-window, undo, URL sanitization,
-AI gateway request shaping, and page-sampling permission gates.
-
-After installing dev dependencies, run the floating-window smoke test:
+运行 popup UI smoke 测试：
 
 ```bash
-npm install
 npm run test:ui
 ```
 
-The UI smoke test opens the floating-window HTML (`src/sidepanel/index.html`) in mock mode. It does not
-need a loaded extension.
-
-Optional AI gateway live smoke:
+运行完整发布检查：
 
 ```bash
-GATEWAY_BASE_URL=http://127.0.0.1:8317/v1 GATEWAY_THINKING_INTENSITY=high npm run smoke:gateway
+npm run release:check
 ```
 
-Real extension stress test:
+生成 README 图片资源：
+
+```bash
+npm run assets:readme
+```
+
+构建 Chrome Web Store 风格的安装包，不带实验性页面读取权限：
+
+```bash
+npm run build:extension:store
+```
+
+输出文件为 `dist/semantic-tab-agent-<version>-store.zip`。
+
+## 压力测试
 
 ```bash
 npm run build:extension
 npm run stress:extension
 ```
 
-This launches an isolated Chromium profile, opens hundreds of generated HTTP
-pages across multiple normal browser windows, then verifies current-window mode,
-all-windows-to-one-window mode, apply, undo, page-sampling permission gates, and
-page body sampling. The installed extension entry opens the same UI in a
-persistent popup window so permission prompts do not destroy the control
-surface. Optional gateway stress:
+压力测试会启动隔离 Chromium profile，跨多个普通窗口打开数百个生成页面，然后验证：
+
+- 当前窗口整理；
+- 所有窗口合并到一个窗口；
+- 应用和回退；
+- 页面摘要权限边界；
+- 对可访问 live 页面读取短摘要。
+
+可选真实网关压力测试：
 
 ```bash
 GATEWAY_BASE_URL=http://127.0.0.1:8317/v1 STRESS_GATEWAY_TABS=60 npm run stress:extension
 ```
 
-Do not commit custom gateway keys. Rotate any key that has appeared in chat,
-shell history, logs, screenshots, or test output.
+## 架构
 
-Release check:
-
-```bash
-npm run release:check
+```text
+Chrome tabs/windows
+        |
+        v
+标签页清单 + URL 脱敏 + 原始顺序
+        |
+        v
+可选缓存/页面短摘要信号
+        |
+        v
+AI 网关规划器
+        |
+        v
+本地校验 + 预览
+        |
+        v
+Chrome 执行器 + 回退快照
 ```
 
-This runs automated tests, scans for provider-key patterns, and builds
-`dist/semantic-tab-agent-<version>.zip` plus an unpacked `dist/extension`.
-
-Chrome Web Store-style package without experimental content-reading controls:
-
-```bash
-npm run build:extension:store
-```
-
-This emits `dist/semantic-tab-agent-<version>-store.zip` and removes `activeTab`,
-`scripting`, and broad optional host permissions from the packed manifest.
-
-Design notes:
+## 设计文档
 
 - [Agent contract](docs/agent-contract.md)
 - [Evaluation harness](docs/harness.md)
