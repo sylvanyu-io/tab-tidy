@@ -7,13 +7,15 @@ import {
   normalizeSettings
 } from "../shared/settings.js";
 import { reviewGroupTitle } from "../shared/language.js";
+import { normalizePlanOrder } from "./plan-normalizer.js";
 import { validatePlan } from "./plan-validator.js";
 
 const NO_GROUP_ID = -1;
 
 export async function applyValidatedPlan(chromeApi, plan, inventory, rawSettings = {}, rollbackSnapshot = null, onRollbackUpdate = null) {
   const settings = normalizeSettings(rawSettings);
-  const validation = validatePlan(plan, inventory, settings);
+  const orderedPlan = normalizePlanOrder(plan, inventory);
+  const validation = validatePlan(orderedPlan, inventory, settings);
   if (!validation.ok) {
     throw new Error(`Cannot apply an invalid plan: ${validation.errors.join(" ")}`);
   }
@@ -26,7 +28,7 @@ export async function applyValidatedPlan(chromeApi, plan, inventory, rawSettings
   const eligibleTabsCount = (inventory.tabs || []).length;
   let targetWindowId = inventory.scope.currentWindowId;
 
-  if (!eligibleTabsCount && !(plan.groups || []).length && !(plan.reviewTabs || []).length) {
+  if (!eligibleTabsCount && !(orderedPlan.groups || []).length && !(orderedPlan.reviewTabs || []).length) {
     return {
       rollback,
       result: {
@@ -42,7 +44,7 @@ export async function applyValidatedPlan(chromeApi, plan, inventory, rawSettings
   }
 
   if (settings.organizeMode === ORGANIZE_MODES.CONSOLIDATE_ONE_WINDOW) {
-    const target = await resolveTargetWindow(chromeApi, plan, inventory, settings, operationJournal);
+    const target = await resolveTargetWindow(chromeApi, orderedPlan, inventory, settings, operationJournal);
     targetWindowId = target.windowId;
     createdWindowIds.push(...target.createdWindowIds);
     rollback.createdWindowIds = createdWindowIds;
@@ -76,7 +78,7 @@ export async function applyValidatedPlan(chromeApi, plan, inventory, rawSettings
     }
   }
 
-  for (const group of plan.groups || []) {
+  for (const group of orderedPlan.groups || []) {
     const tabIds = group.tabRefs.map((ref) => ref.tabId);
     const groupId = await recreateGroup(chromeApi, tabIds, targetWindowId, group, settings);
     if (groupId !== null) {
@@ -89,8 +91,8 @@ export async function applyValidatedPlan(chromeApi, plan, inventory, rawSettings
     }
   }
 
-  if (settings.reviewGroupMode === REVIEW_GROUP_MODES.CREATE && (plan.reviewTabs || []).length) {
-    const reviewTabIds = plan.reviewTabs.map((ref) => ref.tabId);
+  if (settings.reviewGroupMode === REVIEW_GROUP_MODES.CREATE && (orderedPlan.reviewTabs || []).length) {
+    const reviewTabIds = orderedPlan.reviewTabs.map((ref) => ref.tabId);
     const groupId = await recreateGroup(
       chromeApi,
       reviewTabIds,
@@ -121,8 +123,8 @@ export async function applyValidatedPlan(chromeApi, plan, inventory, rawSettings
       createdGroupIds,
       createdWindowIds,
       movedTabsCount: settings.organizeMode === ORGANIZE_MODES.CONSOLIDATE_ONE_WINDOW ? (inventory.tabs || []).length : 0,
-      groupedTabsCount: (plan.groups || []).reduce((sum, group) => sum + group.tabRefs.length, 0),
-      reviewTabsCount: (plan.reviewTabs || []).length
+      groupedTabsCount: (orderedPlan.groups || []).reduce((sum, group) => sum + group.tabRefs.length, 0),
+      reviewTabsCount: (orderedPlan.reviewTabs || []).length
     }
   };
 }

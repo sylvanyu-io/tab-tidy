@@ -193,7 +193,7 @@ test("review-like groups are ordered after topic groups", () => {
     mode: "current_window",
     targetWindow: { kind: "current_window", windowId: 1, title: "Current Window" },
     groups: [
-      { groupKey: "needs-review", title: "待分类", color: "grey", confidence: 0.9, tabRefs: [{ tabId: 10, windowId: 1 }] },
+      { groupKey: "needs-review", title: "待确认", color: "grey", confidence: 0.9, tabRefs: [{ tabId: 10, windowId: 1 }] },
       { groupKey: "work", title: "当前项目", color: "blue", confidence: 0.9, tabRefs: [{ tabId: 11, windowId: 1 }] }
     ],
     reviewTabs: [],
@@ -204,7 +204,7 @@ test("review-like groups are ordered after topic groups", () => {
 
   assert.deepEqual(
     normalized.groups.map((group) => group.title),
-    ["当前项目", "待分类"]
+    ["当前项目", "待确认"]
   );
 });
 

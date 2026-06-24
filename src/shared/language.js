@@ -41,6 +41,38 @@ export function reviewGroupReason(languageMode) {
   );
 }
 
+const REVIEW_LIKE_LABELS = new Set([
+  "待分类",
+  "待确认",
+  "待复核",
+  "待归类",
+  "未分类",
+  "未归类",
+  "review",
+  "needs review",
+  "pending review",
+  "needs classification",
+  "to review",
+  "review queue",
+  "ungrouped"
+]);
+
+export function normalizeReviewLabel(value) {
+  return String(value || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[-_]+/g, " ")
+    .replace(/\s+/g, " ");
+}
+
+export function isReviewLikeLabel(value) {
+  return REVIEW_LIKE_LABELS.has(normalizeReviewLabel(value));
+}
+
+export function isReviewLikeGroup(group) {
+  return isReviewLikeLabel(group?.title) || isReviewLikeLabel(group?.groupKey);
+}
+
 export function targetWindowTitle(kind, languageMode) {
   if (kind === "selected_window") return localizedText(languageMode, "选定窗口", "Selected Window");
   if (kind === "current_window") return localizedText(languageMode, "当前窗口", "Current Window");

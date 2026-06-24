@@ -1,5 +1,5 @@
 import { BUILTIN_GATEWAY_BASE_URL, GATEWAY_CUSTOM_MODEL_VALUE } from "../shared/settings.js";
-import { localizedText, reviewGroupReason, reviewGroupTitle } from "../shared/language.js";
+import { isReviewLikeGroup, localizedText, reviewGroupReason, reviewGroupTitle } from "../shared/language.js";
 import { shouldShowPageSampleCount } from "../shared/page-sampling-copy.js";
 
 const UI_LANGUAGE_STORAGE_KEY = "tabTidy.uiLanguage";
@@ -940,18 +940,12 @@ function renderPreview(job) {
   );
 }
 
-function orderPreviewGroups(groups, languageMode) {
-  const reviewTitle = normalizeReviewLabel(reviewGroupTitle(languageMode));
-  const fallbackReviewTitle = normalizeReviewLabel(reviewGroupTitle("auto"));
-  const englishReviewTitle = normalizeReviewLabel(reviewGroupTitle("en-US"));
-  const reviewLabels = new Set([reviewTitle, fallbackReviewTitle, englishReviewTitle, "review", "needs review", "ungrouped"]);
+function orderPreviewGroups(groups) {
   const normalGroups = [];
   const reviewLikeGroups = [];
 
   for (const group of groups) {
-    const title = normalizeReviewLabel(group?.title);
-    const key = normalizeReviewLabel(group?.groupKey);
-    if (reviewLabels.has(title) || reviewLabels.has(key)) {
+    if (isReviewLikeGroup(group)) {
       reviewLikeGroups.push(group);
     } else {
       normalGroups.push(group);
@@ -959,13 +953,6 @@ function orderPreviewGroups(groups, languageMode) {
   }
 
   return [...normalGroups, ...reviewLikeGroups];
-}
-
-function normalizeReviewLabel(value) {
-  return String(value || "")
-    .trim()
-    .toLowerCase()
-    .replace(/\s+/g, " ");
 }
 
 function previewSummary(preview, groupCount, reviewTabsCount, reviewGroupWillBeCreated, languageMode) {

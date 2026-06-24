@@ -1,3 +1,5 @@
+import { isReviewLikeGroup } from "../shared/language.js";
+
 export function normalizePlanOrder(plan, inventory) {
   if (!plan || typeof plan !== "object") return plan;
 
@@ -34,18 +36,6 @@ function orderGroupsByOriginalPosition(groups, inventory) {
 function firstGroupOrder(group, tabOrder) {
   const orders = asArray(group?.tabRefs).map((ref) => tabOrder(ref.tabId));
   return orders.length ? Math.min(...orders) : Number.MAX_SAFE_INTEGER;
-}
-
-function isReviewLikeGroup(group) {
-  const labels = new Set(["待分类", "review", "needs review", "ungrouped"]);
-  return labels.has(normalizeLabel(group?.title)) || labels.has(normalizeLabel(group?.groupKey));
-}
-
-function normalizeLabel(value) {
-  return String(value || "")
-    .trim()
-    .toLowerCase()
-    .replace(/\s+/g, " ");
 }
 
 function buildTabOrder(inventory) {

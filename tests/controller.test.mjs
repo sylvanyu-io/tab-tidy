@@ -11,7 +11,7 @@ import {
   startAnalyzeTabs,
   undoLastApply
 } from "../src/core/controller.js";
-import { undoFromRollback } from "../src/core/chrome-executor.js";
+import { applyValidatedPlan, undoFromRollback } from "../src/core/chrome-executor.js";
 import { rememberPageSummary } from "../src/core/page-summary-cache.js";
 import { STORAGE_KEYS } from "../src/core/storage.js";
 import {
@@ -212,6 +212,53 @@ test("review group title follows the selected result language when applying", as
   const groups = await chrome.tabGroups.query({ windowId: 1 });
   assert.equal(groups.length, 1);
   assert.equal(groups[0].title, "Needs Review");
+});
+
+test("applying a plan keeps review-like groups after topic groups", async () => {
+  const chrome = createFakeChrome({
+    windows: [
+      {
+        id: 1,
+        focused: true,
+        tabs: [
+          { id: 10, title: "Obscure page", url: "https://rare.example", active: true },
+          { id: 11, title: "Current project issue", url: "https://github.com/acme/repo/issues/1" }
+        ]
+      }
+    ]
+  });
+  const inventory = {
+    scope: { kind: "current_window", currentWindowId: 1, windowIds: [1] },
+    tabs: [
+      { tabId: 10, windowId: 1, sequenceIndex: 0, pinned: false, incognito: false },
+      { tabId: 11, windowId: 1, sequenceIndex: 1, pinned: false, incognito: false }
+    ],
+    plannerTabs: [
+      { tabId: 10, windowId: 1, sequenceIndex: 0, pinned: false, incognito: false },
+      { tabId: 11, windowId: 1, sequenceIndex: 1, pinned: false, incognito: false }
+    ],
+    lockedGroups: [],
+    excludedTabs: []
+  };
+  const plan = {
+    schemaVersion: 1,
+    mode: ORGANIZE_MODES.CURRENT_WINDOW,
+    targetWindow: { kind: "current_window", windowId: 1, title: "当前窗口" },
+    groups: [
+      { groupKey: "needs-review", title: "待确认", color: "grey", confidence: 0.9, tabRefs: [{ tabId: 10, windowId: 1 }] },
+      { groupKey: "work", title: "当前项目", color: "blue", confidence: 0.9, tabRefs: [{ tabId: 11, windowId: 1 }] }
+    ],
+    reviewTabs: [],
+    excludedTabs: []
+  };
+
+  await applyValidatedPlan(chrome, plan, inventory, DEFAULT_SETTINGS);
+  const groups = await chrome.tabGroups.query({ windowId: 1 });
+
+  assert.deepEqual(
+    groups.map((group) => group.title),
+    ["当前项目", "待确认"]
+  );
 });
 
 test("consolidate_one_window moves all eligible normal-window tabs into one target", async () => {
