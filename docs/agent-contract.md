@@ -161,9 +161,9 @@ Presets should be short, opinionated clauses appended to the planner prompt.
 
 `platform_source`:
 
-- group by web page type when that helps more than topic;
+- group by media type when that helps more than topic;
 - keep docs, code/issues/PRs, papers, videos, articles, dashboards, search results, mail/chat, shopping/finance, and local tools distinct;
-- split unrelated work inside a large page type.
+- split unrelated work inside a large media type.
 
 `read_later`:
 

@@ -213,7 +213,7 @@ Core switches:
 - include incognito tabs: off by default and only possible if the browser allows extension access;
 - collapse groups after apply: user preference;
 - undo target window: leave empty created window open, or close it after successful undo;
-- prompt preset: smart organization, web page type, read later, or bold grouping;
+- prompt preset: smart organization, media type, read later, or bold grouping;
 - custom prompt: appended as user preference, never as a permission override.
 
 MVP defaults should be conservative: metadata-only page context, preserve existing groups, create a Review group, never request page host permissions during analysis, and require an explicit risk acknowledgement before any page content sample is collected.

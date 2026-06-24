@@ -26,10 +26,10 @@ const inventory = {
 test("planner prompt includes the selected organization preset", () => {
   const prompt = buildPlannerSystemPrompt({
     ...DEFAULT_SETTINGS,
-    promptPreset: PROMPT_PRESETS.WEB_TYPE
+    promptPreset: PROMPT_PRESETS.MEDIA_TYPE
   });
 
-  assert.match(prompt, /web page type/);
+  assert.match(prompt, /media type/);
   assert.match(prompt, /code\/issues\/PRs/);
   assert.match(prompt, /shopping\/finance/);
 });

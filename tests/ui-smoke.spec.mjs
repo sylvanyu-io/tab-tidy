@@ -96,7 +96,7 @@ test("popup renders settings and mock preview", async ({ page }) => {
     )
   ).toEqual([
     { value: "conservative", text: "智能整理" },
-    { value: "platform_source", text: "按网页类型" },
+    { value: "platform_source", text: "媒体类型" },
     { value: "read_later", text: "稍后阅读" },
     { value: "aggressive_cleanup", text: "强力归纳" }
   ]);
