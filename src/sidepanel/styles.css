@@ -771,8 +771,7 @@ button:focus-visible {
 
 .help-tip {
   position: relative;
-  display: inline-grid;
-  place-items: center;
+  display: inline-block;
   flex: 0 0 auto;
   width: 15px;
   height: 15px;
@@ -781,13 +780,33 @@ button:focus-visible {
   border: 1px solid color-mix(in srgb, var(--primary) 26%, var(--line));
   border-radius: 999px;
   box-shadow: inset 0 1px 0 color-mix(in srgb, #ffffff 42%, transparent);
-  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", sans-serif;
-  font-size: 10px;
+  font-size: 0;
   font-style: normal;
-  font-weight: 850;
-  line-height: 1;
   cursor: help;
   transform: translateY(-1px);
+}
+
+.help-tip::before,
+.help-tip::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  background: currentColor;
+  transform: translateX(-50%);
+}
+
+.help-tip::before {
+  top: 3px;
+  width: 2px;
+  height: 2px;
+  border-radius: 999px;
+}
+
+.help-tip::after {
+  top: 6px;
+  width: 2px;
+  height: 6px;
+  border-radius: 999px;
 }
 
 .help-tip:hover,
