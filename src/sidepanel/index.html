@@ -227,9 +227,9 @@
             <div class="field setting-select-row">
               <label for="gatewayModel">AI 模型</label>
               <select id="gatewayModel">
+                <option value="claude-sonnet-4-6">claude-sonnet-4-6</option>
                 <option value="gpt-5.5">gpt-5.5</option>
                 <option value="claude-opus-4-8">claude-opus-4-8</option>
-                <option value="claude-sonnet-4-6">claude-sonnet-4-6</option>
                 <option value="custom">自定义模型名</option>
               </select>
             </div>
@@ -266,6 +266,13 @@
               <label for="gatewayApiKey">AI 网关密钥（可选）</label>
               <input id="gatewayApiKey" type="password" autocomplete="off" placeholder="默认服务无需填写" />
             </div>
+            <label class="mini-check secret-remember-row">
+              <input id="rememberProviderKeys" type="checkbox" />
+              <span>
+                <strong>记住自定义密钥</strong>
+                <small>只保存在这台电脑</small>
+              </span>
+            </label>
           </div>
 
         <div class="number-grid">

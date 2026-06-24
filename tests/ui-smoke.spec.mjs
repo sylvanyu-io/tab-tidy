@@ -114,7 +114,7 @@ test("popup renders settings and mock preview", async ({ page }) => {
   await expect(page.locator("#gatewayBaseUrl")).toHaveValue("");
   await expect(page.locator("#gatewayBaseUrl")).toHaveAttribute("placeholder", "不填则使用默认服务");
   await expect(page.locator("#gatewayApiKey")).toHaveAttribute("placeholder", "默认服务无需填写");
-  await expect(page.locator("#gatewayModel")).toHaveValue("gpt-5.5");
+  await expect(page.locator("#gatewayModel")).toHaveValue("claude-sonnet-4-6");
   await expect(page.locator("#gatewayCustomModelField")).toBeHidden();
   await page.locator("#gatewayModel").selectOption("custom");
   await expect(page.locator("#gatewayCustomModelField")).toBeVisible();
@@ -227,7 +227,7 @@ test("auto-selects English UI and can manually switch back", async ({ page }) =>
     { value: "aggressive_cleanup", text: "Bold grouping" }
   ]);
   await expect(page.locator("#uiLanguageToggle")).toHaveText("");
-  await expect(page.locator("#uiLanguageToggle")).toHaveAttribute("aria-label", "切换界面为中文");
+  await expect(page.locator("#uiLanguageToggle")).toHaveAttribute("aria-label", "Switch UI to Chinese");
   await expect(page.locator("#closeWindowBtn")).toHaveCount(0);
 
   await page.locator("#uiLanguageToggle").click();
@@ -484,7 +484,10 @@ test("popup restores a background planning error after reopening", async ({ page
 
   await page.goto(`${baseUrl}/src/sidepanel/index.html`);
   await expect(page.locator("#statusText")).toHaveText("This model is not available on the free gateway.");
-  await expect(page.locator("#previewSection")).toBeHidden();
+  await expect(page.locator("#previewSection")).toBeVisible();
+  await expect(page.locator(".step-label")).toHaveText("出错");
+  await expect(page.locator(".section-heading h2")).toHaveText("生成失败");
+  await expect(page.locator(".error-panel")).toContainText("This model is not available on the free gateway.");
   await expect(page.getByText("整理预览")).toBeHidden();
   await expect(page.getByRole("button", { name: "生成方案" })).toBeEnabled();
 });
@@ -1100,6 +1103,7 @@ test("apply confirms changed tabs before adding them to review", async ({ page }
                     removedTabIds: [11],
                     skippedNewTabIds: [12],
                     addedReviewTabIds: [],
+                    confirmationToken: "changed-token-1",
                     duplicateTabIds: []
                   }
                 }
@@ -1134,8 +1138,13 @@ test("apply confirms changed tabs before adding them to review", async ({ page }
     "标签页在预览后发生了变化。\n1 个新增标签页会放进「待分类」。\n1 个已关闭的标签页会跳过。\n确认继续整理吗？"
   ]);
   await expect.poll(() => page.evaluate(() => window.__applyMessages)).toEqual([
-    { type: "tabs:applyLastPlan" },
-    { type: "tabs:applyLastPlan", confirmChangedTabs: true }
+    { type: "tabs:applyLastPlan", confirmMultiWindow: false },
+    {
+      type: "tabs:applyLastPlan",
+      confirmChangedTabs: true,
+      confirmationToken: "changed-token-1",
+      confirmMultiWindow: false
+    }
   ]);
 });
 
@@ -1210,7 +1219,8 @@ test("page summary main toggle requests scripting and page origins", async ({ pa
             { id: 10, title: "Login", url: "https://example.com/signin", active: true },
             { id: 11, title: "Specific documentation article with clear title", url: "https://docs.example.org/page" }
           ]
-        })
+        }),
+        getCurrent: async () => ({ id: 77, type: "normal" })
       },
       runtime: {
         sendMessage: async (message) => {
@@ -1312,7 +1322,7 @@ test("page summary range can be changed while the main toggle is off", async ({ 
   );
 });
 
-test("continuous summaries request all-site optional access once", async ({ page }) => {
+test("continuous summaries request visible-site optional access once", async ({ page }) => {
   await page.addInitScript(() => {
     let settings = {
       organizeMode: "current_window",
@@ -1355,6 +1365,17 @@ test("continuous summaries request all-site optional access once", async ({ page
           return true;
         }
       },
+      windows: {
+        get: async () => ({
+          id: 1,
+          type: "normal",
+          tabs: [
+            { id: 10, windowId: 1, title: "Docs", url: "https://docs.example/page", active: true },
+            { id: 11, windowId: 1, title: "Shop", url: "https://shop.example/cart" }
+          ]
+        }),
+        getCurrent: async () => ({ id: 1, type: "normal" })
+      },
       runtime: {
         getManifest: () => ({
           optional_permissions: ["scripting"],
@@ -1378,7 +1399,7 @@ test("continuous summaries request all-site optional access once", async ({ page
   await page.locator("#continuousPageSummaries").check();
   await expect.poll(() => page.evaluate(() => window.__permissionRequests.at(-1))).toEqual({
     permissions: ["scripting"],
-    origins: ["https://*/*", "http://*/*"]
+    origins: ["https://docs.example/*", "https://shop.example/*"]
   });
   await expect.poll(() => page.evaluate(() => window.__savedSettings.at(-1)?.continuousPageSummaries)).toBe(true);
   await expect.poll(() => page.evaluate(() => window.__savedSettings.at(-1)?.pageSamplingConsentMode)).toBe(
@@ -1387,8 +1408,8 @@ test("continuous summaries request all-site optional access once", async ({ page
   await expect(page.locator("#continuousPageSummaries")).toBeChecked();
   await expect.poll(() => page.evaluate(() => window.__events.at(0))).toEqual({
     type: "permission_request",
-    savedContinuous: true,
-    savedConsent: "acknowledged_persistently"
+    savedContinuous: undefined,
+    savedConsent: undefined
   });
 });
 

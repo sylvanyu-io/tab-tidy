@@ -48,7 +48,7 @@ const UI_COPY = Object.freeze({
     "button.apply": "开始整理",
     "button.undo": "撤销",
     "button.language": "EN",
-    "button.languageAria": "Switch UI to English",
+    "button.languageAria": "切换界面为英文",
     "scope.label": "范围",
     "scope.currentWindow": "当前窗口",
     "scope.allWindows": "所有窗口",
@@ -86,6 +86,8 @@ const UI_COPY = Object.freeze({
     "field.customModel": "自定义模型名",
     "field.gatewayUrl": "AI 网关地址（可选）",
     "field.gatewayKey": "AI 网关密钥（可选）",
+    "field.rememberKey": "记住自定义密钥",
+    "field.rememberKeyHint": "只保存在这台电脑",
     "field.minConfidence": "最低置信度",
     "field.maxTabs": "单组最大数量",
     "placeholder.customModel": "例如：glm-5.2、deepseek-v4-pro",
@@ -125,12 +127,15 @@ const UI_COPY = Object.freeze({
     "preview.pending": "待生成",
     "preview.empty": "还没有方案。",
     "preview.error": "出错",
+    "error.heading": "生成失败",
+    "error.retryHint": "检查提示后可以重新生成。",
     "preview.emptyCount": "空",
     "details.summary": "诊断信息",
     "confirm.applyMultiWindow": "这会移动多个窗口里的标签页，并创建浏览器分组。确认开始整理吗？",
     "confirm.changedHeader": "标签页在预览后发生了变化。",
     "confirm.newToReview": "{count} 个新增标签页会放进「{reviewTitle}」。",
     "confirm.newUngrouped": "{count} 个新增标签页会放进最接近的分组。",
+    "confirm.changedContent": "{count} 个页面内容已变化，会按当前状态重新纳入整理。",
     "confirm.removed": "{count} 个已关闭的标签页会跳过。",
     "confirm.duplicate": "{count} 个重复引用会跳过。",
     "confirm.continue": "确认继续整理吗？",
@@ -182,7 +187,7 @@ const UI_COPY = Object.freeze({
     "button.apply": "Organize",
     "button.undo": "Undo",
     "button.language": "中",
-    "button.languageAria": "切换界面为中文",
+    "button.languageAria": "Switch UI to Chinese",
     "scope.label": "Scope",
     "scope.currentWindow": "Current window",
     "scope.allWindows": "All windows",
@@ -220,6 +225,8 @@ const UI_COPY = Object.freeze({
     "field.customModel": "Custom model name",
     "field.gatewayUrl": "AI gateway URL (optional)",
     "field.gatewayKey": "AI gateway key (optional)",
+    "field.rememberKey": "Remember custom key",
+    "field.rememberKeyHint": "Stored only on this computer",
     "field.minConfidence": "Minimum confidence",
     "field.maxTabs": "Max tabs per group",
     "placeholder.customModel": "Example: glm-5.2, deepseek-v4-pro",
@@ -259,12 +266,15 @@ const UI_COPY = Object.freeze({
     "preview.pending": "Pending",
     "preview.empty": "No plan yet.",
     "preview.error": "Error",
+    "error.heading": "Generation failed",
+    "error.retryHint": "Review the message, then generate again.",
     "preview.emptyCount": "Empty",
     "details.summary": "Diagnostics",
     "confirm.applyMultiWindow": "This will move tabs across windows and create browser tab groups. Continue?",
     "confirm.changedHeader": "Tabs changed after the preview.",
     "confirm.newToReview": "{count} new tabs will be added to \"{reviewTitle}\".",
     "confirm.newUngrouped": "{count} new tabs will be placed in the closest group.",
+    "confirm.changedContent": "{count} changed tabs will be handled from their current state.",
     "confirm.removed": "{count} closed tabs will be skipped.",
     "confirm.duplicate": "{count} duplicate references will be skipped.",
     "confirm.continue": "Continue organizing?",
@@ -292,6 +302,7 @@ const fields = {
   gatewayCustomModel: document.querySelector("#gatewayCustomModel"),
   gatewayThinkingIntensity: document.querySelector("#gatewayThinkingIntensity"),
   gatewayApiKey: document.querySelector("#gatewayApiKey"),
+  rememberProviderKeys: document.querySelector("#rememberProviderKeys"),
   customPrompt: document.querySelector("#customPrompt"),
   includePinnedTabs: document.querySelector("#includePinnedTabs"),
   includeIncognitoTabs: document.querySelector("#includeIncognitoTabs"),
@@ -373,6 +384,7 @@ async function init() {
   updateConditionalUi();
   schedulePageSamplingOriginRefresh();
   await hydrateActiveJob();
+  await hydrateUndoState();
   syncActionState();
 }
 
@@ -390,7 +402,6 @@ function bindEvents() {
         fields.hostPermissionRequestMode.value = "ask_for_all_visible_origins";
       }
       updateConditionalUi();
-      await persistSettings();
       setStatusKey("status.requestingPageSummaryPermission");
       try {
         await ensurePageSamplingPermissions(readSettings({ effectiveForAnalysis: true }), { requestMissing: true });
@@ -410,7 +421,6 @@ function bindEvents() {
   });
   fields.continuousPageSummaries.addEventListener("change", async () => {
     if (fields.continuousPageSummaries.checked) {
-      await persistSettings();
       try {
         await ensureContinuousSummaryPermissions();
       } catch (error) {
@@ -501,6 +511,8 @@ function applyUiLanguage() {
   setText('label[for="gatewayCustomModel"]', t("field.customModel"));
   setText('label[for="gatewayBaseUrl"]', t("field.gatewayUrl"));
   setText('label[for="gatewayApiKey"]', t("field.gatewayKey"));
+  setText(".secret-remember-row strong", t("field.rememberKey"));
+  setText(".secret-remember-row small", t("field.rememberKeyHint"));
   setText('label[for="minConfidenceToApply"]', t("field.minConfidence"));
   setText('label[for="maxTabsPerGroup"]', t("field.maxTabs"));
   setAttribute("#gatewayCustomModel", "placeholder", t("placeholder.customModel"));
@@ -658,7 +670,7 @@ function readSettings(options = {}) {
     languageMode: fields.languageMode.value,
     promptPreset: fields.promptPreset.value,
     plannerProvider: fields.plannerProvider.value || "gateway",
-    rememberProviderKeys: Boolean(fields.gatewayApiKey.value),
+    rememberProviderKeys: Boolean(fields.rememberProviderKeys.checked && fields.gatewayBaseUrl.value.trim() && fields.gatewayApiKey.value.trim()),
     gatewayBaseUrl: fields.gatewayBaseUrl.value,
     gatewayModel: fields.gatewayModel.value,
     gatewayCustomModel: fields.gatewayCustomModel.value,
@@ -736,6 +748,9 @@ function updateConditionalUi() {
   nodes.hostPermissionField.hidden =
     !samplingEnabled || fields.pageContextMode.value === "off";
   nodes.gatewayCustomModelField.hidden = fields.gatewayModel.value !== GATEWAY_CUSTOM_MODEL_VALUE;
+  const canRememberCustomKey = Boolean(fields.gatewayBaseUrl.value.trim() && fields.gatewayApiKey.value.trim());
+  fields.rememberProviderKeys.disabled = !canRememberCustomKey;
+  if (!canRememberCustomKey) fields.rememberProviderKeys.checked = false;
   syncChoiceGroups();
   schedulePageSamplingOriginRefresh();
 }
@@ -820,14 +835,25 @@ async function cancelAnalyze() {
 }
 
 async function applyLastPlan() {
+  let confirmMultiWindow = false;
   if (lastPreview?.requiresConfirmation) {
     const confirmed = confirm(t("confirm.applyMultiWindow"));
     if (!confirmed) return;
+    confirmMultiWindow = true;
   }
 
   setBusy(true, t("status.organizing"));
   try {
-    let result = await sendMessage({ type: "tabs:applyLastPlan" });
+    let result = await sendMessage({ type: "tabs:applyLastPlan", confirmMultiWindow });
+    if (result?.requiresMultiWindowConfirmation) {
+      const confirmed = confirm(t("confirm.applyMultiWindow"));
+      if (!confirmed) {
+        setStatusKey("status.canceled");
+        return;
+      }
+      confirmMultiWindow = true;
+      result = await sendMessage({ type: "tabs:applyLastPlan", confirmMultiWindow });
+    }
     if (result?.requiresChangedTabsConfirmation) {
       const confirmed = confirm(changedTabsConfirmationText(result.rebasedPlan));
       if (!confirmed) {
@@ -835,7 +861,17 @@ async function applyLastPlan() {
         return;
       }
       setStatusKey("status.organizingChanged");
-      result = await sendMessage({ type: "tabs:applyLastPlan", confirmChangedTabs: true });
+      result = await sendMessage({
+        type: "tabs:applyLastPlan",
+        confirmChangedTabs: true,
+        confirmationToken: result.rebasedPlan?.confirmationToken || "",
+        confirmMultiWindow
+      });
+      if (result?.requiresChangedTabsConfirmation) {
+        setStatusKey("status.previousFailed", {}, true);
+        renderError(new Error(changedTabsConfirmationText(result.rebasedPlan)));
+        return;
+      }
     }
     canUndo = true;
     const status = applyResultStatus(result);
@@ -850,7 +886,8 @@ async function applyLastPlan() {
 }
 
 function changedTabsConfirmationText(summary = {}) {
-  const newCount = (summary.skippedNewTabIds || summary.addedReviewTabIds || []).length;
+  const newCount = [...(summary.skippedNewTabIds || []), ...(summary.addedReviewTabIds || [])].length;
+  const changedContentCount = (summary.changedContentTabIds || []).length;
   const removedCount = (summary.removedTabIds || []).length;
   const duplicateCount = (summary.duplicateTabIds || []).length;
   const reviewTitle = reviewGroupTitle(currentResultLanguageMode());
@@ -863,6 +900,7 @@ function changedTabsConfirmationText(summary = {}) {
       lines.push(t("confirm.newUngrouped", { count: newCount }));
     }
   }
+  if (changedContentCount) lines.push(t("confirm.changedContent", { count: changedContentCount, reviewTitle }));
   if (removedCount) lines.push(t("confirm.removed", { count: removedCount }));
   if (duplicateCount) lines.push(t("confirm.duplicate", { count: duplicateCount }));
   lines.push(t("confirm.continue"));
@@ -898,6 +936,8 @@ async function undoLastApply() {
 
 function renderPreview(job) {
   nodes.previewSection.hidden = false;
+  setText(".step-label", t("preview.step"));
+  setText(".section-heading h2", t("preview.heading"));
   const preview = job.preview;
   const resultLanguageMode = preview.languageMode || job.settings?.languageMode || currentResultLanguageMode();
   const groups = orderPreviewGroups(preview.groups || [], resultLanguageMode);
@@ -1078,11 +1118,13 @@ function renderDetails(payload) {
 function renderError(error) {
   lastPreview = null;
   lastCanApply = false;
-  nodes.previewSection.hidden = true;
-  nodes.previewCount.textContent = t("preview.pending");
-  nodes.previewRoot.className = "empty";
-  nodes.previewRoot.textContent = t("preview.empty");
-  nodes.detailsRoot.hidden = true;
+  nodes.previewSection.hidden = false;
+  setText(".step-label", t("preview.error"));
+  setText(".section-heading h2", t("error.heading"));
+  nodes.previewCount.textContent = t("preview.error");
+  nodes.previewRoot.className = "error-panel";
+  nodes.previewRoot.replaceChildren(errorPanelContent(error));
+  nodes.detailsRoot.hidden = false;
   nodes.detailsText.textContent = JSON.stringify({ error: error.message }, null, 2);
   syncActionState();
 }
@@ -1091,12 +1133,24 @@ function resetToSetup() {
   lastPreview = null;
   lastCanApply = false;
   nodes.previewSection.hidden = true;
+  setText(".step-label", t("preview.step"));
+  setText(".section-heading h2", t("preview.heading"));
   nodes.previewCount.textContent = t("preview.pending");
   nodes.previewRoot.className = "empty";
   nodes.previewRoot.textContent = t("preview.empty");
   nodes.detailsRoot.hidden = true;
   nodes.detailsText.textContent = "";
   syncActionState();
+}
+
+function errorPanelContent(error) {
+  const wrapper = document.createElement("div");
+  const message = document.createElement("strong");
+  message.textContent = String(error?.message || t("status.previousFailed"));
+  const hint = document.createElement("small");
+  hint.textContent = t("error.retryHint");
+  wrapper.append(message, hint);
+  return wrapper;
 }
 
 async function clearAnalysisState() {
@@ -1144,6 +1198,11 @@ async function hydrateActiveJob() {
   } else if (job.status === "error" || job.status === "canceled") {
     restoreTerminalJob(job);
   }
+}
+
+async function hydrateUndoState() {
+  const result = await sendMessage({ type: "tabs:canUndo" }).catch(() => null);
+  canUndo = Boolean(result?.canUndo);
 }
 
 async function restoreCompletedJob(activeJob = {}) {
@@ -1482,10 +1541,17 @@ async function ensureContinuousSummaryPermissions() {
   }
   if (!globalThis.chrome?.permissions?.contains || !globalThis.chrome?.permissions?.request) return;
 
+  const settings = {
+    ...readSettings({ effectiveForAnalysis: true }),
+    pageContextMode: "all_granted_origins",
+    hostPermissionRequestMode: "ask_for_all_visible_origins"
+  };
+  const windowId = await resolveInvocationWindowId();
+  const origins = await collectPageSamplingOrigins(settings, windowId);
   await requireOptionalPermission(
     {
       permissions: ["scripting"],
-      origins: ["https://*/*", "http://*/*"]
+      origins
     },
     t("status.permissionContinuousSummary")
   );
@@ -1748,7 +1814,7 @@ async function mockMessage(message) {
       plannerProvider: "gateway",
       rememberProviderKeys: false,
       gatewayBaseUrl: "",
-      gatewayModel: "gpt-5.5",
+      gatewayModel: "claude-sonnet-4-6",
       gatewayCustomModel: "",
       gatewayThinkingIntensity: "high",
       gatewayApiKey: "",
@@ -1779,6 +1845,7 @@ async function mockMessage(message) {
   if (message.type === "tabs:applyLastPlan") return { createdGroupIds: [1, 2] };
   if (message.type === "tabs:undoLastApply") return { restoredTabs: 20 };
   if (message.type === "tabs:getActiveJob") return mockActiveJob;
+  if (message.type === "tabs:canUndo") return { canUndo };
   if (message.type === "tabs:clearAnalysisState") {
     mockActiveJob = null;
     mockLastJob = null;

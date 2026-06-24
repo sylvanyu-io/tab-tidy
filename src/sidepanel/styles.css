@@ -318,9 +318,9 @@ h2 {
 }
 
 .language-toggle:focus-visible {
-  color: var(--muted);
+  color: var(--primary);
   background: transparent;
-  box-shadow: none;
+  box-shadow: 0 0 0 3px var(--primary-soft);
   outline: none;
 }
 
@@ -633,6 +633,16 @@ button:focus-visible {
 .mini-check small {
   color: var(--muted);
   font-size: 11px;
+}
+
+.secret-remember-row {
+  min-height: 42px;
+  padding: 8px 12px;
+  background: transparent;
+}
+
+.secret-remember-row input:disabled + span {
+  opacity: 0.56;
 }
 
 .prompt-field {
@@ -1213,6 +1223,32 @@ details[open] > summary::before {
   background: var(--surface);
   border: 1px dashed var(--line-strong);
   border-radius: var(--radius-md);
+}
+
+.error-panel {
+  display: grid;
+  gap: 6px;
+  padding: 12px;
+  color: var(--danger);
+  background: var(--coral-soft);
+  border: 1px solid color-mix(in srgb, var(--danger) 42%, var(--line));
+  border-radius: var(--radius-md);
+}
+
+.error-panel > div {
+  display: grid;
+  gap: 4px;
+}
+
+.error-panel strong {
+  font-size: 13px;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.error-panel small {
+  color: var(--muted);
+  font-size: 12px;
 }
 
 #detailsRoot {
