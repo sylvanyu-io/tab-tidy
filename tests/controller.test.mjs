@@ -254,10 +254,64 @@ test("applying a plan keeps review-like groups after topic groups", async () => 
 
   await applyValidatedPlan(chrome, plan, inventory, DEFAULT_SETTINGS);
   const groups = await chrome.tabGroups.query({ windowId: 1 });
+  const tabs = await chrome.tabs.query({ windowId: 1 });
 
   assert.deepEqual(
     groups.map((group) => group.title),
     ["当前项目", "待确认"]
+  );
+  assert.deepEqual(
+    tabs.map((tab) => tab.id),
+    [11, 10]
+  );
+});
+
+test("applying reviewTabs moves the runtime review group after topic groups", async () => {
+  const chrome = createFakeChrome({
+    windows: [
+      {
+        id: 1,
+        focused: true,
+        tabs: [
+          { id: 10, title: "Obscure page", url: "https://rare.example", active: true },
+          { id: 11, title: "Current project issue", url: "https://github.com/acme/repo/issues/1" }
+        ]
+      }
+    ]
+  });
+  const inventory = {
+    scope: { kind: "current_window", currentWindowId: 1, windowIds: [1] },
+    tabs: [
+      { tabId: 10, windowId: 1, sequenceIndex: 0, pinned: false, incognito: false },
+      { tabId: 11, windowId: 1, sequenceIndex: 1, pinned: false, incognito: false }
+    ],
+    plannerTabs: [
+      { tabId: 10, windowId: 1, sequenceIndex: 0, pinned: false, incognito: false },
+      { tabId: 11, windowId: 1, sequenceIndex: 1, pinned: false, incognito: false }
+    ],
+    lockedGroups: [],
+    excludedTabs: []
+  };
+  const plan = {
+    schemaVersion: 1,
+    mode: ORGANIZE_MODES.CURRENT_WINDOW,
+    targetWindow: { kind: "current_window", windowId: 1, title: "当前窗口" },
+    groups: [{ groupKey: "work", title: "当前项目", color: "blue", confidence: 0.9, tabRefs: [{ tabId: 11, windowId: 1 }] }],
+    reviewTabs: [{ tabId: 10, windowId: 1, reason: "主题不明确" }],
+    excludedTabs: []
+  };
+
+  await applyValidatedPlan(chrome, plan, inventory, DEFAULT_SETTINGS);
+  const groups = await chrome.tabGroups.query({ windowId: 1 });
+  const tabs = await chrome.tabs.query({ windowId: 1 });
+
+  assert.deepEqual(
+    groups.map((group) => group.title),
+    ["当前项目", "待分类"]
+  );
+  assert.deepEqual(
+    tabs.map((tab) => tab.id),
+    [11, 10]
   );
 });
 

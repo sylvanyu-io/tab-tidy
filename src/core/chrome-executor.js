@@ -78,6 +78,13 @@ export async function applyValidatedPlan(chromeApi, plan, inventory, rawSettings
     }
   }
 
+  await moveTabsToPlanOrder(chromeApi, orderedPlan, targetWindowId, operationJournal);
+  if (operationJournal.length) {
+    rollback.operationJournal.push(...operationJournal);
+    operationJournal.length = 0;
+    await notifyRollbackUpdate(onRollbackUpdate, rollback);
+  }
+
   for (const group of orderedPlan.groups || []) {
     const tabIds = group.tabRefs.map((ref) => ref.tabId);
     const groupId = await recreateGroup(chromeApi, tabIds, targetWindowId, group, settings);
@@ -290,6 +297,43 @@ async function moveTabsToTarget(chromeApi, tabs, targetWindowId, seedTabId, jour
   if (!tabIds.length) return;
   await chromeApi.tabs.move(tabIds, { windowId: targetWindowId, index: -1 });
   journal.push({ type: "move_tabs", tabIds, toWindowId: targetWindowId });
+}
+
+async function moveTabsToPlanOrder(chromeApi, plan, targetWindowId, journal) {
+  const orderedTabIds = planOrderTabIds(plan);
+  if (orderedTabIds.length < 2) return;
+
+  const targetTabs = await chromeApi.tabs.query({ windowId: targetWindowId });
+  const targetTabIds = new Set(targetTabs.map((tab) => tab.id));
+  const orderedLiveTabIds = orderedTabIds.filter((tabId) => targetTabIds.has(tabId));
+  if (orderedLiveTabIds.length < 2) return;
+
+  const orderedSet = new Set(orderedLiveTabIds);
+  const insertionIndex = targetTabs.filter((tab) => !orderedSet.has(tab.id)).length;
+  for (const tabId of [...orderedLiveTabIds].reverse()) {
+    await chromeApi.tabs.move(tabId, { windowId: targetWindowId, index: insertionIndex });
+  }
+  journal.push({ type: "order_tabs", tabIds: orderedLiveTabIds, toWindowId: targetWindowId });
+}
+
+function planOrderTabIds(plan) {
+  const ids = [];
+  const seen = new Set();
+  for (const group of plan.groups || []) {
+    for (const ref of group.tabRefs || []) {
+      if (!seen.has(ref.tabId)) {
+        seen.add(ref.tabId);
+        ids.push(ref.tabId);
+      }
+    }
+  }
+  for (const ref of plan.reviewTabs || []) {
+    if (!seen.has(ref.tabId)) {
+      seen.add(ref.tabId);
+      ids.push(ref.tabId);
+    }
+  }
+  return ids;
 }
 
 async function recreateGroup(chromeApi, tabIds, windowId, groupLike, settings, options = {}) {
