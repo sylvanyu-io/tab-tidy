@@ -216,6 +216,16 @@ test("auto-selects English UI and can manually switch back", async ({ page }) =>
     "placeholder",
     "Example: keep job search, AI papers, and current projects separate; put uncertain pages in review."
   );
+  await expect.poll(() =>
+    page.locator("#promptPreset option").evaluateAll((options) =>
+      options.map((option) => ({ value: option.value, text: option.textContent?.trim() }))
+    )
+  ).toEqual([
+    { value: "conservative", text: "Smart organize" },
+    { value: "media_type", text: "Media type" },
+    { value: "read_later", text: "Read later" },
+    { value: "aggressive_cleanup", text: "Bold grouping" }
+  ]);
   await expect(page.locator("#uiLanguageToggle")).toHaveText("");
   await expect(page.locator("#uiLanguageToggle")).toHaveAttribute("aria-label", "切换界面为中文");
   await expect(page.locator("#closeWindowBtn")).toHaveCount(0);
