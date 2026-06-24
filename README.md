@@ -38,8 +38,21 @@ models for this workflow. The built-in service does not require a key. If you
 use a custom gateway that needs one, set it in "More options"; it is stored only
 in local extension storage.
 
-Page content sampling is off by default. Session-only acknowledgement is not
-persisted; persistent acknowledgement is reserved for a later settings flow.
+Page content access is off by default and the core organizer must still work
+from tab metadata: title, URL signals, original order, windows, and existing
+groups. Development builds expose two opt-in content features:
+
+- "Deep scan uncertain pages while organizing" reads short visible-text
+  summaries only for ambiguous, accessible pages during the current run.
+- "Experimental: continuously accumulate page summaries" asks once for broad
+  optional page access, then silently caches short summaries only for already
+  authorized, live, non-incognito, non-sleeping pages. It does not wake hundreds
+  of discarded tabs.
+
+The experimental continuous-summary feature is not intended for Chrome Web Store
+builds. Use the store build command below to strip content-reading optional
+permissions from the packaged manifest; the UI hides content-reading controls
+when those permissions are absent.
 
 ## Tests
 
@@ -95,7 +108,16 @@ npm run release:check
 ```
 
 This runs automated tests, scans for provider-key patterns, and builds
-`dist/semantic-tab-agent-0.1.0.zip` plus an unpacked `dist/extension`.
+`dist/semantic-tab-agent-<version>.zip` plus an unpacked `dist/extension`.
+
+Chrome Web Store-style package without experimental content-reading controls:
+
+```bash
+npm run build:extension:store
+```
+
+This emits `dist/semantic-tab-agent-<version>-store.zip` and removes `activeTab`,
+`scripting`, and broad optional host permissions from the packed manifest.
 
 Design notes:
 

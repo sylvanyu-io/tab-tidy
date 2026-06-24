@@ -13,6 +13,7 @@
     "assets:icons": "node scripts/generate-icons.mjs",
     "scan:secrets": "node scripts/scan-secrets.mjs",
     "build:extension": "node scripts/build-extension.mjs",
+    "build:extension:store": "EXTENSION_CHANNEL=store node scripts/build-extension.mjs",
     "check": "npm test && npm run test:ui",
     "release:check": "npm run assets:icons && npm run check && npm run scan:secrets && npm run build:extension"
   },

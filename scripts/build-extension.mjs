@@ -1,13 +1,14 @@
-import { cp, mkdir, rm, readFile } from "node:fs/promises";
+import { cp, mkdir, rm, readFile, writeFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
-import { dirname, join } from "node:path";
+import { join } from "node:path";
 import { spawnSync } from "node:child_process";
 
 const rootDir = new URL("..", import.meta.url).pathname;
 const distDir = join(rootDir, "dist");
 const extensionDir = join(distDir, "extension");
 const manifest = JSON.parse(await readFile(join(rootDir, "manifest.json"), "utf8"));
-const zipName = `semantic-tab-agent-${manifest.version}.zip`;
+const channel = process.env.EXTENSION_CHANNEL === "store" ? "store" : "dev";
+const zipName = `semantic-tab-agent-${manifest.version}${channel === "store" ? "-store" : ""}.zip`;
 const zipPath = join(distDir, zipName);
 
 await rm(extensionDir, { recursive: true, force: true });
@@ -18,6 +19,10 @@ for (const path of ["manifest.json", "src", "icons"]) {
   if (existsSync(sourcePath)) {
     await cp(sourcePath, join(extensionDir, path), { recursive: true });
   }
+}
+
+if (channel === "store") {
+  await writeStoreManifest(join(extensionDir, "manifest.json"));
 }
 
 await rm(zipPath, { force: true });
@@ -34,3 +39,13 @@ if (!existsSync(zipPath)) {
 
 console.log(`Built ${zipPath}`);
 console.log(`Unpacked extension: ${extensionDir}`);
+console.log(`Channel: ${channel}`);
+
+async function writeStoreManifest(manifestPath) {
+  const storeManifest = JSON.parse(await readFile(manifestPath, "utf8"));
+  storeManifest.permissions = (storeManifest.permissions || []).filter((permission) => permission !== "activeTab");
+  storeManifest.optional_permissions = (storeManifest.optional_permissions || []).filter((permission) => permission !== "scripting");
+  if (!storeManifest.optional_permissions.length) delete storeManifest.optional_permissions;
+  delete storeManifest.optional_host_permissions;
+  await writeFile(manifestPath, `${JSON.stringify(storeManifest, null, 2)}\n`);
+}
