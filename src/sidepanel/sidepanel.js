@@ -60,6 +60,7 @@ const AI_WAIT_RAMP_MS = 45000;
 const AI_WAIT_COPY_INTERVAL_SECONDS = 4;
 const ACTIVE_JOB_POLL_MS = 600;
 const GENERATED_COPY_CACHE_LIMIT = 4;
+const PAGE_SAMPLE_COUNT_COPY_THRESHOLD = 8;
 const AI_WAIT_COPY = Object.freeze({
   planning: ["理解标题线索", "寻找相邻任务", "避开域名硬分组", "检查不确定页", "整理分组边界"],
   coarse_planning: ["快速扫一遍", "寻找跨窗口主题", "切出候选大组", "标记模糊标签"],
@@ -576,17 +577,16 @@ function previewSummaryText(preview, groupCount, reviewTabsCount, reviewGroupWil
 
 function pageSamplingLine(pageSampling, languageMode) {
   const line = document.createElement("small");
-  if (!pageSampling?.requested) return line;
+  if (!pageSampling?.requested || !pageSampling.ok) return line;
 
-  const missed = Math.max(0, (pageSampling.permissionRequired || 0) + (pageSampling.blocked || 0));
   line.textContent =
     languageMode === "en-US"
-      ? missed
-        ? `Page summaries were read for ${pageSampling.ok}/${pageSampling.requested} tabs; ${missed} used only title and URL signals.`
-        : `Page summaries were read for ${pageSampling.ok}/${pageSampling.requested} tabs.`
-      : missed
-        ? `页面摘要已读 ${pageSampling.ok}/${pageSampling.requested} 个标签页；${missed} 个只参考标题和网址。`
-        : `页面摘要已读 ${pageSampling.ok}/${pageSampling.requested} 个标签页。`;
+      ? pageSampling.ok >= PAGE_SAMPLE_COUNT_COPY_THRESHOLD
+        ? `Referenced ${pageSampling.ok} page summaries plus titles, URLs, and tab order.`
+        : "Added extra page context where available, then organized with titles, URLs, and tab order."
+      : pageSampling.ok >= PAGE_SAMPLE_COUNT_COPY_THRESHOLD
+        ? `已参考 ${pageSampling.ok} 个页面摘要，并结合标题、网址和原始顺序整理。`
+        : "已补充部分页面线索，并结合标题、网址和原始顺序整理。";
   return line;
 }
 

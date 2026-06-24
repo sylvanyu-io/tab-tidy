@@ -26,6 +26,7 @@ const PROGRESS_COPY_COUNT = 90;
 const PROGRESS_COPY_MAX_LENGTH = 18;
 const PAGE_SAMPLE_CONCURRENCY = 6;
 const PAGE_SAMPLE_TIMEOUT_MS = 1800;
+const PAGE_SAMPLE_COUNT_COPY_THRESHOLD = 8;
 
 export async function handleRuntimeMessage(chromeApi, message) {
   switch (message?.type) {
@@ -649,14 +650,14 @@ async function attachPageSamples(chromeApi, inventory, settings, options = {}) {
   await options.onProgress?.({
     phase: "sampling",
     progress: 20 + Math.round((completed / candidates.length) * 16),
-    message: `正在读取页面摘要 ${completed}/${candidates.length}，已读 ${sampledOk} 个`
+    message: pageSamplingProgressMessage(sampledOk)
   });
 
   const sampleOne = async (tab) => {
     await options.onProgress?.({
       phase: "sampling",
       progress: 20 + Math.round((completed / candidates.length) * 16),
-      message: `正在读取页面摘要 ${completed}/${candidates.length}，已读 ${sampledOk} 个`
+      message: pageSamplingProgressMessage(sampledOk)
     });
     const liveTab = await getLiveTab(chromeApi, tab.tabId);
     const sampleResult = liveTab
@@ -682,7 +683,7 @@ async function attachPageSamples(chromeApi, inventory, settings, options = {}) {
     await options.onProgress?.({
       phase: "sampling",
       progress: 20 + Math.round((completed / candidates.length) * 16),
-      message: `正在读取页面摘要 ${completed}/${candidates.length}，已读 ${sampledOk} 个`
+      message: pageSamplingProgressMessage(sampledOk)
     });
   };
 
@@ -703,11 +704,19 @@ async function attachPageSamples(chromeApi, inventory, settings, options = {}) {
   await options.onProgress?.({
     phase: "sampling",
     progress: 36,
-    message: sampledBlocked
-      ? `页面摘要：已读 ${sampledOk}/${candidates.length} 个，${sampledBlocked} 个只参考标题`
-      : `页面摘要：已读 ${sampledOk}/${candidates.length} 个`
+    message: pageSamplingDoneMessage(sampledOk)
   });
   return inventory;
+}
+
+function pageSamplingProgressMessage(sampledOk) {
+  return sampledOk >= PAGE_SAMPLE_COUNT_COPY_THRESHOLD ? `正在补充页面线索，已补充 ${sampledOk} 个` : "正在补充页面线索";
+}
+
+function pageSamplingDoneMessage(sampledOk) {
+  if (sampledOk >= PAGE_SAMPLE_COUNT_COPY_THRESHOLD) return `已补充 ${sampledOk} 个页面摘要`;
+  if (sampledOk > 0) return "已补充部分页面线索";
+  return "继续参考标题、网址和原始顺序";
 }
 
 async function attachCachedPageSamples(chromeApi, inventory, settings, options = {}) {

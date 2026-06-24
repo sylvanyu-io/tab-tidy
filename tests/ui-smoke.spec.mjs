@@ -140,7 +140,7 @@ test("popup renders settings and mock preview", async ({ page }) => {
   await expect(
     page.locator(".preview").getByText("AI 已梳理 23 个标签页，识别出 2 个主题；20 个已自动归类，3 个留到「待分类」。")
   ).toBeVisible();
-  await expect(page.locator(".preview").getByText("页面摘要已读 2/3 个标签页；1 个只参考标题和网址。")).toBeVisible();
+  await expect(page.locator(".preview").getByText("已补充部分页面线索，并结合标题、网址和原始顺序整理。")).toBeVisible();
   await expect(page.locator(".preview").getByText("另有 1 个固定、无痕或受限标签页未参与整理。")).toBeVisible();
   await expect(page.getByText("待确认")).toHaveCount(0);
   await expect(page.locator(".preview-stats")).toHaveCount(0);
@@ -1384,7 +1384,7 @@ test("canceling generation returns to setup without error preview", async ({ pag
       status: "running",
       phase: "sampling",
       progress: 24,
-      message: "正在读取页面摘要 67/244，已读 1 个",
+      message: "正在补充页面线索",
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString()
     };
@@ -1422,7 +1422,7 @@ test("canceling generation returns to setup without error preview", async ({ pag
 
   await page.goto(`${baseUrl}/src/sidepanel/index.html`);
   await page.getByRole("button", { name: "生成方案" }).click();
-  await expect(page.locator("#progressLabel")).toContainText("正在读取页面摘要");
+  await expect(page.locator("#progressLabel")).toContainText("正在补充页面线索");
   await page.getByRole("button", { name: "取消" }).click();
   await expect(page.locator("#statusText")).toHaveText("已取消整理。");
   await expect(page.locator("#cancelBtn")).toBeHidden();
