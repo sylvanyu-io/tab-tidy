@@ -215,27 +215,29 @@ export async function applyLastPlan(chromeApi) {
 
   const latestInventory = await collectTabInventory(chromeApi, job.settings, job.invocation);
   let planForApply = job.plan;
+  let inventoryForApply = latestInventory;
   let rebaseSummary = null;
   let latestValidation = validatePlan(planForApply, latestInventory, job.settings);
   if (!latestValidation.ok) {
-    const rebased = rebasePlanForLatestInventory(job.plan, latestInventory, job.settings);
+    const rebased = rebasePlanForLatestInventory(job.plan, job.inventory, latestInventory, job.settings);
     if (!rebased.validation.ok) {
       throw new Error(`标签页变化较多，请重新生成方案。${rebased.validation.errors.join(" ")}`);
     }
-    if (shouldRejectRebasedPlan(rebased.summary, latestInventory)) {
+    if (shouldRejectRebasedPlan(rebased.summary, job.inventory, latestInventory)) {
       throw new Error(`标签页变化较多，请重新生成方案。变化标签页 ${rebased.summary.changedTabsCount} 个。`);
     }
     planForApply = rebased.plan;
+    inventoryForApply = rebased.inventory;
     rebaseSummary = rebased.summary;
   }
 
-  const rollbackSnapshot = await createRollbackSnapshot(chromeApi, latestInventory, job.settings);
+  const rollbackSnapshot = await createRollbackSnapshot(chromeApi, inventoryForApply, job.settings);
   await setLocal(chromeApi, STORAGE_KEYS.lastRollback, rollbackSnapshot);
 
   const { rollback, result } = await applyValidatedPlan(
     chromeApi,
     planForApply,
-    latestInventory,
+    inventoryForApply,
     job.settings,
     rollbackSnapshot,
     (nextRollback) => setLocal(chromeApi, STORAGE_KEYS.lastRollback, nextRollback)
@@ -244,13 +246,18 @@ export async function applyLastPlan(chromeApi) {
   return rebaseSummary ? { ...result, rebasedPlan: rebaseSummary } : result;
 }
 
-function rebasePlanForLatestInventory(plan, latestInventory, rawSettings = {}) {
+function rebasePlanForLatestInventory(plan, originalInventory, latestInventory, rawSettings = {}) {
   const settings = normalizeSettings(rawSettings);
-  const latestTabsById = new Map((latestInventory.plannerTabs || []).map((tab) => [tab.tabId, tab]));
+  const originalEligibleIds = new Set((originalInventory?.tabs || []).map((tab) => tab.tabId));
+  const originalPlannerIds = new Set((originalInventory?.plannerTabs || []).map((tab) => tab.tabId));
+  const inventoryForApply = filterInventoryForApply(latestInventory, originalEligibleIds, originalPlannerIds);
+  const latestTabsById = new Map((inventoryForApply.plannerTabs || []).map((tab) => [tab.tabId, tab]));
   const seen = new Set();
   const summary = {
     removedTabIds: [],
-    addedReviewTabIds: [],
+    skippedNewTabIds: (latestInventory.plannerTabs || [])
+      .filter((tab) => !originalPlannerIds.has(tab.tabId))
+      .map((tab) => tab.tabId),
     duplicateTabIds: [],
     droppedGroupKeys: [],
     changedTabsCount: 0
@@ -291,24 +298,13 @@ function rebasePlanForLatestInventory(plan, latestInventory, rawSettings = {}) {
     .map((ref) => rebaseRef(ref, "review"))
     .filter(Boolean);
 
-  for (const tab of latestInventory.plannerTabs || []) {
-    if (seen.has(tab.tabId)) continue;
-    seen.add(tab.tabId);
-    summary.addedReviewTabIds.push(tab.tabId);
-    reviewTabs.push({
-      tabId: tab.tabId,
-      windowId: tab.windowId,
-      reason: "Tab appeared or changed after preview; left for review."
-    });
-  }
-
   const rebasedPlan = {
     ...plan,
     mode: settings.organizeMode,
-    targetWindow: rebaseTargetWindow(plan.targetWindow, latestInventory, settings),
+    targetWindow: rebaseTargetWindow(plan.targetWindow, inventoryForApply, settings),
     groups,
     reviewTabs,
-    excludedTabs: (latestInventory.excludedTabs || []).map((tab) => ({
+    excludedTabs: (inventoryForApply.excludedTabs || []).map((tab) => ({
       tabId: tab.tabId,
       windowId: tab.windowId,
       reason: tab.exclusionReason || "Excluded by current settings."
@@ -316,14 +312,32 @@ function rebasePlanForLatestInventory(plan, latestInventory, rawSettings = {}) {
   };
 
   summary.removedTabIds = uniqueNumbers(summary.removedTabIds);
-  summary.addedReviewTabIds = uniqueNumbers(summary.addedReviewTabIds);
+  summary.skippedNewTabIds = uniqueNumbers(summary.skippedNewTabIds);
   summary.duplicateTabIds = uniqueNumbers(summary.duplicateTabIds);
-  summary.changedTabsCount = summary.removedTabIds.length + summary.addedReviewTabIds.length + summary.duplicateTabIds.length;
+  summary.changedTabsCount = summary.removedTabIds.length + summary.skippedNewTabIds.length + summary.duplicateTabIds.length;
 
   return {
     plan: rebasedPlan,
-    validation: validatePlan(rebasedPlan, latestInventory, settings),
+    inventory: inventoryForApply,
+    validation: validatePlan(rebasedPlan, inventoryForApply, settings),
     summary
+  };
+}
+
+function filterInventoryForApply(inventory, originalEligibleIds, originalPlannerIds) {
+  const filterOriginalEligible = (tab) => originalEligibleIds.has(tab.tabId);
+  const stablePlannerTabs = (inventory.plannerTabs || []).filter((tab) => originalPlannerIds.has(tab.tabId));
+  return {
+    ...inventory,
+    tabs: (inventory.tabs || []).filter(filterOriginalEligible),
+    plannerTabs: stablePlannerTabs,
+    lockedGroups: (inventory.lockedGroups || [])
+      .map((group) => ({
+        ...group,
+        tabIds: (group.tabIds || []).filter((tabId) => originalEligibleIds.has(tabId))
+      }))
+      .filter((group) => group.tabIds.length),
+    excludedTabs: inventory.excludedTabs || []
   };
 }
 
@@ -358,10 +372,10 @@ function rebaseTargetWindow(targetWindow, inventory, settings) {
   return { ...(targetWindow || {}), kind: TARGET_WINDOW_MODES.NEW_WINDOW };
 }
 
-function shouldRejectRebasedPlan(summary, inventory) {
+function shouldRejectRebasedPlan(summary, originalInventory, latestInventory) {
   const changed = summary.changedTabsCount || 0;
   if (!changed) return false;
-  const eligible = Math.max(1, (inventory.plannerTabs || []).length);
+  const eligible = Math.max(1, (originalInventory?.plannerTabs || latestInventory.plannerTabs || []).length);
   const allowedChanges = Math.max(5, Math.min(APPLY_REBASE_MAX_CHANGED_TABS, Math.ceil(eligible * APPLY_REBASE_MAX_CHANGED_RATIO)));
   return changed > allowedChanges;
 }

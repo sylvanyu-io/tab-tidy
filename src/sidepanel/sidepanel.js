@@ -353,7 +353,7 @@ function applyResultStatus(result) {
   const groupCount = result.createdGroupIds?.length || 0;
   const changedTabs = result.rebasedPlan?.changedTabsCount || 0;
   if (changedTabs) {
-    return `已创建 ${groupCount} 个分组；${changedTabs} 个变化标签页已跳过或留待分类`;
+    return `已创建 ${groupCount} 个分组；${changedTabs} 个变化标签页已跳过`;
   }
   return `已创建 ${groupCount} 个分组`;
 }

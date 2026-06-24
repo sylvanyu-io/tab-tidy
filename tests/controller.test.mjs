@@ -146,9 +146,9 @@ test("apply rebases small tab changes since preview", async () => {
   const result = await applyLastPlan(chrome);
   assert.equal(result.rebasedPlan.changedTabsCount, 2);
   assert.deepEqual(result.rebasedPlan.removedTabIds, [11]);
-  assert.deepEqual(result.rebasedPlan.addedReviewTabIds, [12]);
+  assert.deepEqual(result.rebasedPlan.skippedNewTabIds, [12]);
   assert.notEqual((await chrome.tabs.get(10)).groupId, -1);
-  assert.notEqual((await chrome.tabs.get(12)).groupId, -1);
+  assert.equal((await chrome.tabs.get(12)).groupId, -1);
 });
 
 test("apply asks to regenerate when too many tabs changed since preview", async () => {
