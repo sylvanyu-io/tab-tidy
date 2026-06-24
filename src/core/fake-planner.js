@@ -1,4 +1,4 @@
-import { ORGANIZE_MODES, PROMPT_PRESET_TEXT, TARGET_WINDOW_MODES, normalizeSettings } from "../shared/settings.js";
+import { ORGANIZE_MODES, PROMPT_PRESET_TEXT, REVIEW_GROUP_MODES, TARGET_WINDOW_MODES, normalizeSettings } from "../shared/settings.js";
 import { localizedText, targetWindowTitle } from "../shared/language.js";
 
 const GROUP_COLORS = ["blue", "green", "purple", "cyan", "yellow", "pink", "grey"];
@@ -57,6 +57,11 @@ export function createFakePlan(inventory, rawSettings = {}) {
   for (const tab of plannerTabs) {
     const match = classifyTab(tab, settings);
     if (!match || match.confidence < settings.minConfidenceToApply) {
+      if (settings.reviewGroupMode === REVIEW_GROUP_MODES.LEAVE_UNGROUPED) {
+        const fallback = closestFallbackMatch(tab, settings);
+        addTabToGroup(groupsByKey, fallback, tab);
+        continue;
+      }
       reviewTabs.push({
         tabId: tab.tabId,
         windowId: tab.windowId,
@@ -65,17 +70,7 @@ export function createFakePlan(inventory, rawSettings = {}) {
       continue;
     }
 
-    if (!groupsByKey.has(match.key)) {
-      groupsByKey.set(match.key, {
-        groupKey: match.key,
-        title: match.title,
-        color: match.color,
-        confidence: match.confidence,
-        tabRefs: [],
-        reason: match.reason
-      });
-    }
-    groupsByKey.get(match.key).tabRefs.push({ tabId: tab.tabId, windowId: tab.windowId });
+    addTabToGroup(groupsByKey, match, tab);
   }
 
   const groups = splitLargeGroups([...groupsByKey.values()], plannerTabs, settings)
@@ -110,6 +105,34 @@ export function createFakePlan(inventory, rawSettings = {}) {
       presetText: PROMPT_PRESET_TEXT[settings.promptPreset],
       customPromptUsed: Boolean(settings.customPrompt.trim())
     }
+  };
+}
+
+function addTabToGroup(groupsByKey, match, tab) {
+  if (!groupsByKey.has(match.key)) {
+    groupsByKey.set(match.key, {
+      groupKey: match.key,
+      title: match.title,
+      color: match.color,
+      confidence: match.confidence,
+      tabRefs: [],
+      reason: match.reason
+    });
+  }
+  groupsByKey.get(match.key).tabRefs.push({ tabId: tab.tabId, windowId: tab.windowId });
+}
+
+function closestFallbackMatch(tab, settings) {
+  return {
+    key: "closest-fit",
+    title: localizedText(settings.languageMode, "综合整理", "Closest Fit"),
+    color: "blue",
+    confidence: Math.max(settings.minConfidenceToApply, 0.65),
+    reason: localizedText(
+      settings.languageMode,
+      "标签信息较少，已按设置放入最接近的整理组。",
+      "The tab had limited metadata, so it was placed into the closest useful group."
+    )
   };
 }
 

@@ -7,14 +7,14 @@ import {
   normalizeSettings
 } from "../shared/settings.js";
 import { reviewGroupTitle } from "../shared/language.js";
-import { normalizePlanOrder } from "./plan-normalizer.js";
+import { normalizePlanForSettings } from "./plan-normalizer.js";
 import { validatePlan } from "./plan-validator.js";
 
 const NO_GROUP_ID = -1;
 
 export async function applyValidatedPlan(chromeApi, plan, inventory, rawSettings = {}, rollbackSnapshot = null, onRollbackUpdate = null) {
   const settings = normalizeSettings(rawSettings);
-  const orderedPlan = normalizePlanOrder(plan, inventory);
+  const orderedPlan = normalizePlanForSettings(plan, inventory, settings);
   const validation = validatePlan(orderedPlan, inventory, settings);
   if (!validation.ok) {
     throw new Error(`Cannot apply an invalid plan: ${validation.errors.join(" ")}`);

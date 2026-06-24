@@ -12,7 +12,7 @@ import { applyValidatedPlan, createRollbackSnapshot, undoFromRollback } from "./
 import { cachedPageSampleForTab, rememberPageSummary } from "./page-summary-cache.js";
 import { requestPageSample } from "./page-sampler.js";
 import { createPlan } from "./planner.js";
-import { normalizePlanOrder } from "./plan-normalizer.js";
+import { normalizePlanForSettings } from "./plan-normalizer.js";
 import { buildPreview } from "./preview.js";
 import { STORAGE_KEYS, getLocal, removeLocal, setLocal } from "./storage.js";
 import { collectTabInventory } from "./tab-inventory.js";
@@ -411,6 +411,7 @@ function rebasePlanForLatestInventory(plan, originalInventory, latestInventory, 
       reason: tab.exclusionReason || "Excluded by current settings."
     }))
   };
+  const normalizedRebasedPlan = normalizePlanForSettings(rebasedPlan, inventoryForApply, settings);
 
   summary.removedTabIds = uniqueNumbers(summary.removedTabIds);
   summary.addedReviewTabIds = uniqueNumbers(summary.addedReviewTabIds);
@@ -420,9 +421,9 @@ function rebasePlanForLatestInventory(plan, originalInventory, latestInventory, 
     summary.removedTabIds.length + summary.addedReviewTabIds.length + summary.skippedNewTabIds.length + summary.duplicateTabIds.length;
 
   return {
-    plan: rebasedPlan,
+    plan: normalizedRebasedPlan,
     inventory: inventoryForApply,
-    validation: validatePlan(rebasedPlan, inventoryForApply, settings),
+    validation: validatePlan(normalizedRebasedPlan, inventoryForApply, settings),
     summary
   };
 }
@@ -576,7 +577,7 @@ function settingsForPersistence(settings) {
 
 async function createValidatedPlan(inventory, settings, options = {}) {
   throwIfCanceled(options.signal);
-  const plan = normalizePlanOrder(await createPlan(inventory, settings, options), inventory);
+  const plan = normalizePlanForSettings(await createPlan(inventory, settings, options), inventory, settings);
   await options.onProgress?.({ phase: "validation", progress: 88, message: "正在校验 AI 方案" });
   let validation = validatePlan(plan, inventory, settings);
   if (validation.ok || settings.plannerProvider === PLANNER_PROVIDERS.FAKE) {
@@ -599,7 +600,7 @@ async function createValidatedPlan(inventory, settings, options = {}) {
       .join("\n")
       .slice(0, 4000)
   };
-  const retryPlan = normalizePlanOrder(await createPlan(inventory, retrySettings, options), inventory);
+  const retryPlan = normalizePlanForSettings(await createPlan(inventory, retrySettings, options), inventory, settings);
   await options.onProgress?.({ phase: "validation", progress: 94, message: "正在校验修正方案" });
   validation = validatePlan(retryPlan, inventory, settings);
   return { plan: retryPlan, validation };

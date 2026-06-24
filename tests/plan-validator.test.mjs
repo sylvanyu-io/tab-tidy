@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { normalizePlanOrder } from "../src/core/plan-normalizer.js";
+import { normalizePlanForSettings, normalizePlanOrder } from "../src/core/plan-normalizer.js";
 import { validatePlan } from "../src/core/plan-validator.js";
-import { DEFAULT_SETTINGS, EXISTING_GROUP_MODES, ORGANIZE_MODES, TARGET_WINDOW_MODES } from "../src/shared/settings.js";
+import { DEFAULT_SETTINGS, EXISTING_GROUP_MODES, ORGANIZE_MODES, REVIEW_GROUP_MODES, TARGET_WINDOW_MODES } from "../src/shared/settings.js";
 
 test("current-window mode rejects tabs from another window", () => {
   const inventory = {
@@ -125,7 +125,7 @@ test("groups above the tab limit are invalid", () => {
   assert.match(result.errors.join("\n"), /above the limit 2/);
 });
 
-test("selected target window must come from settings, not planner choice", () => {
+test("legacy selected target window setting is ignored in consolidate mode", () => {
   const settings = {
     ...DEFAULT_SETTINGS,
     organizeMode: ORGANIZE_MODES.CONSOLIDATE_ONE_WINDOW,
@@ -149,7 +149,7 @@ test("selected target window must come from settings, not planner choice", () =>
 
   const result = validatePlan(plan, inventory, settings);
   assert.equal(result.ok, false);
-  assert.match(result.errors.join("\n"), /targetWindow\.windowId must be 2/);
+  assert.match(result.errors.join("\n"), /does not match setting current_window/);
 });
 
 test("current target window in consolidate mode must be the invocation window", () => {
@@ -206,6 +206,45 @@ test("review-like groups are ordered after topic groups", () => {
     normalized.groups.map((group) => group.title),
     ["当前项目", "待确认"]
   );
+});
+
+test("review tabs are assigned to closest groups when separate review is disabled", () => {
+  const inventory = {
+    scope: { kind: "current_window", currentWindowId: 1, windowIds: [1] },
+    plannerTabs: [
+      { tabId: 10, windowId: 1, sequenceIndex: 0, pinned: false, incognito: false },
+      { tabId: 11, windowId: 1, sequenceIndex: 1, pinned: false, incognito: false },
+      { tabId: 12, windowId: 1, sequenceIndex: 2, pinned: false, incognito: false },
+      { tabId: 20, windowId: 1, sequenceIndex: 20, pinned: false, incognito: false }
+    ],
+    lockedGroups: [],
+    excludedTabs: []
+  };
+  const plan = {
+    schemaVersion: 1,
+    mode: "current_window",
+    targetWindow: { kind: "current_window", windowId: 1, title: "Current Window" },
+    groups: [
+      { groupKey: "docs", title: "技术文档", color: "blue", confidence: 0.9, tabRefs: [{ tabId: 10, windowId: 1 }] },
+      { groupKey: "review", title: "待分类", color: "grey", confidence: 0.9, tabRefs: [{ tabId: 11, windowId: 1 }] },
+      { groupKey: "media", title: "视频资料", color: "green", confidence: 0.9, tabRefs: [{ tabId: 20, windowId: 1 }] }
+    ],
+    reviewTabs: [{ tabId: 12, windowId: 1, reason: "不确定" }],
+    excludedTabs: []
+  };
+
+  const normalized = normalizePlanForSettings(plan, inventory, {
+    ...DEFAULT_SETTINGS,
+    reviewGroupMode: REVIEW_GROUP_MODES.LEAVE_UNGROUPED
+  });
+
+  assert.deepEqual(
+    normalized.groups.map((group) => group.title),
+    ["技术文档", "视频资料"]
+  );
+  assert.deepEqual(normalized.groups[0].tabRefs.map((ref) => ref.tabId), [10, 11, 12]);
+  assert.deepEqual(normalized.reviewTabs, []);
+  assert.equal(validatePlan(normalized, inventory, DEFAULT_SETTINGS).ok, true);
 });
 
 test("invalid plan collections are rejected without throwing", () => {

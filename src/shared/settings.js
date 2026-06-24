@@ -157,6 +157,8 @@ export function normalizeSettings(input = {}) {
       merged[key] = DEFAULT_SETTINGS[key];
     }
   }
+  merged.targetWindowMode = TARGET_WINDOW_MODES.CURRENT_WINDOW;
+  merged.undoTargetWindowMode = UNDO_TARGET_WINDOW_MODES.LEAVE_EMPTY;
 
   merged.includePinnedTabs = Boolean(merged.includePinnedTabs);
   merged.includeIncognitoTabs = Boolean(merged.includeIncognitoTabs);

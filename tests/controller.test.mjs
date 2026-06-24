@@ -315,7 +315,7 @@ test("applying reviewTabs moves the runtime review group after topic groups", as
   );
 });
 
-test("consolidate_one_window moves all eligible normal-window tabs into one target", async () => {
+test("consolidate_one_window merges all eligible normal-window tabs into the invocation window", async () => {
   const chrome = createFakeChrome({
     windows: [
       {
@@ -340,10 +340,12 @@ test("consolidate_one_window moves all eligible normal-window tabs into one targ
   const job = await analyzeTabs(chrome, settings, { windowId: 1 });
   assert.equal(job.validation.ok, true);
   assert.equal(job.preview.requiresConfirmation, true);
+  assert.equal(job.plan.targetWindow.windowId, 1);
 
   const result = await applyLastPlan(chrome);
   assert.equal(result.movedTabsCount, 2);
-  assert.equal(result.createdWindowIds.length, 1);
+  assert.deepEqual(result.createdWindowIds, []);
+  assert.equal(result.targetWindowId, 1);
   const targetWindow = await chrome.windows.get(result.targetWindowId, { populate: true });
   assert.deepEqual(
     targetWindow.tabs.map((tab) => tab.id).sort(),
