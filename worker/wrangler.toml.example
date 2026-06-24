@@ -1,0 +1,21 @@
+name = "tab-tidy-gateway"
+main = "src/index.js"
+compatibility_date = "2026-06-24"
+
+[[routes]]
+pattern = "cliproxy.sylvanyu.io"
+custom_domain = true
+
+[[kv_namespaces]]
+binding = "RATE_LIMIT_KV"
+id = "replace-with-production-kv-namespace-id"
+preview_id = "replace-with-preview-kv-namespace-id"
+
+[vars]
+ALLOWED_MODELS = "gpt-5.5,claude-opus-4-8,claude-sonnet-4-6"
+MAX_BODY_BYTES = "1000000"
+MAX_TOKENS = "8192"
+IP_HOURLY_REQUESTS = "60"
+INSTALL_DAILY_REQUESTS = "100"
+INSTALL_DAILY_PAGE_SUMMARY_REQUESTS = "20"
+GLOBAL_DAILY_REQUESTS = "3000"

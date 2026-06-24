@@ -1,0 +1,60 @@
+# Tab Tidy Gateway Worker
+
+Cloudflare Worker wrapper for the default free Tab Tidy AI gateway.
+
+The extension sends chat-completions-compatible planner requests to this Worker.
+The Worker validates the request, applies coarse anti-abuse limits, injects the
+real upstream API key on the server side, and forwards only to the configured
+upstream base URL.
+
+## What It Protects
+
+- No upstream API key is shipped in the extension.
+- Clients cannot override the upstream target.
+- Only the planner model allowlist is accepted by default:
+  `gpt-5.5`, `claude-opus-4-8`, `claude-sonnet-4-6`.
+- Request body size and `max_tokens` are capped before upstream forwarding.
+- KV counters limit global, IP, install-id, and page-summary usage.
+
+This is not account-grade billing control. It is a practical free-tier abuse
+brake for an open-source browser extension before login exists.
+
+## Required Cloudflare Resources
+
+Create a Workers KV namespace and bind it as `RATE_LIMIT_KV`. Copy
+`wrangler.toml.example` to `wrangler.toml`, then fill in the KV namespace IDs.
+
+Set upstream values as Worker secrets:
+
+```bash
+npx wrangler secret put UPSTREAM_BASE_URL
+npx wrangler secret put UPSTREAM_API_KEY
+```
+
+If the origin LLM gateway is behind Cloudflare Access, also set:
+
+```bash
+npx wrangler secret put CF_ACCESS_CLIENT_ID
+npx wrangler secret put CF_ACCESS_CLIENT_SECRET
+```
+
+Then deploy:
+
+```bash
+npx wrangler deploy --config worker/wrangler.toml
+```
+
+Health check:
+
+```bash
+curl https://cliproxy.sylvanyu.io/healthz
+```
+
+## Local Tests
+
+```bash
+npm run test:worker
+```
+
+The tests use an in-memory KV and mocked upstream fetch. They never call the
+real LLM gateway.

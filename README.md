@@ -102,3 +102,4 @@ Design notes:
 - [Multi-window feasibility](docs/multi-window-feasibility.md)
 - [Permissions research](docs/permissions-research.md)
 - [Release readiness](docs/release-readiness.md)
+- [Gateway Worker](worker/README.md)
