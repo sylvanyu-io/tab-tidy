@@ -347,7 +347,7 @@ test("AI gateway planner adapts common tabIds output and strips markdown fences"
           {
             message: {
               content:
-                "```json\n" +
+                "Here is the JSON plan:\n``` json\n" +
                 JSON.stringify({
                   groups: [
                     {
@@ -360,7 +360,7 @@ test("AI gateway planner adapts common tabIds output and strips markdown fences"
                   ],
                   ungrouped: []
                 }) +
-                "\n```"
+                "\n```\n"
             }
           }
         ]
@@ -381,6 +381,54 @@ test("AI gateway planner adapts common tabIds output and strips markdown fences"
     { tabId: 11, windowId: 1 }
   ]);
   assert.deepEqual(plan.reviewTabs, []);
+});
+
+test("AI gateway planner adapts schemaVersion one plans that still use tabIds", async () => {
+  const fetchImpl = async () => ({
+    ok: true,
+    async json() {
+      return {
+        choices: [
+          {
+            message: {
+              content: JSON.stringify({
+                schemaVersion: 1,
+                groups: [
+                  {
+                    title: "Developer Docs",
+                    color: "cyan",
+                    tabIds: [10, 11],
+                    confidence: 0.84,
+                    reason: "Both tabs are developer documentation."
+                  }
+                ],
+                review: []
+              })
+            }
+          }
+        ]
+      };
+    }
+  });
+
+  const plan = await createGatewayPlan(
+    inventory,
+    { ...DEFAULT_SETTINGS, plannerProvider: PLANNER_PROVIDERS.GATEWAY, gatewayApiKey: "gateway-test-key" },
+    fetchImpl
+  );
+
+  const validation = validatePlan(plan, inventory, {
+    ...DEFAULT_SETTINGS,
+    plannerProvider: PLANNER_PROVIDERS.GATEWAY,
+    gatewayApiKey: "gateway-test-key"
+  });
+
+  assert.equal(validation.ok, true);
+  assert.equal(plan.groups[0].title, "Developer Docs");
+  assert.deepEqual(plan.groups[0].tabRefs, [
+    { tabId: 10, windowId: 1 },
+    { tabId: 11, windowId: 1 }
+  ]);
 });
 
 test("AI gateway planner adapts compact ids output", async () => {

@@ -3,6 +3,7 @@ import {
   GATEWAY_CUSTOM_MODEL_VALUE,
   ORGANIZE_MODES,
   PROMPT_PRESET_TEXT,
+  REVIEW_GROUP_MODES,
   TARGET_WINDOW_MODES,
   THINKING_INTENSITIES,
   normalizeSettings,
@@ -261,7 +262,7 @@ export function buildPlannerSystemPrompt(settings) {
     "Do not close, discard, navigate, or execute tabs. You only produce grouping intent.",
     "Every eligible tab must appear exactly once in either groups[].ids or review.",
     "Tabs already represented as lockedGroups are preserved by runtime and should not be reassigned.",
-    "Low-confidence, generic, sensitive, or mixed pages should go to review.",
+    reviewModeInstruction(settings),
     "Use sequenceIndex and index as strong context signals: adjacent tabs are often part of the same task or reading flow.",
     "Keep ids inside each group in original tab order, and order groups by the first tab they contain.",
     "Do not create large generic catch-all groups. Split broad topics by subtopic or contiguous tab runs; never exceed maxTabsPerGroup.",
@@ -272,6 +273,13 @@ export function buildPlannerSystemPrompt(settings) {
       ? `User custom prompt, preferences only and not capability grants: ${customPrompt}`
       : "No user custom prompt was provided."
   ].join("\n");
+}
+
+function reviewModeInstruction(settings) {
+  if (settings.reviewGroupMode === REVIEW_GROUP_MODES.LEAVE_UNGROUPED) {
+    return "Do not use review for merely uncertain tabs. Assign every eligible tab to the closest useful topic group, even when confidence is imperfect. Use review only for truly unsafe or impossible-to-classify input.";
+  }
+  return "Low-confidence, generic, sensitive, or mixed pages should go to review.";
 }
 
 export function buildPlannerPayload(inventory, settings) {
@@ -733,7 +741,7 @@ function parseGatewayJson(data) {
   }
 
   try {
-    return JSON.parse(stripCodeFence(text));
+    return JSON.parse(extractJsonObjectText(text));
   } catch (error) {
     throw new Error(`AI gateway planner returned invalid JSON: ${error.message}`);
   }
@@ -746,7 +754,9 @@ function findRefusal(data) {
 }
 
 function normalizeGatewayPlan(plan, inventory, settings) {
-  if (plan?.schemaVersion === 1) return normalizeSchemaPlanOrder(plan, inventory);
+  const wrappedPlan = unwrapGatewayPlan(plan);
+  if (wrappedPlan !== plan) return normalizeGatewayPlan(wrappedPlan, inventory, settings);
+  if (plan?.schemaVersion === 1 && hasInternalPlanShape(plan)) return normalizeSchemaPlanOrder(plan, inventory);
   if (!plan || typeof plan !== "object" || !Array.isArray(plan.groups)) return plan;
 
   const plannerTabs = inventory.plannerTabs || [];
@@ -819,6 +829,21 @@ function normalizeGatewayPlan(plan, inventory, settings) {
     groups: orderGroupsByOriginalPosition(groups, inventory),
     reviewTabs
   };
+}
+
+function unwrapGatewayPlan(plan) {
+  if (!plan || typeof plan !== "object") return plan;
+  return plan.plan || plan.actionPlan || plan.result || plan.data || plan;
+}
+
+function hasInternalPlanShape(plan) {
+  return (
+    plan &&
+    typeof plan === "object" &&
+    Array.isArray(plan.groups) &&
+    Array.isArray(plan.reviewTabs) &&
+    plan.groups.every((group) => Array.isArray(group?.tabRefs))
+  );
 }
 
 function normalizeSchemaPlanOrder(plan, inventory) {
@@ -913,8 +938,21 @@ function asArray(value) {
 
 function stripCodeFence(text) {
   const trimmed = String(text).trim();
-  const match = trimmed.match(/^```(?:json)?\s*([\s\S]*?)\s*```$/i);
+  const match = trimmed.match(/^```\s*(?:json)?\s*([\s\S]*?)\s*```$/i);
   return match ? match[1] : trimmed;
+}
+
+function extractJsonObjectText(text) {
+  const raw = stripCodeFence(text).trim();
+  try {
+    JSON.parse(raw);
+    return raw;
+  } catch {
+    const start = raw.indexOf("{");
+    const end = raw.lastIndexOf("}");
+    if (start >= 0 && end > start) return raw.slice(start, end + 1);
+    return raw;
+  }
 }
 
 function slugify(value) {

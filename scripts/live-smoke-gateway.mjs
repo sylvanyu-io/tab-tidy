@@ -1,7 +1,4 @@
-import { collectTabInventory } from "../src/core/tab-inventory.js";
-import { createGatewayPlan } from "../src/core/gateway-planner.js";
-import { validatePlan } from "../src/core/plan-validator.js";
-import { buildPreview } from "../src/core/preview.js";
+import { analyzeTabs } from "../src/core/controller.js";
 import { BUILTIN_GATEWAY_BASE_URL, DEFAULT_SETTINGS, PLANNER_PROVIDERS } from "../src/shared/settings.js";
 import { createFakeChrome } from "../tests/helpers/fake-chrome.mjs";
 
@@ -32,10 +29,7 @@ const chrome = createFakeChrome({
   ]
 });
 
-const inventory = await collectTabInventory(chrome, settings, { windowId: 1 });
-const plan = await createGatewayPlan(inventory, settings);
-const validation = validatePlan(plan, inventory, settings);
-const preview = buildPreview(plan, inventory, validation, settings);
+const job = await analyzeTabs(chrome, settings, { windowId: 1 });
 
 console.log(
   JSON.stringify(
@@ -44,12 +38,12 @@ console.log(
       baseUrl: settings.gatewayBaseUrl,
       model: settings.gatewayModel,
       thinkingIntensity: settings.gatewayThinkingIntensity,
-      validation,
+      validation: job.validation,
       preview: {
-        groups: preview.groups,
-        reviewTabsCount: preview.reviewTabsCount,
-        excludedTabsCount: preview.excludedTabsCount,
-        warnings: preview.warnings
+        groups: job.preview.groups,
+        reviewTabsCount: job.preview.reviewTabsCount,
+        excludedTabsCount: job.preview.excludedTabsCount,
+        warnings: job.preview.warnings
       }
     },
     null,
@@ -57,4 +51,4 @@ console.log(
   )
 );
 
-process.exit(validation.ok ? 0 : 1);
+process.exit(job.validation.ok ? 0 : 1);
