@@ -1048,6 +1048,82 @@ test("generation progress follows the background job after start", async ({ page
   await expect.poll(() => page.evaluate(() => window.__messageTypes.includes("tabs:analyze"))).toBe(false);
 });
 
+test("canceling generation returns to setup without error preview", async ({ page }) => {
+  await page.addInitScript(() => {
+    const settings = {
+      organizeMode: "current_window",
+      targetWindowMode: "current_window",
+      existingGroupMode: "preserve_existing_groups",
+      reviewGroupMode: "create_review_group",
+      undoTargetWindowMode: "leave_empty_target_window",
+      pageContextMode: "off",
+      hostPermissionRequestMode: "never",
+      pageSamplingConsentMode: "not_acknowledged",
+      urlPrivacyMode: "sanitized_url",
+      includePinnedTabs: false,
+      includeIncognitoTabs: false,
+      collapseGroupsAfterApply: false,
+      minConfidenceToApply: 0.65,
+      maxTabsPerGroup: 40,
+      promptPreset: "conservative",
+      plannerProvider: "gateway",
+      rememberProviderKeys: false,
+      gatewayBaseUrl: "",
+      gatewayModel: "gpt-5.5",
+      gatewayThinkingIntensity: "high",
+      gatewayApiKey: "",
+      customPrompt: ""
+    };
+    const runningJob = {
+      operationId: "job_cancel_progress",
+      status: "running",
+      phase: "sampling",
+      progress: 24,
+      message: "正在读取页面摘要 67/244，已读到 1 个",
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+    const canceledJob = {
+      ...runningJob,
+      status: "canceled",
+      phase: "canceled",
+      message: "已取消整理。",
+      finishedAt: new Date().toISOString()
+    };
+    window.__started = false;
+    window.__canceled = false;
+    window.chrome = {
+      runtime: {
+        sendMessage: async (message) => {
+          if (message.type === "settings:get") return { ok: true, result: settings };
+          if (message.type === "settings:save") return { ok: true, result: message.settings };
+          if (message.type === "tabs:startAnalyze") {
+            window.__started = true;
+            return { ok: true, result: { operationId: runningJob.operationId } };
+          }
+          if (message.type === "tabs:getActiveJob") {
+            if (!window.__started) return { ok: true, result: null };
+            return { ok: true, result: window.__canceled ? canceledJob : runningJob };
+          }
+          if (message.type === "tabs:cancelActiveJob") {
+            window.__canceled = true;
+            return { ok: true, result: { canceled: true, job: canceledJob } };
+          }
+          return { ok: true, result: null };
+        }
+      }
+    };
+  });
+
+  await page.goto(`${baseUrl}/src/sidepanel/index.html`);
+  await page.getByRole("button", { name: "生成方案" }).click();
+  await expect(page.locator("#progressLabel")).toContainText("正在读取页面摘要");
+  await page.getByRole("button", { name: "取消" }).click();
+  await expect(page.locator("#statusText")).toHaveText("已取消整理。");
+  await expect(page.locator("#cancelBtn")).toBeHidden();
+  await expect(page.locator("#previewSection")).toBeHidden();
+});
+
 test("page sampling permission request returns to the floating window flow", async ({ page }) => {
   await page.addInitScript(() => {
     const settings = {

@@ -304,8 +304,12 @@ async function analyze() {
     syncActionState();
     setStatus(job.validation?.ok ? "方案好了，可以先检查" : "方案需要检查", !job.validation?.ok);
   } catch (error) {
-    setStatus(error.message, true);
-    renderError(error);
+    if (isCancellationError(error)) {
+      setStatus("已取消整理。");
+    } else {
+      setStatus(error.message, true);
+      renderError(error);
+    }
   } finally {
     stopProgressPolling();
     setBusy(false);
@@ -322,11 +326,21 @@ function validateGatewaySettingsForAnalyze(settings) {
   }
 }
 
+function isCancellationError(error) {
+  return /已取消整理/.test(String(error?.message || ""));
+}
+
 async function cancelAnalyze() {
   nodes.cancelBtn.disabled = true;
   setStatus("正在取消整理");
   try {
-    await sendMessage({ type: "tabs:cancelActiveJob" });
+    const result = await sendMessage({ type: "tabs:cancelActiveJob" });
+    if (result?.job) updateProgressFromJob(result.job);
+    if (result?.job?.status === "canceled") {
+      stopProgressPolling();
+      setBusy(false);
+      setStatus("已取消整理。");
+    }
   } catch (error) {
     setStatus(error.message, true);
     nodes.cancelBtn.disabled = false;

@@ -494,6 +494,16 @@ input[type="number"] {
     background 160ms var(--ease);
 }
 
+select {
+  appearance: none;
+  -webkit-appearance: none;
+  padding-right: 38px;
+  background:
+    linear-gradient(45deg, transparent 50%, var(--muted) 50%) calc(100% - 17px) 50% / 6px 6px no-repeat,
+    linear-gradient(135deg, var(--muted) 50%, transparent 50%) calc(100% - 12px) 50% / 6px 6px no-repeat,
+    color-mix(in srgb, var(--surface) 84%, #fff);
+}
+
 textarea {
   min-height: 94px;
   resize: vertical;
@@ -658,6 +668,46 @@ button:focus-visible {
 
 .setting-toggle-field {
   display: grid;
+}
+
+.advanced-settings .setting-toggle-field {
+  display: block;
+}
+
+.advanced-settings .setting-toggle-field + .setting-toggle-field,
+.advanced-settings .toggles .switch-row + .switch-row {
+  border-top: 1px solid color-mix(in srgb, var(--line) 16%, transparent);
+}
+
+.advanced-settings .compact-switch {
+  min-height: 48px;
+  padding: 9px 0;
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+}
+
+.advanced-settings .compact-switch strong {
+  font-size: 13px;
+}
+
+.advanced-settings .compact-switch small {
+  font-size: 11px;
+}
+
+.advanced-settings .compact-switch input[type="checkbox"] {
+  width: 48px;
+  height: 28px;
+}
+
+.advanced-settings .compact-switch input[type="checkbox"]::before {
+  width: 22px;
+  height: 22px;
+  left: 2px;
+}
+
+.advanced-settings .compact-switch input[type="checkbox"]:checked::before {
+  transform: translate(21px, -50%);
 }
 
 .setting-source {
