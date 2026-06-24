@@ -35,7 +35,7 @@ export async function fetchJsonWithTimeout(
     const fetchPromise = (async () => {
       try {
         const response = await fetchImpl(url, { ...options, signal: controller.signal });
-        const data = await response.json();
+        const data = await readJsonResponse(response, label);
         return { response, data };
       } catch (error) {
         if (abortedByExternalSignal) {
@@ -49,4 +49,35 @@ export async function fetchJsonWithTimeout(
     if (timeoutId) clearTimeout(timeoutId);
     externalSignal?.removeEventListener?.("abort", abortFromExternalSignal);
   }
+}
+
+async function readJsonResponse(response, label) {
+  if (typeof response.text !== "function") {
+    return response.json();
+  }
+
+  const text = await response.text();
+  if (!text.trim()) return null;
+
+  try {
+    return JSON.parse(text);
+  } catch (error) {
+    const message = compactResponseText(text) || error.message;
+    if (!response.ok) {
+      return {
+        error: {
+          message
+        },
+        rawText: message
+      };
+    }
+    throw new Error(`${label} returned invalid JSON: ${message}`);
+  }
+}
+
+function compactResponseText(text) {
+  return String(text || "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 300);
 }

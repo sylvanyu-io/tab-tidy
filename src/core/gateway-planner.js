@@ -204,7 +204,9 @@ function gatewayErrorMessage(response, data, settings) {
       ? "AI 服务拒绝访问。请检查自定义网关地址和密钥。"
       : "默认 AI 服务拒绝访问。请稍后重试，或在更多选项里切换自定义网关。";
   }
-  return providerMessage || `AI gateway planner failed with status ${response.status}.`;
+  return providerMessage
+    ? `AI 服务返回 ${response.status}：${providerMessage}`
+    : `AI gateway planner failed with status ${response.status}.`;
 }
 
 export function buildPlannerSystemPrompt(settings) {

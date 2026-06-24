@@ -415,6 +415,31 @@ test("AI gateway planner surfaces auth failures as product copy", async () => {
   );
 });
 
+test("AI gateway planner surfaces plain-text gateway failures without JSON parse noise", async () => {
+  const fetchImpl = async () => ({
+    ok: false,
+    status: 502,
+    async text() {
+      return "error code: 502";
+    }
+  });
+
+  await assert.rejects(
+    () =>
+      createGatewayPlan(
+        inventory,
+        {
+          ...DEFAULT_SETTINGS,
+          plannerProvider: PLANNER_PROVIDERS.GATEWAY,
+          gatewayBaseUrl: "http://localhost:8317/v1",
+          gatewayApiKey: "test-key"
+        },
+        fetchImpl
+      ),
+    /AI 服务返回 502：error code: 502/
+  );
+});
+
 test("AI gateway planner honors an explicit timeout", async () => {
   const fetchImpl = async () => new Promise(() => {});
 
