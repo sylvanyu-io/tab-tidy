@@ -67,6 +67,7 @@ test("AI gateway planner posts a chat-completions JSON request", async () => {
     const payload = JSON.parse(body.messages[1].content.slice(body.messages[1].content.indexOf("{")));
     assert.equal(payload.schema, "tab_tidy_compact_v1");
     assert.equal(payload.settings.languageMode, "en-US");
+    assert.deepEqual(payload.excludedFields, ["id", "windowId", "reason"]);
     assert.deepEqual(payload.tabFields, [
       "id",
       "windowId",
@@ -112,6 +113,73 @@ test("AI gateway planner posts a chat-completions JSON request", async () => {
   );
 
   assert.deepEqual(plan, expectedPlan);
+});
+
+test("AI gateway payload omits excluded tab titles", async () => {
+  const sensitiveInventory = {
+    ...inventory,
+    excludedTabs: [
+      {
+        tabId: 99,
+        windowId: 1,
+        title: "Private bank account recovery phrase",
+        exclusionReason: "Pinned tabs are excluded by policy."
+      }
+    ]
+  };
+  const expectedPlan = {
+    schemaVersion: 1,
+    mode: "current_window",
+    scope: { kind: "current_window", windowIds: [1] },
+    targetWindow: { kind: "current_window", windowId: 1, title: "Current Window" },
+    eligibleTabs: [
+      { tabId: 10, windowId: 1 },
+      { tabId: 11, windowId: 1 }
+    ],
+    excludedTabs: [{ tabId: 99, windowId: 1, reason: "Pinned tabs are excluded by policy." }],
+    groups: [
+      {
+        groupKey: "developer-docs",
+        title: "Developer Docs",
+        color: "cyan",
+        confidence: 0.88,
+        tabRefs: [
+          { tabId: 10, windowId: 1 },
+          { tabId: 11, windowId: 1 }
+        ],
+        reason: "Developer documentation tabs."
+      }
+    ],
+    reviewTabs: []
+  };
+
+  const fetchImpl = async (_url, options) => {
+    const bodyText = options.body;
+    assert.doesNotMatch(bodyText, /Private bank account recovery phrase/);
+    const body = JSON.parse(bodyText);
+    const payload = JSON.parse(body.messages[1].content.slice(body.messages[1].content.indexOf("{")));
+    assert.deepEqual(payload.excludedFields, ["id", "windowId", "reason"]);
+    assert.deepEqual(payload.excluded, [[99, 1, "Pinned tabs are excluded by policy."]]);
+    return {
+      ok: true,
+      async json() {
+        return { choices: [{ message: { content: JSON.stringify(expectedPlan) } }] };
+      }
+    };
+  };
+
+  const plan = await createGatewayPlan(
+    sensitiveInventory,
+    {
+      ...DEFAULT_SETTINGS,
+      plannerProvider: PLANNER_PROVIDERS.GATEWAY,
+      gatewayBaseUrl: "http://localhost:8317/v1",
+      gatewayApiKey: "gateway-test-key"
+    },
+    fetchImpl
+  );
+
+  assert.deepEqual(plan.excludedTabs, expectedPlan.excludedTabs);
 });
 
 test("AI gateway planner maps ultra thinking to gateway-compatible high effort", async () => {

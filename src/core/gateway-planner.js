@@ -32,7 +32,7 @@ const TAB_FIELDS = Object.freeze([
   "pageSample"
 ]);
 const PAGE_SAMPLE_FIELDS = Object.freeze(["status", "title", "metaDescription", "language", "headings", "visibleText", "reason"]);
-const EXCLUDED_FIELDS = Object.freeze(["id", "windowId", "title", "reason"]);
+const EXCLUDED_FIELDS = Object.freeze(["id", "windowId", "reason"]);
 const LOCKED_GROUP_FIELDS = Object.freeze(["id", "windowId", "title", "color", "collapsed", "tabIds"]);
 const PAGE_SAMPLE_RESULT_FIELDS = Object.freeze(["id", "windowId", "status", "origin", "reason"]);
 
@@ -290,7 +290,7 @@ export function buildPlannerPayload(inventory, settings) {
     ]),
     pageSampleFields: PAGE_SAMPLE_FIELDS,
     excludedFields: EXCLUDED_FIELDS,
-    excluded: (inventory.excludedTabs || []).map((tab) => [tab.tabId, tab.windowId, tab.title, tab.exclusionReason]),
+    excluded: (inventory.excludedTabs || []).map((tab) => [tab.tabId, tab.windowId, tab.exclusionReason]),
     lockedGroupFields: LOCKED_GROUP_FIELDS,
     lockedGroups: (inventory.lockedGroups || []).map((group) => [
       group.groupId,

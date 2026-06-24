@@ -318,6 +318,7 @@ Validator rules:
 - `consolidate_one_window` mode must include all eligible tabs from all normal windows visible to the extension;
 - in `consolidate_one_window` mode, every eligible tab is moved to the target window, including Review tabs;
 - `excludedTabs` may only contain tabs excluded by policy, such as pinned tabs, incognito tabs, denied domains, unsupported schemes, or tabs hidden from the extension;
+- compact planner input for excluded tabs must include only `tabId`, `windowId`, and exclusion reason; excluded tab titles are not sent to the LLM;
 - when `existingGroupMode` is `preserve_existing_groups`, every existing native tab group is a locked unit and the model may not split its member tabs across generated groups;
 - when `existingGroupMode` is `dissolve_existing_groups`, existing group membership is context only and every eligible tab can be reassigned;
 - every `tabId` must exist in the latest inventory;
