@@ -73,6 +73,23 @@ test("analyze/apply/undo groups only the current window by default", async () =>
   assert.equal((await chrome.tabs.get(11)).groupId, -1);
 });
 
+test("current-window analysis ignores invalid invocation window ids", async () => {
+  const chrome = createFakeChrome({
+    windows: [
+      {
+        id: 1,
+        focused: true,
+        tabs: [{ id: 10, title: "Chrome tabs API docs", url: "https://developer.chrome.com/docs/extensions/reference/api/tabs", active: true }]
+      }
+    ]
+  });
+
+  const job = await analyzeTabs(chrome, FAKE_PLANNER_SETTINGS, { windowId: 0 });
+  assert.equal(job.validation.ok, true);
+  assert.equal(job.inventory.scope.currentWindowId, 1);
+  assert.equal(job.inventory.plannerTabs[0].tabId, 10);
+});
+
 test("collapse toggle can leave newly created groups expanded", async () => {
   const chrome = createFakeChrome({
     windows: [
@@ -347,6 +364,30 @@ test("undo can close an empty target window created by the operation", async () 
   const result = await undoFromRollback(chrome, rollback);
   assert.deepEqual(result.closedCreatedWindowIds, [2]);
   await assert.rejects(() => chrome.windows.get(2), /No window with id 2/);
+});
+
+test("undo restores highlighted tab state", async () => {
+  const chrome = createFakeChrome({
+    windows: [
+      {
+        id: 1,
+        focused: true,
+        tabs: [
+          { id: 10, title: "Chrome tabs API docs", url: "https://developer.chrome.com/docs/extensions/reference/api/tabs", active: true, highlighted: true },
+          { id: 11, title: "Chrome tabGroups API docs", url: "https://developer.chrome.com/docs/extensions/reference/api/tabGroups", highlighted: true }
+        ]
+      }
+    ]
+  });
+
+  const job = await analyzeTabs(chrome, FAKE_PLANNER_SETTINGS, { windowId: 1 });
+  assert.equal(job.validation.ok, true);
+  await applyLastPlan(chrome);
+  await chrome.tabs.update(11, { highlighted: false });
+
+  await undoLastApply(chrome);
+  assert.equal((await chrome.tabs.get(10)).highlighted, true);
+  assert.equal((await chrome.tabs.get(11)).highlighted, true);
 });
 
 test("apply fails instead of silently grouping a partial tab set", async () => {
@@ -648,6 +689,7 @@ test("canceling during preview cannot be overwritten by completion", async () =>
   assert.equal(issuedCancel, true);
   assert.equal(finalJob.status, "canceled");
   assert.equal(finalJob.message, "已取消整理。");
+  assert.equal(await getLastJob(chrome), null);
 });
 
 async function waitForActiveJob(chrome, predicate) {

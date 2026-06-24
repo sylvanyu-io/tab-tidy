@@ -440,6 +440,31 @@ test("AI gateway planner surfaces plain-text gateway failures without JSON parse
   );
 });
 
+test("AI gateway planner accepts common string error payloads", async () => {
+  const fetchImpl = async () => ({
+    ok: false,
+    status: 503,
+    async json() {
+      return { error: "upstream overloaded" };
+    }
+  });
+
+  await assert.rejects(
+    () =>
+      createGatewayPlan(
+        inventory,
+        {
+          ...DEFAULT_SETTINGS,
+          plannerProvider: PLANNER_PROVIDERS.GATEWAY,
+          gatewayBaseUrl: "http://localhost:8317/v1",
+          gatewayApiKey: "test-key"
+        },
+        fetchImpl
+      ),
+    /AI 服务返回 503：upstream overloaded/
+  );
+});
+
 test("AI gateway planner honors an explicit timeout", async () => {
   const fetchImpl = async () => new Promise(() => {});
 

@@ -198,7 +198,7 @@ function gatewayRequestMeta(inventory, options = {}) {
 }
 
 function gatewayErrorMessage(response, data, settings) {
-  const providerMessage = String(data?.error?.message || "").trim();
+  const providerMessage = extractProviderErrorMessage(data);
   if (response.status === 401 || response.status === 403) {
     return settings.gatewayBaseUrl
       ? "AI 服务拒绝访问。请检查自定义网关地址和密钥。"
@@ -207,6 +207,14 @@ function gatewayErrorMessage(response, data, settings) {
   return providerMessage
     ? `AI 服务返回 ${response.status}：${providerMessage}`
     : `AI gateway planner failed with status ${response.status}.`;
+}
+
+function extractProviderErrorMessage(data) {
+  if (!data || typeof data !== "object") return "";
+  if (typeof data.error === "string") return data.error.trim();
+  if (typeof data.error?.message === "string") return data.error.message.trim();
+  if (typeof data.message === "string") return data.message.trim();
+  return "";
 }
 
 export function buildPlannerSystemPrompt(settings) {

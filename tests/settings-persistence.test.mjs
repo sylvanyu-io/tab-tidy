@@ -37,6 +37,18 @@ test("invalid undo target window mode falls back to conservative default", () =>
   assert.equal(settings.undoTargetWindowMode, UNDO_TARGET_WINDOW_MODES.LEAVE_EMPTY);
 });
 
+test("blank numeric settings fall back instead of becoming zero", () => {
+  const settings = normalizeSettings({
+    ...DEFAULT_SETTINGS,
+    minConfidenceToApply: "",
+    maxTabsPerGroup: ""
+  });
+
+  assert.equal(settings.minConfidenceToApply, DEFAULT_SETTINGS.minConfidenceToApply);
+  assert.equal(settings.maxTabsPerGroup, DEFAULT_SETTINGS.maxTabsPerGroup);
+  assert.equal(normalizeSettings({ ...DEFAULT_SETTINGS, minConfidenceToApply: "2" }).minConfidenceToApply, 1);
+});
+
 test("AI gateway settings normalize safely", () => {
   assert.equal(
     normalizeSettings({ ...DEFAULT_SETTINGS, gatewayBaseUrl: "http://127.0.0.1:8317/v1/" }).gatewayBaseUrl,

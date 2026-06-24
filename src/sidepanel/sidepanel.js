@@ -373,7 +373,7 @@ function renderPreview(job) {
   }
 
   nodes.previewRoot.className = "preview-list";
-  nodes.previewCount.textContent = localizedText(languageMode, `${visibleGroupCount} 组`, `${visibleGroupCount} groups`);
+  nodes.previewCount.textContent = localizedText(languageMode, `${visibleGroupCount} 组`, formatCount(visibleGroupCount, "group"));
   nodes.previewRoot.replaceChildren(
     previewSummary(summaryPreview, groups.length, reviewTabsCount, reviewGroupWillBeCreated, languageMode),
     ...groups.map((group, index) => groupRow(group, swatchForIndex(index), languageMode)),
@@ -399,18 +399,18 @@ function previewSummaryText(preview, groupCount, reviewTabsCount, reviewGroupWil
   }
 
   if (languageMode === "en-US") {
-    const subjectText = groupCount ? `found ${groupCount} topic groups` : "found no stable topic groups";
+    const subjectText = groupCount ? `found ${formatCount(groupCount, "topic group")}` : "found no stable topic groups";
     const reviewText = reviewTabsCount
       ? reviewGroupWillBeCreated
-        ? `, with ${reviewTabsCount} set aside for Needs Review`
-        : `, with ${reviewTabsCount} left ungrouped`
+        ? `, with ${formatCount(reviewTabsCount, "tab")} set aside for Needs Review`
+        : `, with ${formatCount(reviewTabsCount, "tab")} left ungrouped`
       : "";
 
     if (!groupCount && reviewTabsCount) {
-      return `AI reviewed ${handledTabs} tabs, ${subjectText}${reviewText}.`;
+      return `AI reviewed ${formatCount(handledTabs, "tab")}, ${subjectText}${reviewText}.`;
     }
 
-    return `AI reviewed ${handledTabs} tabs, ${subjectText}; ${groupedTabs} will be grouped automatically${reviewText}.`;
+    return `AI reviewed ${formatCount(handledTabs, "tab")}, ${subjectText}; ${formatCount(groupedTabs, "tab")} will be grouped automatically${reviewText}.`;
   }
 
   const subjectText = groupCount ? `识别出 ${groupCount} 个主题` : "没有找到足够稳定的主题";
@@ -473,10 +473,15 @@ function groupRow(group, swatchColor, languageMode = "auto") {
 
   const badge = document.createElement("div");
   badge.className = "badge";
-  badge.textContent = localizedText(languageMode, `${group.tabCount} 个`, `${group.tabCount}`);
+  badge.textContent = localizedText(languageMode, `${group.tabCount} 个`, formatCount(group.tabCount, "tab"));
 
   row.append(swatch, body, badge);
   return row;
+}
+
+function formatCount(count, noun) {
+  const numeric = Number(count) || 0;
+  return `${numeric} ${noun}${numeric === 1 ? "" : "s"}`;
 }
 
 function reviewGroupRow(tabCount, languageMode, preview) {

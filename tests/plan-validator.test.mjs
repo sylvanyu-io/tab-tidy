@@ -68,6 +68,27 @@ test("group confidence below apply threshold is invalid", () => {
   assert.match(result.errors.join("\n"), /below the apply threshold/);
 });
 
+test("missing group confidence is invalid", () => {
+  const inventory = {
+    scope: { kind: "current_window", currentWindowId: 1, windowIds: [1] },
+    plannerTabs: [{ tabId: 10, windowId: 1, pinned: false, incognito: false }],
+    lockedGroups: [],
+    excludedTabs: []
+  };
+  const plan = {
+    schemaVersion: 1,
+    mode: "current_window",
+    targetWindow: { kind: "current_window", windowId: 1, title: "Current Window" },
+    groups: [{ groupKey: "unknown", title: "Unknown", color: "blue", tabRefs: [{ tabId: 10, windowId: 1 }] }],
+    reviewTabs: [],
+    excludedTabs: []
+  };
+
+  const result = validatePlan(plan, inventory, DEFAULT_SETTINGS);
+  assert.equal(result.ok, false);
+  assert.match(result.errors.join("\n"), /valid confidence/);
+});
+
 test("groups above the tab limit are invalid", () => {
   const plannerTabs = Array.from({ length: 3 }, (_, index) => ({
     tabId: index + 10,

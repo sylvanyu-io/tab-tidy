@@ -133,7 +133,10 @@ function validateGroup(group, settings, errors, warnings) {
   if ((group.tabRefs || []).length > settings.maxTabsPerGroup) {
     errors.push(`Group ${group.title} has ${(group.tabRefs || []).length} tabs, above the limit ${settings.maxTabsPerGroup}.`);
   }
-  if (Number(group.confidence) < settings.minConfidenceToApply) {
+  const confidence = Number(group.confidence);
+  if (!Number.isFinite(confidence)) {
+    errors.push(`Group ${group.title || group.groupKey} is missing a valid confidence.`);
+  } else if (confidence < settings.minConfidenceToApply) {
     errors.push(`Group ${group.title} confidence is below the apply threshold.`);
   }
 }

@@ -203,7 +203,7 @@ export async function undoFromRollback(chromeApi, rollback) {
     restoredTabs += sourceTabs.length;
 
     await moveTabsInOrder(chromeApi, sourceTabs, windowId, existingTabs);
-    await restorePinnedState(chromeApi, sourceTabs);
+    await restoreTabState(chromeApi, sourceTabs);
 
     if (sourceWindow.activeTabId && existingTabs.has(sourceWindow.activeTabId)) {
       await safeTabUpdate(chromeApi, sourceWindow.activeTabId, { active: true });
@@ -387,9 +387,9 @@ async function moveTabsInOrder(chromeApi, sourceTabs, windowId, existingTabs) {
   }
 }
 
-async function restorePinnedState(chromeApi, sourceTabs) {
+async function restoreTabState(chromeApi, sourceTabs) {
   for (const snapshot of sourceTabs) {
-    await safeTabUpdate(chromeApi, snapshot.tabId, { pinned: snapshot.pinned });
+    await safeTabUpdate(chromeApi, snapshot.tabId, { pinned: snapshot.pinned, highlighted: snapshot.highlighted });
   }
 }
 

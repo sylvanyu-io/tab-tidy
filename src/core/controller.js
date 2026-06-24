@@ -117,7 +117,9 @@ async function runActiveAnalysis(chromeApi, rawSettings, invocation, operationId
     throwIfCanceled(abortController.signal);
 
     await reportProgress({ phase: "preview", progress: 96, message: "正在生成预览" });
+    throwIfCanceled(abortController.signal);
     const preview = buildPreview(plan, inventory, validation, settings);
+    throwIfCanceled(abortController.signal);
     const jobSettings = redactSettingsForJob(settings);
     const job = {
       operationId,

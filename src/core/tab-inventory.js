@@ -65,8 +65,9 @@ export async function collectTabInventory(chromeApi, rawSettings, invocation = {
 }
 
 async function resolveCurrentWindow(chromeApi, windowId) {
-  if (Number.isInteger(windowId)) {
-    return chromeApi.windows.get(windowId, { populate: true });
+  if (Number.isInteger(windowId) && windowId > 0) {
+    const requestedWindow = await chromeApi.windows.get(windowId, { populate: true }).catch(() => null);
+    if (requestedWindow?.type === "normal") return requestedWindow;
   }
 
   if (chromeApi.windows.getLastFocused) {

@@ -213,12 +213,13 @@ test("preview copy and review group follow the selected result language", async 
   await page.goto(`${baseUrl}/src/sidepanel/index.html`);
   await expect(page.locator("#languageMode")).toHaveValue("en-US");
   await page.getByRole("button", { name: "生成方案" }).click();
+  await expect(page.locator("#previewCount")).toHaveText("2 groups");
   await expect(page.locator(".preview").getByText("AI Research", { exact: true })).toBeVisible();
   await expect(page.locator(".preview").getByText("Needs Review", { exact: true })).toBeVisible();
   await expect(
     page
       .locator(".preview")
-      .getByText("AI reviewed 3 tabs, found 1 topic groups; 2 will be grouped automatically, with 1 set aside for Needs Review.")
+      .getByText("AI reviewed 3 tabs, found 1 topic group; 2 tabs will be grouped automatically, with 1 tab set aside for Needs Review.")
   ).toBeVisible();
 });
 

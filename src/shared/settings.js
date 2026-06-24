@@ -170,6 +170,7 @@ export function normalizeSettings(input = {}) {
 }
 
 function clampNumber(value, min, max, fallback) {
+  if (typeof value === "string" && !value.trim()) return fallback;
   const numeric = Number(value);
   if (!Number.isFinite(numeric)) return fallback;
   return Math.min(max, Math.max(min, numeric));
