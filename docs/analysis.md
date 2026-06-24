@@ -1,4 +1,4 @@
-# Semantic Tab Agent: Analysis
+# Tab Tidy: Analysis
 
 ## Problem
 

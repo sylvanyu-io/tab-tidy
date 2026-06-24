@@ -49,7 +49,7 @@ MVP required permissions:
   "optional_permissions": ["scripting"],
   "optional_host_permissions": ["https://*/*", "http://*/*"],
   "action": {
-    "default_title": "Semantic Tab Agent",
+    "default_title": "Tab Tidy",
     "default_popup": "src/sidepanel/index.html"
   }
 }
