@@ -158,7 +158,7 @@ test("popup renders settings and mock preview", async ({ page }) => {
   await expect(page.getByRole("button", { name: "撤销" })).toBeVisible();
 });
 
-test("preview copy and review group follow the selected result language", async ({ page }) => {
+test("popup restores a completed background preview after reopening", async ({ page }) => {
   await page.addInitScript(() => {
     const settings = {
       organizeMode: "current_window",
@@ -210,9 +210,11 @@ test("preview copy and review group follow the selected result language", async 
         warnings: []
       }
     };
+    window.__messageTypes = [];
     window.chrome = {
       runtime: {
         sendMessage: async (message) => {
+          window.__messageTypes.push(message.type);
           if (message.type === "settings:get") return { ok: true, result: settings };
           if (message.type === "settings:save") return { ok: true, result: message.settings };
           if (message.type === "tabs:getActiveJob") return { ok: true, result: activeJob };
@@ -226,7 +228,7 @@ test("preview copy and review group follow the selected result language", async 
 
   await page.goto(`${baseUrl}/src/sidepanel/index.html`);
   await expect(page.locator("#languageMode")).toHaveValue("en-US");
-  await page.getByRole("button", { name: "生成方案" }).click();
+  await expect(page.getByRole("button", { name: "开始整理" })).toBeEnabled();
   await expect(page.locator("#previewCount")).toHaveText("2 groups");
   await expect(page.locator(".preview").getByText("AI Research", { exact: true })).toBeVisible();
   await expect(page.locator(".preview").getByText("Needs Review", { exact: true })).toBeVisible();
@@ -235,6 +237,64 @@ test("preview copy and review group follow the selected result language", async 
       .locator(".preview")
       .getByText("AI reviewed 3 tabs, found 1 topic group; 2 tabs will be grouped automatically, with 1 tab set aside for Needs Review.")
   ).toBeVisible();
+  await expect.poll(() => page.evaluate(() => window.__messageTypes.includes("tabs:startAnalyze"))).toBe(false);
+});
+
+test("popup restores a background planning error after reopening", async ({ page }) => {
+  await page.addInitScript(() => {
+    const settings = {
+      organizeMode: "current_window",
+      targetWindowMode: "current_window",
+      existingGroupMode: "preserve_existing_groups",
+      reviewGroupMode: "create_review_group",
+      undoTargetWindowMode: "leave_empty_target_window",
+      pageContextMode: "off",
+      hostPermissionRequestMode: "never",
+      pageSamplingConsentMode: "not_acknowledged",
+      urlPrivacyMode: "sanitized_url",
+      languageMode: "auto",
+      includePinnedTabs: false,
+      includeIncognitoTabs: false,
+      collapseGroupsAfterApply: true,
+      minConfidenceToApply: 0.65,
+      maxTabsPerGroup: 40,
+      promptPreset: "conservative",
+      plannerProvider: "gateway",
+      rememberProviderKeys: false,
+      gatewayBaseUrl: "",
+      gatewayModel: "gpt-5.5",
+      gatewayThinkingIntensity: "high",
+      gatewayApiKey: "",
+      customPrompt: ""
+    };
+    const activeJob = {
+      operationId: "job_gateway_model_error",
+      status: "error",
+      phase: "error",
+      progress: 100,
+      message: "This model is not available on the free gateway.",
+      error: "This model is not available on the free gateway.",
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      finishedAt: new Date().toISOString()
+    };
+    window.chrome = {
+      runtime: {
+        sendMessage: async (message) => {
+          if (message.type === "settings:get") return { ok: true, result: settings };
+          if (message.type === "settings:save") return { ok: true, result: message.settings };
+          if (message.type === "tabs:getActiveJob") return { ok: true, result: activeJob };
+          return { ok: true, result: null };
+        }
+      }
+    };
+  });
+
+  await page.goto(`${baseUrl}/src/sidepanel/index.html`);
+  await expect(page.locator("#statusText")).toHaveText("This model is not available on the free gateway.");
+  await expect(page.locator("#previewCount")).toHaveText("出错");
+  await expect(page.locator("#detailsText")).toContainText("This model is not available on the free gateway.");
+  await expect(page.getByRole("button", { name: "生成方案" })).toBeEnabled();
 });
 
 test("popup shows optimistic progress while waiting for AI", async ({ page }) => {
@@ -350,6 +410,7 @@ test("default gateway permission request is narrow and compact", async ({ page }
       customPrompt: ""
     };
     window.__permissionRequests = [];
+    window.__started = false;
     const activeJob = {
       operationId: "job_default_gateway",
       status: "complete",
@@ -386,9 +447,10 @@ test("default gateway permission request is narrow and compact", async ({ page }
         sendMessage: async (message) => {
           if (message.type === "settings:get") return { ok: true, result: settings };
           if (message.type === "settings:save") return { ok: true, result: message.settings };
-          if (message.type === "tabs:getActiveJob") return { ok: true, result: activeJob };
+          if (message.type === "tabs:getActiveJob") return { ok: true, result: window.__started ? activeJob : null };
           if (message.type === "tabs:getLastJob") return { ok: true, result: job };
           if (message.type === "tabs:startAnalyze") {
+            window.__started = true;
             window.__analyzeWindowId = message.windowId;
             return { ok: true, result: { operationId: activeJob.operationId } };
           }
@@ -511,6 +573,7 @@ test("current-window generation without sourceWindowId uses the focused normal w
       }
     };
     window.__analyzeWindowId = null;
+    window.__started = false;
     window.chrome = {
       windows: {
         getLastFocused: async () => ({ id: 42, type: "normal" }),
@@ -520,9 +583,10 @@ test("current-window generation without sourceWindowId uses the focused normal w
         sendMessage: async (message) => {
           if (message.type === "settings:get") return { ok: true, result: settings };
           if (message.type === "settings:save") return { ok: true, result: message.settings };
-          if (message.type === "tabs:getActiveJob") return { ok: true, result: activeJob };
+          if (message.type === "tabs:getActiveJob") return { ok: true, result: window.__started ? activeJob : null };
           if (message.type === "tabs:getLastJob") return { ok: true, result: job };
           if (message.type === "tabs:startAnalyze") {
+            window.__started = true;
             window.__analyzeWindowId = message.windowId;
             return { ok: true, result: { operationId: activeJob.operationId } };
           }
@@ -585,6 +649,7 @@ test("current-window generation ignores a stale sourceWindowId", async ({ page }
       }
     };
     window.__analyzeWindowId = null;
+    window.__started = false;
     window.chrome = {
       windows: {
         get: async (windowId) => {
@@ -598,9 +663,10 @@ test("current-window generation ignores a stale sourceWindowId", async ({ page }
         sendMessage: async (message) => {
           if (message.type === "settings:get") return { ok: true, result: settings };
           if (message.type === "settings:save") return { ok: true, result: message.settings };
-          if (message.type === "tabs:getActiveJob") return { ok: true, result: activeJob };
+          if (message.type === "tabs:getActiveJob") return { ok: true, result: window.__started ? activeJob : null };
           if (message.type === "tabs:getLastJob") return { ok: true, result: job };
           if (message.type === "tabs:startAnalyze") {
+            window.__started = true;
             window.__analyzeWindowId = message.windowId;
             return { ok: true, result: { operationId: activeJob.operationId } };
           }
@@ -663,14 +729,18 @@ test("review-only previews are shown as a pending classification group", async (
         warnings: []
       }
     };
+    window.__started = false;
     window.chrome = {
       runtime: {
         sendMessage: async (message) => {
           if (message.type === "settings:get") return { ok: true, result: settings };
           if (message.type === "settings:save") return { ok: true, result: message.settings };
-          if (message.type === "tabs:getActiveJob") return { ok: true, result: activeJob };
+          if (message.type === "tabs:getActiveJob") return { ok: true, result: window.__started ? activeJob : null };
           if (message.type === "tabs:getLastJob") return { ok: true, result: job };
-          if (message.type === "tabs:startAnalyze") return { ok: true, result: { operationId: activeJob.operationId } };
+          if (message.type === "tabs:startAnalyze") {
+            window.__started = true;
+            return { ok: true, result: { operationId: activeJob.operationId } };
+          }
           return { ok: true, result: null };
         }
       }
@@ -735,6 +805,7 @@ test("apply confirms changed tabs before adding them to review", async ({ page }
     };
     window.__confirmMessages = [];
     window.__applyMessages = [];
+    window.__started = false;
     window.confirm = (message) => {
       window.__confirmMessages.push(message);
       return true;
@@ -748,9 +819,12 @@ test("apply confirms changed tabs before adding them to review", async ({ page }
         sendMessage: async (message) => {
           if (message.type === "settings:get") return { ok: true, result: settings };
           if (message.type === "settings:save") return { ok: true, result: message.settings };
-          if (message.type === "tabs:getActiveJob") return { ok: true, result: activeJob };
+          if (message.type === "tabs:getActiveJob") return { ok: true, result: window.__started ? activeJob : null };
           if (message.type === "tabs:getLastJob") return { ok: true, result: job };
-          if (message.type === "tabs:startAnalyze") return { ok: true, result: { operationId: activeJob.operationId } };
+          if (message.type === "tabs:startAnalyze") {
+            window.__started = true;
+            return { ok: true, result: { operationId: activeJob.operationId } };
+          }
           if (message.type === "tabs:applyLastPlan") {
             window.__applyMessages.push(message);
             if (!message.confirmChangedTabs) {
@@ -852,6 +926,7 @@ test("page summary main toggle requests scripting and page origins", async ({ pa
     const grantedOrigins = new Set(["https://cliproxy.sylvanyu.io/*"]);
     window.__permissionRequests = [];
     window.__savedSettings = [];
+    window.__started = false;
     window.chrome = {
       permissions: {
         contains: async (request) =>
@@ -882,9 +957,12 @@ test("page summary main toggle requests scripting and page origins", async ({ pa
             window.__savedSettings.push(settings);
             return { ok: true, result: settings };
           }
-          if (message.type === "tabs:getActiveJob") return { ok: true, result: activeJob };
+          if (message.type === "tabs:getActiveJob") return { ok: true, result: window.__started ? activeJob : null };
           if (message.type === "tabs:getLastJob") return { ok: true, result: job };
-          if (message.type === "tabs:startAnalyze") return { ok: true, result: { operationId: activeJob.operationId } };
+          if (message.type === "tabs:startAnalyze") {
+            window.__started = true;
+            return { ok: true, result: { operationId: activeJob.operationId } };
+          }
           return { ok: true, result: null };
         }
       }
@@ -1282,6 +1360,7 @@ test("generation does not request page sampling permissions from a stale enabled
       customPrompt: ""
     };
     window.__permissionRequests = [];
+    window.__started = false;
     const activeJob = {
       operationId: "job_page_sampling",
       status: "complete",
@@ -1315,9 +1394,12 @@ test("generation does not request page sampling permissions from a stale enabled
         sendMessage: async (message) => {
           if (message.type === "settings:get") return { ok: true, result: settings };
           if (message.type === "settings:save") return { ok: true, result: message.settings };
-          if (message.type === "tabs:getActiveJob") return { ok: true, result: activeJob };
+          if (message.type === "tabs:getActiveJob") return { ok: true, result: window.__started ? activeJob : null };
           if (message.type === "tabs:getLastJob") return { ok: true, result: job };
-          if (message.type === "tabs:startAnalyze") return { ok: true, result: { operationId: activeJob.operationId } };
+          if (message.type === "tabs:startAnalyze") {
+            window.__started = true;
+            return { ok: true, result: { operationId: activeJob.operationId } };
+          }
           return { ok: true, result: null };
         }
       }

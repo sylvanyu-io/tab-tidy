@@ -679,9 +679,43 @@ async function hydrateActiveJob() {
     updateProgressFromJob(job);
     setBusy(true, job.message || "正在整理", { cancelable: true, progress: job.progress || 8 });
     startProgressPolling();
+  } else if (job.status === "complete") {
+    await restoreCompletedJob(job);
   } else if (job.status === "error" || job.status === "canceled") {
-    setStatus(job.status === "error" ? "上次生成失败，请重新生成" : "上次整理已取消", job.status === "error");
+    restoreTerminalJob(job);
   }
+}
+
+async function restoreCompletedJob(activeJob = {}) {
+  stopProgressPolling();
+  const job = await sendMessage({ type: "tabs:getLastJob" }).catch(() => null);
+  if (!job?.preview) {
+    const message = "方案已生成，但预览数据没有保存成功。";
+    setStatus(message, true);
+    renderError(new Error(message));
+    setBusy(false);
+    return;
+  }
+  if (activeJob.operationId && job.operationId && activeJob.operationId !== job.operationId) {
+    return;
+  }
+
+  lastPreview = job.preview;
+  lastCanApply = Boolean(job.validation?.ok);
+  renderPreview(job);
+  renderDetails(job);
+  nodes.applyBtn.disabled = !lastCanApply;
+  setStatus(job.validation?.ok ? "方案好了，可以先检查" : "方案需要检查", !job.validation?.ok);
+  setBusy(false);
+}
+
+function restoreTerminalJob(job = {}) {
+  stopProgressPolling();
+  setBusy(false);
+  const isError = job.status === "error";
+  const message = job.message || (isError ? "上次生成失败，请重新生成" : "上次整理已取消");
+  setStatus(message, isError);
+  if (isError) renderError(new Error(message));
 }
 
 function startProgressPolling() {
@@ -700,7 +734,13 @@ async function pollActiveJob() {
   try {
     const job = await sendMessage({ type: "tabs:getActiveJob" });
     updateProgressFromJob(job);
-    if (!isLiveJob(job)) stopProgressPolling();
+    if (job?.status === "complete") {
+      await restoreCompletedJob(job);
+    } else if (job?.status === "error" || job?.status === "canceled") {
+      restoreTerminalJob(job);
+    } else if (!isLiveJob(job)) {
+      stopProgressPolling();
+    }
   } catch {
     stopProgressPolling();
   }
