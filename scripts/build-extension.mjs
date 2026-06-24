@@ -8,7 +8,7 @@ const distDir = process.env.EXTENSION_DIST_DIR ? resolve(rootDir, process.env.EX
 const extensionDir = join(distDir, "extension");
 const manifest = JSON.parse(await readFile(join(rootDir, "manifest.json"), "utf8"));
 const channel = process.env.EXTENSION_CHANNEL === "store" ? "store" : "dev";
-const zipName = `semantic-tab-agent-${manifest.version}${channel === "store" ? "-store" : ""}.zip`;
+const zipName = `tab-tidy-${manifest.version}${channel === "store" ? "-store" : ""}.zip`;
 const zipPath = join(distDir, zipName);
 
 await rm(extensionDir, { recursive: true, force: true });

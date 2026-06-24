@@ -117,7 +117,7 @@ npm run assets:readme
 npm run build:extension:store
 ```
 
-输出文件为 `dist/semantic-tab-agent-<version>-store.zip`。
+输出文件为 `dist/tab-tidy-<version>-store.zip`。
 
 ## 压力测试
 
