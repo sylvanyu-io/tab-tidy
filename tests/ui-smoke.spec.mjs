@@ -263,14 +263,26 @@ test("floating window shows optimistic progress while waiting for AI", async ({ 
       progress: 45,
       message: "正在请求 AI 规划",
       createdAt: new Date(Date.now() - 12000).toISOString(),
-      updatedAt: new Date(Date.now() - 12000).toISOString()
+      updatedAt: new Date(Date.now() - 12000).toISOString(),
+      tabCount: 252,
+      windowCount: 4
     };
+    window.__progressCopyRequests = [];
     window.chrome = {
       runtime: {
         sendMessage: async (message) => {
           if (message.type === "settings:get") return { ok: true, result: settings };
           if (message.type === "tabs:getActiveJob") return { ok: true, result: activeJob };
           if (message.type === "settings:save") return { ok: true, result: message.settings };
+          if (message.type === "progressCopy:generate") {
+            window.__progressCopyRequests.push(message);
+            return {
+              ok: true,
+              result: {
+                messages: ["清点主题边界", "压缩相近任务", "分离模糊页面", "校对分组命名", "铺开待分类线索"]
+              }
+            };
+          }
           return { ok: true, result: null };
         }
       }
@@ -279,11 +291,24 @@ test("floating window shows optimistic progress while waiting for AI", async ({ 
 
   await page.goto(`${baseUrl}/src/sidepanel/index.html`);
   await expect(page.locator("#statusText")).toHaveText(
-    /(理解标题线索|寻找相邻任务|避开域名硬分组|检查不确定页|整理分组边界) · \d+秒/
+    /(理解标题线索|寻找相邻任务|避开域名硬分组|检查不确定页|整理分组边界|清点主题边界|压缩相近任务|分离模糊页面|校对分组命名|铺开待分类线索) · \d+秒/
   );
   await expect(page.locator(".actions #progressBar")).toBeVisible();
   await expect(page.locator("#progressLabel")).toHaveText(
-    /(理解标题线索|寻找相邻任务|避开域名硬分组|检查不确定页|整理分组边界) · \d+秒/
+    /(理解标题线索|寻找相邻任务|避开域名硬分组|检查不确定页|整理分组边界|清点主题边界|压缩相近任务|分离模糊页面|校对分组命名|铺开待分类线索) · \d+秒/
+  );
+  await expect.poll(() => page.evaluate(() => window.__progressCopyRequests)).toEqual([
+    {
+      type: "progressCopy:generate",
+      operationId: "job_waiting",
+      phase: "planning",
+      tabCount: 252,
+      windowCount: 4,
+      languageMode: "auto"
+    }
+  ]);
+  await expect(page.locator("#progressLabel")).toHaveText(
+    /(清点主题边界|压缩相近任务|分离模糊页面|校对分组命名|铺开待分类线索) · \d+秒/
   );
   await expect(page.locator("#progressPercent")).toContainText("%");
   const displayedProgress = await page.locator("#progressFill").evaluate((element) => Number.parseFloat(element.style.width));

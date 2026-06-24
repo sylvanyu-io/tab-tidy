@@ -4,6 +4,7 @@ import {
   analyzeTabs,
   applyLastPlan,
   cancelActiveJob,
+  generateProgressCopy,
   getActiveJob,
   getLastJob,
   startAnalyzeTabs,
@@ -727,6 +728,40 @@ test("gateway analyses create and reuse an anonymous install id", async () => {
     assert.equal(requestHeaders[0].authorization, undefined);
     assert.equal(requestHeaders[0]["x-tab-tidy-install-id"], firstInstallId);
     assert.equal(requestHeaders[1]["x-tab-tidy-install-id"], firstInstallId);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("progress copy generation uses spark without tab metadata", async () => {
+  const chrome = createFakeChrome();
+  const originalFetch = globalThis.fetch;
+  const messages = Array.from({ length: 12 }, (_, index) => `整理线索${index}`);
+  const calls = [];
+  globalThis.fetch = async (url, options) => {
+    calls.push({ url, options });
+    const body = JSON.parse(options.body);
+    assert.equal(body.model, "gpt-5.3-codex-spark");
+    assert.equal(body.max_tokens, 1200);
+    assert.match(body.messages[0].content, /Return strict JSON only/);
+    assert.doesNotMatch(options.body, /Chrome tabs API docs|https?:\/\//);
+    assert.equal(options.headers["x-tab-tidy-install-id"].startsWith("install_"), true);
+    return new Response(JSON.stringify({ choices: [{ message: { content: JSON.stringify({ messages }) } }] }), {
+      status: 200,
+      headers: { "content-type": "application/json" }
+    });
+  };
+
+  try {
+    const result = await generateProgressCopy(chrome, {
+      phase: "planning",
+      tabCount: 252,
+      windowCount: 4,
+      languageMode: "zh-CN"
+    });
+    assert.equal(result.model, "gpt-5.3-codex-spark");
+    assert.deepEqual(result.messages, messages);
+    assert.equal(calls[0].url, "https://cliproxy.sylvanyu.io/v1/chat/completions");
   } finally {
     globalThis.fetch = originalFetch;
   }

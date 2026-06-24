@@ -58,6 +58,7 @@ const AI_WAIT_PHASES = new Set(["planning", "coarse_planning", "refining", "retr
 const AI_WAIT_RAMP_MS = 45000;
 const AI_WAIT_COPY_INTERVAL_SECONDS = 4;
 const ACTIVE_JOB_POLL_MS = 600;
+const GENERATED_COPY_CACHE_LIMIT = 4;
 const AI_WAIT_COPY = Object.freeze({
   planning: ["理解标题线索", "寻找相邻任务", "避开域名硬分组", "检查不确定页", "整理分组边界"],
   coarse_planning: ["快速扫一遍", "寻找跨窗口主题", "切出候选大组", "标记模糊标签"],
@@ -97,6 +98,8 @@ let pageSamplingOriginRefreshTimer = null;
 let progressPollTimer = null;
 let mockActiveJob = null;
 let mockLastJob = null;
+const generatedCopyByOperation = new Map();
+const generatedCopyRequests = new Set();
 
 init().catch((error) => setStatus(error.message, true));
 
@@ -672,6 +675,7 @@ async function waitForAnalysisCompletion(operationId) {
 
 function updateProgressFromJob(job) {
   if (!job) return;
+  requestGeneratedProgressCopy(job);
   if (typeof job.progress === "number") {
     nodes.progressBar.hidden = false;
     showProgress(displayProgressForJob(job));
@@ -746,9 +750,49 @@ function isLiveAiWait(job) {
 }
 
 function aiWaitCopy(job, elapsedSeconds) {
-  const copies = AI_WAIT_COPY[job.phase] || AI_WAIT_COPY.planning;
+  const copies = generatedProgressCopyForJob(job) || AI_WAIT_COPY[job.phase] || AI_WAIT_COPY.planning;
   const index = Math.floor(elapsedSeconds / AI_WAIT_COPY_INTERVAL_SECONDS) % copies.length;
   return copies[index];
+}
+
+function requestGeneratedProgressCopy(job) {
+  if (!isLiveAiWait(job)) return;
+  const operationId = progressCopyOperationId(job);
+  if (generatedCopyByOperation.has(operationId) || generatedCopyRequests.has(operationId)) return;
+
+  generatedCopyRequests.add(operationId);
+  sendMessage({
+    type: "progressCopy:generate",
+    operationId,
+    phase: job.phase,
+    tabCount: job.tabCount || 0,
+    windowCount: job.windowCount || 0,
+    languageMode: fields.languageMode.value
+  })
+    .then((result) => {
+      const messages = Array.isArray(result?.messages) ? result.messages.filter(Boolean) : [];
+      if (messages.length) rememberGeneratedProgressCopy(operationId, messages);
+    })
+    .catch(() => {})
+    .finally(() => {
+      generatedCopyRequests.delete(operationId);
+    });
+}
+
+function generatedProgressCopyForJob(job) {
+  return generatedCopyByOperation.get(progressCopyOperationId(job)) || null;
+}
+
+function progressCopyOperationId(job) {
+  return job.operationId || `${job.phase || "planning"}:${job.createdAt || ""}`;
+}
+
+function rememberGeneratedProgressCopy(operationId, messages) {
+  if (!generatedCopyByOperation.has(operationId) && generatedCopyByOperation.size >= GENERATED_COPY_CACHE_LIMIT) {
+    const oldestKey = generatedCopyByOperation.keys().next().value;
+    generatedCopyByOperation.delete(oldestKey);
+  }
+  generatedCopyByOperation.set(operationId, messages);
 }
 
 function formatElapsedSeconds(totalSeconds) {

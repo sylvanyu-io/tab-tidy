@@ -1,4 +1,4 @@
-const DEFAULT_ALLOWED_MODELS = ["gpt-5.5", "claude-opus-4-8", "claude-sonnet-4-6"];
+const DEFAULT_ALLOWED_MODELS = ["gpt-5.5", "claude-opus-4-8", "claude-sonnet-4-6", "gpt-5.3-codex-spark"];
 const DEFAULT_LIMITS = Object.freeze({
   bodyBytes: 1_000_000,
   maxTokens: 8192,

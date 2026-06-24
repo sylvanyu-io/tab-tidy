@@ -1,4 +1,5 @@
 import {
+  BUILTIN_GATEWAY_BASE_URL,
   DEFAULT_SETTINGS,
   ORGANIZE_MODES,
   PAGE_CONTEXT_MODES,
@@ -19,6 +20,9 @@ const activeAnalyses = new Map();
 const ACTIVE_JOB_TERMINAL_STATUSES = new Set(["complete", "canceled", "error"]);
 const APPLY_REBASE_MAX_CHANGED_TABS = 25;
 const APPLY_REBASE_MAX_CHANGED_RATIO = 0.2;
+const PROGRESS_COPY_MODEL = "gpt-5.3-codex-spark";
+const PROGRESS_COPY_COUNT = 90;
+const PROGRESS_COPY_MAX_LENGTH = 18;
 
 export async function handleRuntimeMessage(chromeApi, message) {
   switch (message?.type) {
@@ -36,6 +40,8 @@ export async function handleRuntimeMessage(chromeApi, message) {
       return getLastJob(chromeApi);
     case "tabs:cancelActiveJob":
       return cancelActiveJob(chromeApi);
+    case "progressCopy:generate":
+      return generateProgressCopy(chromeApi, message);
     case "tabs:applyLastPlan":
       return applyLastPlan(chromeApi, { confirmChangedTabs: Boolean(message.confirmChangedTabs) });
     case "tabs:undoLastApply":
@@ -204,6 +210,61 @@ export async function cancelActiveJob(chromeApi) {
   });
   controller?.abort();
   return { canceled: Boolean(controller), job: nextJob };
+}
+
+export async function generateProgressCopy(chromeApi, request = {}) {
+  if (typeof fetch !== "function") {
+    throw new Error("Fetch is not available for progress copy generation.");
+  }
+
+  const activeJob = await getActiveJob(chromeApi);
+  const installId = await getOrCreateInstallId(chromeApi);
+  const languageMode = normalizeProgressLanguage(request.languageMode || activeJob?.settings?.languageMode);
+  const body = {
+    model: PROGRESS_COPY_MODEL,
+    messages: [
+      {
+        role: "system",
+        content: [
+          "Return strict JSON only: {\"messages\":[\"...\"]}.",
+          "Write short loading captions for an AI browser-tab organization extension.",
+          "Do not claim real internal thoughts, exact work already completed, or user-private content.",
+          "Avoid repeating wording. No numbering, markdown, emoji, quotes, or terminal punctuation.",
+          `Return exactly ${PROGRESS_COPY_COUNT} messages. Each message must be at most ${PROGRESS_COPY_MAX_LENGTH} Chinese characters or 6 English words.`
+        ].join("\n")
+      },
+      {
+        role: "user",
+        content: JSON.stringify({
+          languageMode,
+          phase: String(request.phase || activeJob?.phase || "planning"),
+          tabCount: Number(request.tabCount || activeJob?.tabCount || 0),
+          windowCount: Number(request.windowCount || activeJob?.windowCount || 0),
+          style: "calm, varied, product-like, suitable for multi-minute progress UI"
+        })
+      }
+    ],
+    response_format: { type: "json_object" },
+    max_tokens: 1200
+  };
+
+  const response = await fetch(`${BUILTIN_GATEWAY_BASE_URL}/chat/completions`, {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      "x-tab-tidy-install-id": installId
+    },
+    body: JSON.stringify(body)
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(data?.error?.message || `Progress copy generation failed with status ${response.status}.`);
+  }
+
+  return {
+    model: PROGRESS_COPY_MODEL,
+    messages: normalizeProgressCopyMessages(extractProgressCopyText(data))
+  };
 }
 
 export async function applyLastPlan(chromeApi, options = {}) {
@@ -412,6 +473,65 @@ function shouldRejectRebasedPlan(summary, originalInventory, latestInventory) {
 
 function uniqueNumbers(values) {
   return [...new Set(values.filter((value) => typeof value === "number"))];
+}
+
+function extractProgressCopyText(data) {
+  const content = data?.choices?.[0]?.message?.content ?? data?.output_text ?? data?.text ?? "";
+  if (typeof content === "string") return content;
+  if (Array.isArray(content)) {
+    return content
+      .map((part) => (typeof part === "string" ? part : part?.text || ""))
+      .filter(Boolean)
+      .join("\n");
+  }
+  return "";
+}
+
+function normalizeProgressCopyMessages(text) {
+  const parsed = parseJsonObjectFromText(text);
+  const messages = Array.isArray(parsed?.messages) ? parsed.messages : [];
+  const normalized = [];
+  const seen = new Set();
+
+  for (const message of messages) {
+    const clean = cleanProgressCopyMessage(message);
+    if (!clean || seen.has(clean)) continue;
+    seen.add(clean);
+    normalized.push(clean);
+    if (normalized.length >= PROGRESS_COPY_COUNT) break;
+  }
+
+  if (normalized.length < 12) {
+    throw new Error("Progress copy generation returned too few usable messages.");
+  }
+  return normalized;
+}
+
+function parseJsonObjectFromText(text) {
+  const raw = String(text || "").trim().replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/i, "");
+  try {
+    return JSON.parse(raw);
+  } catch {
+    const start = raw.indexOf("{");
+    const end = raw.lastIndexOf("}");
+    if (start >= 0 && end > start) {
+      return JSON.parse(raw.slice(start, end + 1));
+    }
+    throw new Error("Progress copy generation returned invalid JSON.");
+  }
+}
+
+function cleanProgressCopyMessage(value) {
+  return String(value || "")
+    .replace(/^[\s\d.)、-]+/, "")
+    .replace(/[。！？.!?…]+$/g, "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 48);
+}
+
+function normalizeProgressLanguage(value) {
+  return value === "en-US" ? "en-US" : "zh-CN";
 }
 
 export async function undoLastApply(chromeApi) {

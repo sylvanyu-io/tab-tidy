@@ -28,6 +28,9 @@ test("worker validates models and token caps before forwarding", async () => {
   assert.equal(badModel.status, 400);
   assert.equal((await badModel.json()).error.code, "model_not_allowed");
 
+  const progressCopyModel = await handle(chatRequest({ model: "gpt-5.3-codex-spark" }), env);
+  assert.equal(progressCopyModel.status, 200);
+
   const tooManyTokens = await handle(chatRequest({ max_tokens: 9000 }), env);
   assert.equal(tooManyTokens.status, 400);
   assert.equal((await tooManyTokens.json()).error.code, "max_tokens_exceeded");
