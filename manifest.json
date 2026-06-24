@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Semantic Tab Agent",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "AI-assisted semantic organization for large sets of browser tabs.",
   "minimum_chrome_version": "116",
   "permissions": ["tabs", "tabGroups", "storage", "activeTab"],
