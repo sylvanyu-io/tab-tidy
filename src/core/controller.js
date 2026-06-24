@@ -23,6 +23,8 @@ const APPLY_REBASE_MAX_CHANGED_RATIO = 0.2;
 const PROGRESS_COPY_MODEL = "gpt-5.3-codex-spark";
 const PROGRESS_COPY_COUNT = 90;
 const PROGRESS_COPY_MAX_LENGTH = 18;
+const PAGE_SAMPLE_CONCURRENCY = 6;
+const PAGE_SAMPLE_TIMEOUT_MS = 1800;
 
 export async function handleRuntimeMessage(chromeApi, message) {
   switch (message?.type) {
@@ -202,10 +204,11 @@ export async function cancelActiveJob(chromeApi) {
   const controller = activeAnalyses.get(job.operationId);
   const nextJob = await writeActiveJob(chromeApi, {
     ...job,
-    status: controller ? "canceling" : "canceled",
-    phase: controller ? "canceling" : "canceled",
-    message: controller ? "正在取消整理" : "已取消整理。",
-    finishedAt: controller ? job.finishedAt : new Date().toISOString(),
+    status: "canceled",
+    phase: "canceled",
+    message: "已取消整理。",
+    error: "",
+    finishedAt: new Date().toISOString(),
     updatedAt: new Date().toISOString()
   });
   controller?.abort();
@@ -603,16 +606,25 @@ async function attachPageSamples(chromeApi, inventory, settings, options = {}) {
 
   let sampledOk = 0;
   let sampledBlocked = 0;
-  for (const [index, tab] of candidates.entries()) {
-    throwIfCanceled(options.signal);
+  let completed = 0;
+  let nextIndex = 0;
+  const workerCount = Math.min(PAGE_SAMPLE_CONCURRENCY, candidates.length);
+
+  await options.onProgress?.({
+    phase: "sampling",
+    progress: 20,
+    message: `正在读取页面摘要 0/${candidates.length}，已读到 0 个`
+  });
+
+  const sampleOne = async (tab) => {
     await options.onProgress?.({
       phase: "sampling",
-      progress: 20 + Math.round((index / candidates.length) * 16),
-      message: `正在读取页面摘要 ${index + 1}/${candidates.length}，已读到 ${sampledOk} 个`
+      progress: 20 + Math.round((completed / candidates.length) * 16),
+      message: `正在读取页面摘要 ${completed}/${candidates.length}，已读到 ${sampledOk} 个`
     });
     const liveTab = await getLiveTab(chromeApi, tab.tabId);
     const sampleResult = liveTab
-      ? await requestPageSample(chromeApi, liveTab, settings, `Improve semantic grouping for tab ${tab.tabId}.`)
+      ? await requestPageSampleWithTimeout(chromeApi, liveTab, settings, options.signal, `Improve semantic grouping for tab ${tab.tabId}.`)
       : { status: "missing", reason: "Tab disappeared before sampling." };
     if (sampleResult.status === "ok") {
       sampledOk += 1;
@@ -627,7 +639,30 @@ async function attachPageSamples(chromeApi, inventory, settings, options = {}) {
       reason: sampleResult.reason || "",
       sample: sampleResult.sample || null
     });
-  }
+    completed += 1;
+    await options.onProgress?.({
+      phase: "sampling",
+      progress: 20 + Math.round((completed / candidates.length) * 16),
+      message: `正在读取页面摘要 ${completed}/${candidates.length}，已读到 ${sampledOk} 个`
+    });
+  };
+
+  await Promise.all(
+    Array.from({ length: workerCount }, async () => {
+      while (nextIndex < candidates.length) {
+        throwIfCanceled(options.signal);
+        const tab = candidates[nextIndex];
+        nextIndex += 1;
+        await sampleOne(tab);
+      }
+    })
+  );
+
+  inventory.pageSamples.sort((left, right) => {
+    const leftTab = candidates.findIndex((tab) => tab.tabId === left.tabId);
+    const rightTab = candidates.findIndex((tab) => tab.tabId === right.tabId);
+    return leftTab - rightTab;
+  });
   await options.onProgress?.({
     phase: "sampling",
     progress: 36,
@@ -636,6 +671,54 @@ async function attachPageSamples(chromeApi, inventory, settings, options = {}) {
       : `页面摘要：读到 ${sampledOk}/${candidates.length} 个`
   });
   return inventory;
+}
+
+async function requestPageSampleWithTimeout(chromeApi, tab, settings, signal, reason) {
+  const timeoutMs = Number(globalThis.__semanticTabAgentPageSampleTimeoutMs) || PAGE_SAMPLE_TIMEOUT_MS;
+  try {
+    return await raceWithTimeoutAndAbort(
+      requestPageSample(chromeApi, tab, settings, reason),
+      timeoutMs,
+      signal
+    );
+  } catch (error) {
+    throwIfCanceled(signal);
+    const rawUrl = tab.url || tab.pendingUrl || "";
+    return {
+      status: "blocked",
+      origin: safeOriginPattern(rawUrl),
+      reason: /timed out/i.test(String(error?.message || ""))
+        ? "Timed out while reading page summary."
+        : "Page summary could not be read in time."
+    };
+  }
+}
+
+function raceWithTimeoutAndAbort(promise, timeoutMs, signal) {
+  if (signal?.aborted) return Promise.reject(new Error("已取消整理。"));
+
+  let timeoutId;
+  let abortHandler;
+  const timeoutPromise = new Promise((_, reject) => {
+    timeoutId = setTimeout(() => reject(new Error(`Page sampling timed out after ${timeoutMs}ms.`)), timeoutMs);
+  });
+  const abortPromise = new Promise((_, reject) => {
+    abortHandler = () => reject(new Error("已取消整理。"));
+    signal?.addEventListener("abort", abortHandler, { once: true });
+  });
+
+  return Promise.race([promise, timeoutPromise, abortPromise]).finally(() => {
+    clearTimeout(timeoutId);
+    if (abortHandler) signal?.removeEventListener("abort", abortHandler);
+  });
+}
+
+function safeOriginPattern(rawUrl) {
+  try {
+    return new URL(rawUrl).origin + "/*";
+  } catch {
+    return "";
+  }
 }
 
 async function assertNoRunningAnalysis(chromeApi) {
@@ -672,6 +755,7 @@ function isValidInstallId(value) {
 async function updateActiveJob(chromeApi, operationId, patch) {
   const current = await getLocal(chromeApi, STORAGE_KEYS.activeJob, {});
   if (current?.operationId && current.operationId !== operationId) return current;
+  if (ACTIVE_JOB_TERMINAL_STATUSES.has(current?.status)) return current;
 
   const nextPatch = { ...patch };
   if (current?.status === "canceling") {

@@ -592,6 +592,91 @@ test("active tab page samples are attached to analysis preview", async () => {
   assert.equal(job.preview.pageSampling.requested, 1);
 });
 
+test("page sampling timeouts fall back without blocking analysis", async () => {
+  const chrome = createFakeChrome({
+    grantedOrigins: ["https://a.example/*", "https://b.example/*", "https://c.example/*"],
+    windows: [
+      {
+        id: 1,
+        focused: true,
+        tabs: [
+          { id: 10, title: "A", url: "https://a.example/page", active: true },
+          { id: 11, title: "B", url: "https://b.example/page" },
+          { id: 12, title: "C", url: "https://c.example/page" }
+        ]
+      }
+    ]
+  });
+
+  chrome.scripting.executeScript = async ({ target }) => {
+    if (target.tabId === 11) return new Promise(() => {});
+    return [{ result: { title: `Sample ${target.tabId}`, headings: [], visibleText: "Readable text" } }];
+  };
+  globalThis.__semanticTabAgentPageSampleTimeoutMs = 10;
+
+  try {
+    const job = await analyzeTabs(
+      chrome,
+      {
+        ...FAKE_PLANNER_SETTINGS,
+        pageContextMode: PAGE_CONTEXT_MODES.ALL_GRANTED_ORIGINS,
+        pageSamplingConsentMode: PAGE_SAMPLING_CONSENT_MODES.ACKNOWLEDGED_FOR_SESSION
+      },
+      { windowId: 1 }
+    );
+
+    assert.equal(job.inventory.pageSamples.length, 3);
+    assert.deepEqual(
+      job.inventory.pageSamples.map((sample) => sample.tabId),
+      [10, 11, 12]
+    );
+    assert.equal(job.inventory.pageSamples.find((sample) => sample.tabId === 11).status, "blocked");
+    assert.match(job.inventory.pageSamples.find((sample) => sample.tabId === 11).reason, /Timed out/);
+    assert.equal(job.preview.pageSampling.ok, 2);
+    assert.equal(job.preview.pageSampling.blocked, 1);
+  } finally {
+    delete globalThis.__semanticTabAgentPageSampleTimeoutMs;
+  }
+});
+
+test("canceling during page sampling marks the job canceled immediately", async () => {
+  const chrome = createFakeChrome({
+    grantedOrigins: ["https://example.com/*"],
+    windows: [
+      {
+        id: 1,
+        focused: true,
+        tabs: [{ id: 10, title: "Ambiguous", url: "https://example.com/page", active: true }]
+      }
+    ]
+  });
+
+  chrome.scripting.executeScript = async () => new Promise(() => {});
+  globalThis.__semanticTabAgentPageSampleTimeoutMs = 30_000;
+
+  try {
+    const pending = analyzeTabs(
+      chrome,
+      {
+        ...FAKE_PLANNER_SETTINGS,
+        pageContextMode: PAGE_CONTEXT_MODES.ALL_GRANTED_ORIGINS,
+        pageSamplingConsentMode: PAGE_SAMPLING_CONSENT_MODES.ACKNOWLEDGED_FOR_SESSION
+      },
+      { windowId: 1 }
+    );
+
+    await waitForActiveJob(chrome, (job) => job?.phase === "sampling");
+    const cancelResult = await cancelActiveJob(chrome);
+    assert.equal(cancelResult.canceled, true);
+    assert.equal(cancelResult.job.status, "canceled");
+    assert.equal(cancelResult.job.message, "已取消整理。");
+    await assert.rejects(pending, /已取消整理/);
+    assert.equal((await getActiveJob(chrome)).status, "canceled");
+  } finally {
+    delete globalThis.__semanticTabAgentPageSampleTimeoutMs;
+  }
+});
+
 test("active analysis exposes progress and can be canceled", async () => {
   const chrome = createFakeChrome({
     windows: [
