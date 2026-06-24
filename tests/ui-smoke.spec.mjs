@@ -64,7 +64,7 @@ test("popup renders settings and mock preview", async ({ page }) => {
   await expect(page.locator(".segmented")).toHaveCount(0);
   await expect(page.locator("#previewSection")).toBeHidden();
   await expect(page.locator("#samplingRisk")).toBeVisible();
-  await expect(page.locator("#samplingRisk")).toHaveText("i");
+  await expect(page.locator("#samplingRisk svg")).toBeVisible();
   await expect(page.locator("#samplingRisk")).toHaveAttribute("data-tooltip", /不会读取密码/);
   await expect(page.getByText("会读取页面文字摘要")).toHaveCount(0);
   await expect(page.getByText("会在后台保存短摘要")).toHaveCount(0);
