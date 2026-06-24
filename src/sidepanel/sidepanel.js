@@ -22,6 +22,7 @@ const fields = {
   includePinnedTabs: document.querySelector("#includePinnedTabs"),
   includeIncognitoTabs: document.querySelector("#includeIncognitoTabs"),
   collapseGroupsAfterApply: document.querySelector("#collapseGroupsAfterApply"),
+  continuousPageSummaries: document.querySelector("#continuousPageSummaries"),
   minConfidenceToApply: document.querySelector("#minConfidenceToApply"),
   maxTabsPerGroup: document.querySelector("#maxTabsPerGroup"),
   ackSampling: document.querySelector("#ackSampling")
@@ -70,6 +71,7 @@ const nodes = {
   appShell: document.querySelector(".app-shell"),
   statusText: document.querySelector("#statusText"),
   samplingRisk: document.querySelector("#samplingRisk"),
+  continuousSummaryRisk: document.querySelector("#continuousSummaryRisk"),
   hostPermissionField: document.querySelector("#hostPermissionField"),
   targetWindowField: document.querySelector("#targetWindowField"),
   progressBar: document.querySelector("#progressBar"),
@@ -118,16 +120,27 @@ async function init() {
 
 function bindEvents() {
   for (const element of Object.values(fields)) {
-    if (element === fields.ackSampling) continue;
+    if (element === fields.ackSampling || element === fields.continuousPageSummaries) continue;
     element.addEventListener("change", persistSettings);
   }
   fields.ackSampling.addEventListener("change", () => {
     if (fields.ackSampling.checked) {
       if (fields.pageContextMode.value === "off" || fields.pageContextMode.value === "active_tab_only") {
-        fields.pageContextMode.value = "all_granted_origins";
+        fields.pageContextMode.value = "ambiguous_with_permission";
       }
       if (fields.hostPermissionRequestMode.value === "never") {
         fields.hostPermissionRequestMode.value = "ask_for_all_visible_origins";
+      }
+    }
+    persistSettings();
+  });
+  fields.continuousPageSummaries.addEventListener("change", async () => {
+    if (fields.continuousPageSummaries.checked) {
+      try {
+        await ensureContinuousSummaryPermissions();
+      } catch (error) {
+        fields.continuousPageSummaries.checked = false;
+        setStatus(error.message, true);
       }
     }
     persistSettings();
@@ -173,13 +186,15 @@ function bindSettingSwitches() {
 }
 
 function readSettings() {
+  const contentAccessAvailable = hasContentAccessFeature();
   const pageContextMode = normalizePanelPageContextMode(fields.pageContextMode.value);
   const effectivePageContextMode =
-    fields.ackSampling.checked
+    contentAccessAvailable && fields.ackSampling.checked
       ? pageContextMode === "off"
-        ? "all_granted_origins"
+        ? "ambiguous_with_permission"
         : pageContextMode
       : "off";
+  const continuousPageSummaries = contentAccessAvailable && fields.continuousPageSummaries.checked;
   return {
     organizeMode: fields.organizeMode.value,
     existingGroupMode: fields.existingGroupMode.value,
@@ -190,12 +205,15 @@ function readSettings() {
     urlPrivacyMode: fields.urlPrivacyMode.value,
     pageContextMode: effectivePageContextMode,
     hostPermissionRequestMode:
+      contentAccessAvailable &&
       fields.ackSampling.checked &&
       fields.hostPermissionRequestMode.value === "never"
         ? "ask_for_all_visible_origins"
         : fields.hostPermissionRequestMode.value,
     pageSamplingConsentMode:
-      fields.ackSampling.checked
+      continuousPageSummaries
+        ? "acknowledged_persistently"
+        : contentAccessAvailable && fields.ackSampling.checked
         ? "acknowledged_for_session"
         : "not_acknowledged",
     languageMode: fields.languageMode.value,
@@ -211,6 +229,7 @@ function readSettings() {
     includePinnedTabs: fields.includePinnedTabs.checked,
     includeIncognitoTabs: fields.includeIncognitoTabs.checked,
     collapseGroupsAfterApply: fields.collapseGroupsAfterApply.checked,
+    continuousPageSummaries,
     minConfidenceToApply: fields.minConfidenceToApply.value,
     maxTabsPerGroup: fields.maxTabsPerGroup.value
   };
@@ -223,8 +242,7 @@ function writeSettings(settings) {
   };
   for (const [key, element] of Object.entries(fields)) {
     if (key === "ackSampling") {
-      element.checked =
-        displaySettings.pageSamplingConsentMode === "acknowledged_for_session" || displaySettings.pageContextMode !== "off";
+      element.checked = hasContentAccessFeature() && displaySettings.pageContextMode !== "off";
     } else if (key === "plannerProvider") {
       element.value = allowInternalFakeProvider() && displaySettings[key] === "fake" ? "fake" : "gateway";
     } else if (element.type === "checkbox") {
@@ -261,8 +279,12 @@ async function persistSettings() {
 }
 
 function updateConditionalUi() {
-  const samplingEnabled = fields.ackSampling.checked || fields.pageContextMode.value !== "off";
+  const contentAccessAvailable = hasContentAccessFeature();
+  nodes.appShell.dataset.contentAccess = contentAccessAvailable ? "on" : "off";
+  const samplingEnabled = contentAccessAvailable && (fields.ackSampling.checked || fields.pageContextMode.value !== "off");
+  const continuousEnabled = contentAccessAvailable && fields.continuousPageSummaries.checked;
   nodes.samplingRisk.hidden = !samplingEnabled;
+  nodes.continuousSummaryRisk.hidden = !continuousEnabled;
   nodes.hostPermissionField.hidden =
     !samplingEnabled || fields.pageContextMode.value === "off";
   nodes.targetWindowField.hidden = fields.organizeMode.value !== "consolidate_one_window";
@@ -871,8 +893,26 @@ async function ensurePlannerHostPermission(settings) {
   }
 }
 
+async function ensureContinuousSummaryPermissions() {
+  if (!hasContentAccessFeature()) {
+    throw new Error("当前构建不包含实验性页面摘要缓存。");
+  }
+  if (!globalThis.chrome?.permissions?.contains || !globalThis.chrome?.permissions?.request) return;
+
+  await requireOptionalPermission(
+    {
+      permissions: ["scripting"],
+      origins: ["https://*/*", "http://*/*"]
+    },
+    "需要授权网页读取权限后，才能持续积累页面摘要。"
+  );
+}
+
 async function ensurePageSamplingPermissions(settings) {
   if (settings.pageContextMode === "off" || settings.pageSamplingConsentMode === "not_acknowledged") return;
+  if (!hasContentAccessFeature()) {
+    throw new Error("当前构建不包含页面摘要功能。");
+  }
   if (!globalThis.chrome?.permissions?.contains || !globalThis.chrome?.permissions?.request) return;
 
   const shouldRequestHostOrigins =
@@ -922,7 +962,21 @@ function schedulePageSamplingOriginRefresh() {
   }, 50);
 }
 
+function hasContentAccessFeature() {
+  const manifest = globalThis.chrome?.runtime?.getManifest?.();
+  if (!manifest) return true;
+  return Boolean(
+    (manifest.optional_permissions || []).includes("scripting") &&
+      (manifest.optional_host_permissions || []).some((origin) => origin === "https://*/*" || origin === "http://*/*")
+  );
+}
+
 async function refreshPageSamplingOriginCache() {
+  if (!hasContentAccessFeature()) {
+    pageSamplingOriginCache = { origins: [], refreshedAt: Date.now() };
+    globalThis.__semanticTabAgentPageSamplingOrigins = pageSamplingOriginCache;
+    return;
+  }
   const settings = readSettings();
   const shouldCollect =
     settings.pageContextMode !== "off" &&

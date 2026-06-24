@@ -8,6 +8,7 @@ import {
   normalizeSettings
 } from "../shared/settings.js";
 import { applyValidatedPlan, createRollbackSnapshot, undoFromRollback } from "./chrome-executor.js";
+import { cachedPageSampleForTab, rememberPageSummary } from "./page-summary-cache.js";
 import { requestPageSample } from "./page-sampler.js";
 import { createPlan } from "./planner.js";
 import { normalizePlanOrder } from "./plan-normalizer.js";
@@ -593,14 +594,23 @@ async function createValidatedPlan(inventory, settings, options = {}) {
 
 async function attachPageSamples(chromeApi, inventory, settings, options = {}) {
   inventory.pageSamples = [];
+  const cachedTabIds = await attachCachedPageSamples(chromeApi, inventory, settings, options);
   if (settings.pageContextMode === PAGE_CONTEXT_MODES.OFF) {
-    await options.onProgress?.({ phase: "sampling", progress: 24, message: "页面摘要已关闭" });
+    await options.onProgress?.({
+      phase: "sampling",
+      progress: 24,
+      message: cachedTabIds.size ? `使用已缓存页面摘要 ${cachedTabIds.size} 个` : "页面摘要已关闭"
+    });
     return inventory;
   }
 
-  const candidates = selectSamplingCandidates(inventory, settings);
+  const candidates = selectSamplingCandidates(inventory, settings).filter((tab) => !cachedTabIds.has(tab.tabId));
   if (!candidates.length) {
-    await options.onProgress?.({ phase: "sampling", progress: 30, message: "没有需要读取摘要的页面" });
+    await options.onProgress?.({
+      phase: "sampling",
+      progress: 30,
+      message: cachedTabIds.size ? `使用已缓存页面摘要 ${cachedTabIds.size} 个` : "没有需要读取摘要的页面"
+    });
     return inventory;
   }
 
@@ -608,12 +618,26 @@ async function attachPageSamples(chromeApi, inventory, settings, options = {}) {
   let sampledBlocked = 0;
   let completed = 0;
   let nextIndex = 0;
-  const workerCount = Math.min(PAGE_SAMPLE_CONCURRENCY, candidates.length);
+  const runnableCandidates = [];
+  const candidateOrder = new Map(candidates.map((tab, index) => [tab.tabId, index]));
+
+  for (const tab of candidates) {
+    throwIfCanceled(options.signal);
+    if (shouldSkipPageSample(tab)) {
+      sampledBlocked += 1;
+      completed += 1;
+      inventory.pageSamples.push(skippedPageSampleForTab(tab));
+    } else {
+      runnableCandidates.push(tab);
+    }
+  }
+
+  const workerCount = Math.min(PAGE_SAMPLE_CONCURRENCY, runnableCandidates.length);
 
   await options.onProgress?.({
     phase: "sampling",
-    progress: 20,
-    message: `正在读取页面摘要 0/${candidates.length}，已读到 0 个`
+    progress: 20 + Math.round((completed / candidates.length) * 16),
+    message: `正在读取页面摘要 ${completed}/${candidates.length}，已读到 ${sampledOk} 个`
   });
 
   const sampleOne = async (tab) => {
@@ -628,6 +652,9 @@ async function attachPageSamples(chromeApi, inventory, settings, options = {}) {
       : { status: "missing", reason: "Tab disappeared before sampling." };
     if (sampleResult.status === "ok") {
       sampledOk += 1;
+      if (settings.continuousPageSummaries && liveTab) {
+        await rememberPageSummary(chromeApi, liveTab, sampleResult).catch(() => null);
+      }
     } else {
       sampledBlocked += 1;
     }
@@ -649,9 +676,9 @@ async function attachPageSamples(chromeApi, inventory, settings, options = {}) {
 
   await Promise.all(
     Array.from({ length: workerCount }, async () => {
-      while (nextIndex < candidates.length) {
+      while (nextIndex < runnableCandidates.length) {
         throwIfCanceled(options.signal);
-        const tab = candidates[nextIndex];
+        const tab = runnableCandidates[nextIndex];
         nextIndex += 1;
         await sampleOne(tab);
       }
@@ -659,9 +686,7 @@ async function attachPageSamples(chromeApi, inventory, settings, options = {}) {
   );
 
   inventory.pageSamples.sort((left, right) => {
-    const leftTab = candidates.findIndex((tab) => tab.tabId === left.tabId);
-    const rightTab = candidates.findIndex((tab) => tab.tabId === right.tabId);
-    return leftTab - rightTab;
+    return (candidateOrder.get(left.tabId) ?? 0) - (candidateOrder.get(right.tabId) ?? 0);
   });
   await options.onProgress?.({
     phase: "sampling",
@@ -671,6 +696,36 @@ async function attachPageSamples(chromeApi, inventory, settings, options = {}) {
       : `页面摘要：读到 ${sampledOk}/${candidates.length} 个`
   });
   return inventory;
+}
+
+async function attachCachedPageSamples(chromeApi, inventory, settings, options = {}) {
+  if (!settings.continuousPageSummaries) return new Set();
+
+  const cachedTabIds = new Set();
+  for (const tab of inventory.plannerTabs || []) {
+    throwIfCanceled(options.signal);
+    if (!tab.sampleable) continue;
+    const cached = await cachedPageSampleForTab(chromeApi, tab).catch(() => null);
+    if (!cached) continue;
+    inventory.pageSamples.push(cached);
+    cachedTabIds.add(tab.tabId);
+  }
+  return cachedTabIds;
+}
+
+function shouldSkipPageSample(tab) {
+  return Boolean(tab.discarded);
+}
+
+function skippedPageSampleForTab(tab) {
+  return {
+    tabId: tab.tabId,
+    windowId: tab.windowId,
+    status: "discarded",
+    origin: "",
+    reason: "Tab is sleeping; page summary was skipped to avoid waking it.",
+    sample: null
+  };
 }
 
 async function requestPageSampleWithTimeout(chromeApi, tab, settings, signal, reason) {

@@ -107,6 +107,7 @@ export const DEFAULT_SETTINGS = Object.freeze({
   includePinnedTabs: false,
   includeIncognitoTabs: false,
   collapseGroupsAfterApply: true,
+  continuousPageSummaries: false,
   minConfidenceToApply: 0.65,
   maxTabsPerGroup: 40,
   undoTargetWindowMode: UNDO_TARGET_WINDOW_MODES.LEAVE_EMPTY,
@@ -151,6 +152,7 @@ export function normalizeSettings(input = {}) {
   merged.includePinnedTabs = Boolean(merged.includePinnedTabs);
   merged.includeIncognitoTabs = Boolean(merged.includeIncognitoTabs);
   merged.collapseGroupsAfterApply = Boolean(merged.collapseGroupsAfterApply);
+  merged.continuousPageSummaries = Boolean(merged.continuousPageSummaries);
   merged.rememberProviderKeys = Boolean(merged.rememberProviderKeys);
   merged.minConfidenceToApply = clampNumber(merged.minConfidenceToApply, 0, 1, DEFAULT_SETTINGS.minConfidenceToApply);
   merged.maxTabsPerGroup = Math.max(1, Number.parseInt(merged.maxTabsPerGroup, 10) || DEFAULT_SETTINGS.maxTabsPerGroup);

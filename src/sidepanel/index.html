@@ -51,17 +51,30 @@
           </select>
 
           <div class="preferences-panel">
-            <label class="switch-row emphasis-toggle">
+            <label class="switch-row emphasis-toggle content-access-feature">
               <span>
-                <strong>参考页面短摘要</strong>
-                <small>标题不够明确时更准</small>
+                <strong>整理时精扫不确定页</strong>
+                <small>只补读少量可访问页面</small>
               </span>
               <input id="ackSampling" type="checkbox" />
             </label>
 
-            <div id="samplingRisk" class="risk" hidden>
+            <div id="samplingRisk" class="risk content-access-feature" hidden>
               <strong>会读取页面文字摘要</strong>
-              <p>只读取标题、描述、标题层级和一小段可见文字；不会读取密码、表单内容、Cookie、本地存储或完整 HTML。</p>
+              <p>只读取标题、描述、标题层级和一小段可见文字；不会读取密码、表单内容、Cookie、本地存储或完整 HTML。休眠标签页不会被唤醒。</p>
+            </div>
+
+            <label class="switch-row emphasis-toggle content-access-feature experimental-toggle">
+              <span>
+                <strong>实验：持续积累页面摘要</strong>
+                <small>开发版功能，商店版不包含</small>
+              </span>
+              <input id="continuousPageSummaries" type="checkbox" />
+            </label>
+
+            <div id="continuousSummaryRisk" class="risk content-access-feature" hidden>
+              <strong>实验性长期 agent</strong>
+              <p>开启后会请求一次性网页读取权限。之后只在已授权、未休眠、非无痕页面上静默缓存短摘要；不会主动唤醒大量标签页。</p>
             </div>
 
             <div class="field prompt-field">
@@ -144,7 +157,7 @@
           </select>
         </div>
 
-        <div class="field">
+        <div class="field content-access-feature">
           <label for="pageContextMode">页面摘要范围</label>
           <select id="pageContextMode">
             <option value="off">关闭</option>

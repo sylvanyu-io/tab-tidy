@@ -43,7 +43,7 @@ export async function requestPageSample(chromeApi, tab, rawSettings, reason = ""
   }
 
   const origin = new URL(rawUrl).origin + "/*";
-  const hasPermission = await chromeApi.permissions.contains({ origins: [origin] });
+  const hasPermission = await containsHostPermission(chromeApi, origin);
   if (!hasPermission && settings.hostPermissionRequestMode === HOST_PERMISSION_REQUEST_MODES.NEVER) {
     return { status: "permission_required", origin, reason: "Host permission is required for page sampling." };
   }
@@ -63,6 +63,18 @@ export async function requestPageSample(chromeApi, tab, rawSettings, reason = ""
       reason: executionPermissionReason(error)
     };
   }
+}
+
+async function containsHostPermission(chromeApi, origin) {
+  if (await chromeApi.permissions.contains({ origins: [origin] })) return true;
+  const broadOrigin = broadHostPattern(origin);
+  return Boolean(broadOrigin && (await chromeApi.permissions.contains({ origins: [broadOrigin] })));
+}
+
+function broadHostPattern(origin) {
+  if (origin.startsWith("https://")) return "https://*/*";
+  if (origin.startsWith("http://")) return "http://*/*";
+  return "";
 }
 
 async function executePageSample(chromeApi, tab, reason) {

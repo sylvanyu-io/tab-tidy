@@ -11,6 +11,7 @@ import {
   undoLastApply
 } from "../src/core/controller.js";
 import { undoFromRollback } from "../src/core/chrome-executor.js";
+import { rememberPageSummary } from "../src/core/page-summary-cache.js";
 import { STORAGE_KEYS } from "../src/core/storage.js";
 import {
   DEFAULT_SETTINGS,
@@ -637,6 +638,92 @@ test("page sampling timeouts fall back without blocking analysis", async () => {
   } finally {
     delete globalThis.__semanticTabAgentPageSampleTimeoutMs;
   }
+});
+
+test("discarded tabs skip page sampling without waking the page", async () => {
+  const chrome = createFakeChrome({
+    grantedOrigins: ["https://a.example/*", "https://b.example/*", "https://c.example/*"],
+    windows: [
+      {
+        id: 1,
+        focused: true,
+        tabs: [
+          { id: 10, title: "A", url: "https://a.example/page", active: true },
+          { id: 11, title: "B", url: "https://b.example/page", discarded: true },
+          { id: 12, title: "C", url: "https://c.example/page", discarded: true }
+        ]
+      }
+    ]
+  });
+
+  const sampledTabIds = [];
+  chrome.scripting.executeScript = async ({ target }) => {
+    sampledTabIds.push(target.tabId);
+    return [{ result: { title: `Sample ${target.tabId}`, headings: [], visibleText: "Readable text" } }];
+  };
+
+  const job = await analyzeTabs(
+    chrome,
+    {
+      ...FAKE_PLANNER_SETTINGS,
+      pageContextMode: PAGE_CONTEXT_MODES.ALL_GRANTED_ORIGINS,
+      pageSamplingConsentMode: PAGE_SAMPLING_CONSENT_MODES.ACKNOWLEDGED_FOR_SESSION
+    },
+    { windowId: 1 }
+  );
+
+  assert.deepEqual(sampledTabIds, [10]);
+  assert.deepEqual(
+    job.inventory.pageSamples.map((sample) => sample.status),
+    ["ok", "discarded", "discarded"]
+  );
+  assert.equal(job.preview.pageSampling.requested, 3);
+  assert.equal(job.preview.pageSampling.ok, 1);
+  assert.equal(job.preview.pageSampling.blocked, 2);
+});
+
+test("continuous summary cache can enrich analysis without live page sampling", async () => {
+  const chrome = createFakeChrome({
+    windows: [
+      {
+        id: 1,
+        focused: true,
+        tabs: [{ id: 10, title: "Cached", url: "https://example.com/project", active: true }]
+      }
+    ]
+  });
+  chrome.scripting.executeScript = async () => {
+    throw new Error("Live page sampling should not run.");
+  };
+  await rememberPageSummary(
+    chrome,
+    { id: 10, title: "Cached", url: "https://example.com/project" },
+    {
+      status: "ok",
+      sample: {
+        title: "Cached page",
+        metaDescription: "Cached metadata",
+        language: "en",
+        headings: ["Cached heading"],
+        visibleText: "Cached visible text"
+      }
+    }
+  );
+
+  const job = await analyzeTabs(
+    chrome,
+    {
+      ...FAKE_PLANNER_SETTINGS,
+      continuousPageSummaries: true,
+      pageContextMode: PAGE_CONTEXT_MODES.OFF,
+      pageSamplingConsentMode: PAGE_SAMPLING_CONSENT_MODES.ACKNOWLEDGED_PERSISTENTLY
+    },
+    { windowId: 1 }
+  );
+
+  assert.equal(job.inventory.pageSamples.length, 1);
+  assert.equal(job.inventory.pageSamples[0].reason, "Cached page summary.");
+  assert.equal(job.preview.pageSampling.ok, 1);
 });
 
 test("canceling during page sampling marks the job canceled immediately", async () => {

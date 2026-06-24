@@ -64,7 +64,7 @@ test("floating window renders settings and mock preview", async ({ page }) => {
 
   await page.locator("#ackSampling").check();
   await expect(page.locator("#samplingRisk")).toBeVisible();
-  await expect(page.locator("#pageContextMode")).toHaveValue("all_granted_origins");
+  await expect(page.locator("#pageContextMode")).toHaveValue("ambiguous_with_permission");
   await expect(page.locator("#hostPermissionRequestMode")).toHaveValue("ask_for_all_visible_origins");
   await expect(page.locator("#pageContextMode option[value='active_tab_only']")).toHaveCount(0);
 
@@ -880,7 +880,7 @@ test("page summary main toggle requests scripting and page origins", async ({ pa
 
   await page.goto(`${baseUrl}/src/sidepanel/index.html?sourceWindowId=77`);
   await page.locator("#ackSampling").check();
-  await expect.poll(() => page.evaluate(() => window.__savedSettings.at(-1)?.pageContextMode)).toBe("all_granted_origins");
+  await expect.poll(() => page.evaluate(() => window.__savedSettings.at(-1)?.pageContextMode)).toBe("ambiguous_with_permission");
   await expect.poll(() => page.evaluate(() => window.__savedSettings.at(-1)?.hostPermissionRequestMode)).toBe(
     "ask_for_all_visible_origins"
   );
@@ -889,8 +889,123 @@ test("page summary main toggle requests scripting and page origins", async ({ pa
   await expect(page.locator(".preview").getByText("需要授权", { exact: true })).toBeVisible();
   await expect.poll(() => page.evaluate(() => window.__permissionRequests)).toContainEqual({
     permissions: ["scripting"],
-    origins: ["https://example.com/*", "https://docs.example.org/*"]
+    origins: ["https://example.com/*"]
   });
+});
+
+test("experimental continuous summaries request all-site optional access once", async ({ page }) => {
+  await page.addInitScript(() => {
+    let settings = {
+      organizeMode: "current_window",
+      targetWindowMode: "current_window",
+      existingGroupMode: "preserve_existing_groups",
+      reviewGroupMode: "create_review_group",
+      undoTargetWindowMode: "leave_empty_target_window",
+      pageContextMode: "off",
+      hostPermissionRequestMode: "never",
+      pageSamplingConsentMode: "not_acknowledged",
+      urlPrivacyMode: "sanitized_url",
+      includePinnedTabs: false,
+      includeIncognitoTabs: false,
+      collapseGroupsAfterApply: true,
+      continuousPageSummaries: false,
+      minConfidenceToApply: 0.65,
+      maxTabsPerGroup: 40,
+      promptPreset: "conservative",
+      plannerProvider: "gateway",
+      rememberProviderKeys: false,
+      gatewayBaseUrl: "",
+      gatewayModel: "gpt-5.5",
+      gatewayThinkingIntensity: "high",
+      gatewayApiKey: "",
+      customPrompt: ""
+    };
+    window.__permissionRequests = [];
+    window.__savedSettings = [];
+    window.chrome = {
+      permissions: {
+        contains: async () => false,
+        request: async (request) => {
+          window.__permissionRequests.push(request);
+          return true;
+        }
+      },
+      runtime: {
+        getManifest: () => ({
+          optional_permissions: ["scripting"],
+          optional_host_permissions: ["https://*/*", "http://*/*"]
+        }),
+        sendMessage: async (message) => {
+          if (message.type === "settings:get") return { ok: true, result: settings };
+          if (message.type === "settings:save") {
+            settings = message.settings;
+            window.__savedSettings.push(settings);
+            return { ok: true, result: settings };
+          }
+          if (message.type === "tabs:getActiveJob") return { ok: true, result: null };
+          return { ok: true, result: null };
+        }
+      }
+    };
+  });
+
+  await page.goto(`${baseUrl}/src/sidepanel/index.html`);
+  await page.locator("#continuousPageSummaries").check();
+  await expect.poll(() => page.evaluate(() => window.__permissionRequests.at(-1))).toEqual({
+    permissions: ["scripting"],
+    origins: ["https://*/*", "http://*/*"]
+  });
+  await expect.poll(() => page.evaluate(() => window.__savedSettings.at(-1)?.continuousPageSummaries)).toBe(true);
+  await expect.poll(() => page.evaluate(() => window.__savedSettings.at(-1)?.pageSamplingConsentMode)).toBe(
+    "acknowledged_persistently"
+  );
+});
+
+test("store manifest hides content-reading controls", async ({ page }) => {
+  await page.addInitScript(() => {
+    const settings = {
+      organizeMode: "current_window",
+      targetWindowMode: "current_window",
+      existingGroupMode: "preserve_existing_groups",
+      reviewGroupMode: "create_review_group",
+      undoTargetWindowMode: "leave_empty_target_window",
+      pageContextMode: "off",
+      hostPermissionRequestMode: "never",
+      pageSamplingConsentMode: "not_acknowledged",
+      urlPrivacyMode: "sanitized_url",
+      includePinnedTabs: false,
+      includeIncognitoTabs: false,
+      collapseGroupsAfterApply: true,
+      continuousPageSummaries: false,
+      minConfidenceToApply: 0.65,
+      maxTabsPerGroup: 40,
+      promptPreset: "conservative",
+      plannerProvider: "gateway",
+      rememberProviderKeys: false,
+      gatewayBaseUrl: "",
+      gatewayModel: "gpt-5.5",
+      gatewayThinkingIntensity: "high",
+      gatewayApiKey: "",
+      customPrompt: ""
+    };
+    window.chrome = {
+      runtime: {
+        getManifest: () => ({ optional_permissions: [], optional_host_permissions: [] }),
+        sendMessage: async (message) => {
+          if (message.type === "settings:get") return { ok: true, result: settings };
+          if (message.type === "settings:save") return { ok: true, result: message.settings };
+          if (message.type === "tabs:getActiveJob") return { ok: true, result: null };
+          return { ok: true, result: null };
+        }
+      }
+    };
+  });
+
+  await page.goto(`${baseUrl}/src/sidepanel/index.html`);
+  await expect(page.locator("#ackSampling")).toBeHidden();
+  await expect(page.locator("#continuousPageSummaries")).toBeHidden();
+  await page.getByText("更多选项").click();
+  await expect(page.locator("#pageContextMode")).toBeHidden();
 });
 
 test("page summary permission denial stops generation", async ({ page }) => {

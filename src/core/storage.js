@@ -3,7 +3,8 @@ export const STORAGE_KEYS = Object.freeze({
   installId: "semanticTabAgent.installId",
   activeJob: "semanticTabAgent.activeJob",
   lastJob: "semanticTabAgent.lastJob",
-  lastRollback: "semanticTabAgent.lastRollback"
+  lastRollback: "semanticTabAgent.lastRollback",
+  pageSummaryCache: "semanticTabAgent.pageSummaryCache"
 });
 
 export async function getLocal(chromeApi, key, fallback = null) {

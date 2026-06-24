@@ -53,6 +53,6 @@ function summarizePageSamples(results) {
     requested: results.length,
     ok: results.filter((result) => result.status === "ok").length,
     permissionRequired: results.filter((result) => result.status === "permission_required").length,
-    blocked: results.filter((result) => ["blocked", "permission_denied", "unsupported_url", "missing"].includes(result.status)).length
+    blocked: results.filter((result) => ["blocked", "discarded", "permission_denied", "unsupported_url", "missing"].includes(result.status)).length
   };
 }
