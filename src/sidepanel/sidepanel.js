@@ -84,7 +84,7 @@ const UI_COPY = Object.freeze({
     "field.pageContext": "补读范围",
     "field.hostPermission": "站点授权",
     "field.resultLanguage": "结果语言",
-    "field.promptPreset": "整理风格",
+    "field.promptPreset": "整理方式",
     "field.gatewayModel": "AI 模型",
     "field.thinking": "思考强度",
     "field.customModel": "自定义模型名",
@@ -115,9 +115,12 @@ const UI_COPY = Object.freeze({
     "option.langAuto": "自动判断",
     "option.langZh": "简体中文",
     "option.langEn": "English",
-    "option.presetConservative": "稳妥",
-    "option.presetResearch": "研究资料",
-    "option.presetProject": "项目工作",
+    "option.presetConservative": "智能主题",
+    "option.presetResearch": "按研究方向",
+    "option.presetPlatform": "按平台来源",
+    "option.presetHybrid": "方向 + 公共平台",
+    "option.presetProject": "项目 / 任务",
+    "option.presetReadLater": "稍后阅读",
     "option.presetAggressive": "强力清理",
     "option.customModel": "自定义模型名",
     "option.thinkingLow": "低",
@@ -222,7 +225,7 @@ const UI_COPY = Object.freeze({
     "field.pageContext": "Page summary range",
     "field.hostPermission": "Site access",
     "field.resultLanguage": "Result language",
-    "field.promptPreset": "Cleanup style",
+    "field.promptPreset": "Cleanup mode",
     "field.gatewayModel": "AI model",
     "field.thinking": "Reasoning effort",
     "field.customModel": "Custom model name",
@@ -253,9 +256,12 @@ const UI_COPY = Object.freeze({
     "option.langAuto": "Auto",
     "option.langZh": "Simplified Chinese",
     "option.langEn": "English",
-    "option.presetConservative": "Conservative",
-    "option.presetResearch": "Research",
-    "option.presetProject": "Project work",
+    "option.presetConservative": "Smart topics",
+    "option.presetResearch": "Research directions",
+    "option.presetPlatform": "Platforms & sources",
+    "option.presetHybrid": "Directions + platforms",
+    "option.presetProject": "Projects / tasks",
+    "option.presetReadLater": "Read later",
     "option.presetAggressive": "Aggressive cleanup",
     "option.customModel": "Custom model name",
     "option.thinkingLow": "Low",
@@ -553,7 +559,10 @@ function applyUiLanguage() {
   setOptionText("#languageMode", "en-US", t("option.langEn"));
   setOptionText("#promptPreset", "conservative", t("option.presetConservative"));
   setOptionText("#promptPreset", "research", t("option.presetResearch"));
+  setOptionText("#promptPreset", "platform_source", t("option.presetPlatform"));
+  setOptionText("#promptPreset", "direction_with_platforms", t("option.presetHybrid"));
   setOptionText("#promptPreset", "project_work", t("option.presetProject"));
+  setOptionText("#promptPreset", "read_later", t("option.presetReadLater"));
   setOptionText("#promptPreset", "aggressive_cleanup", t("option.presetAggressive"));
   setOptionText("#gatewayModel", "custom", t("option.customModel"));
   setOptionText("#gatewayThinkingIntensity", "low", t("option.thinkingLow"));
@@ -568,7 +577,12 @@ function applyUiLanguage() {
   setButtonLabel(nodes.applyBtn, t("button.apply"));
   setButtonLabel(nodes.undoBtn, t("button.undo"));
   if (nodes.uiLanguageToggle) {
-    nodes.uiLanguageToggle.textContent = t("button.language");
+    const languageCode = nodes.uiLanguageToggle.querySelector(".language-toggle-code");
+    if (languageCode) {
+      languageCode.textContent = t("button.language");
+    } else {
+      nodes.uiLanguageToggle.textContent = t("button.language");
+    }
     nodes.uiLanguageToggle.setAttribute("aria-label", t("button.languageAria"));
   }
   if (lastPreview) {

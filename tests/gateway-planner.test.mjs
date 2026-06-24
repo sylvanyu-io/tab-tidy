@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { createGatewayPlan } from "../src/core/gateway-planner.js";
+import { buildPlannerSystemPrompt, createGatewayPlan } from "../src/core/gateway-planner.js";
 import { validatePlan } from "../src/core/plan-validator.js";
-import { DEFAULT_SETTINGS, GATEWAY_CUSTOM_MODEL_VALUE, PLANNER_PROVIDERS } from "../src/shared/settings.js";
+import { DEFAULT_SETTINGS, GATEWAY_CUSTOM_MODEL_VALUE, PLANNER_PROVIDERS, PROMPT_PRESETS } from "../src/shared/settings.js";
 
 const inventory = {
   scope: { kind: "current_window", currentWindowId: 1, windowIds: [1] },
@@ -22,6 +22,17 @@ const inventory = {
     }
   ]
 };
+
+test("planner prompt includes the selected cleanup preset", () => {
+  const prompt = buildPlannerSystemPrompt({
+    ...DEFAULT_SETTINGS,
+    promptPreset: PROMPT_PRESETS.DIRECTION_WITH_PLATFORMS
+  });
+
+  assert.match(prompt, /Hybrid style/);
+  assert.match(prompt, /public platforms/);
+  assert.match(prompt, /direction or user intent/);
+});
 
 test("AI gateway planner posts a chat-completions JSON request", async () => {
   const expectedPlan = {

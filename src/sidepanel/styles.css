@@ -281,9 +281,13 @@ h2 {
 }
 
 .language-toggle {
-  min-width: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  min-width: 34px;
   min-height: 28px;
-  padding: 0 2px;
+  padding: 0 1px;
   color: var(--muted);
   background: transparent;
   border: 0;
@@ -294,6 +298,21 @@ h2 {
   letter-spacing: 0;
   line-height: 1;
   cursor: pointer;
+}
+
+.language-toggle-icon {
+  width: 17px;
+  height: 17px;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.7;
+}
+
+.language-toggle-code {
+  min-width: 12px;
+  transform: translateY(0.5px);
 }
 
 .language-toggle:hover {
