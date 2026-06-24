@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { readFile } from "node:fs/promises";
+import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import test from "node:test";
 
 test("extension uses a native action popup", async () => {
@@ -15,12 +17,20 @@ test("extension uses a native action popup", async () => {
 });
 
 test("store extension build strips content-reading permissions", async () => {
-  const result = spawnSync("npm", ["run", "build:extension:store"], { encoding: "utf8" });
-  assert.equal(result.status, 0, result.stderr || result.stdout);
+  const tempDist = await mkdtemp(join(tmpdir(), "tab-tidy-store-build-"));
+  try {
+    const result = spawnSync(process.execPath, ["scripts/build-extension.mjs"], {
+      encoding: "utf8",
+      env: { ...process.env, EXTENSION_CHANNEL: "store", EXTENSION_DIST_DIR: tempDist }
+    });
+    assert.equal(result.status, 0, result.stderr || result.stdout);
 
-  const manifest = JSON.parse(await readFile("dist/extension/manifest.json", "utf8"));
-  assert.equal((manifest.permissions || []).includes("activeTab"), false);
-  assert.equal((manifest.optional_permissions || []).includes("scripting"), false);
-  assert.equal(manifest.optional_host_permissions, undefined);
-  assert.deepEqual(manifest.host_permissions, ["https://cliproxy.sylvanyu.io/*"]);
+    const manifest = JSON.parse(await readFile(join(tempDist, "extension/manifest.json"), "utf8"));
+    assert.equal((manifest.permissions || []).includes("activeTab"), false);
+    assert.equal((manifest.optional_permissions || []).includes("scripting"), false);
+    assert.equal(manifest.optional_host_permissions, undefined);
+    assert.deepEqual(manifest.host_permissions, ["https://cliproxy.sylvanyu.io/*"]);
+  } finally {
+    await rm(tempDist, { recursive: true, force: true });
+  }
 });
