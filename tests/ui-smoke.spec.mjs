@@ -73,6 +73,13 @@ test("floating window renders settings and mock preview", async ({ page }) => {
   await expect(page.locator("#gatewayBaseUrl")).toHaveAttribute("placeholder", "不填则使用默认服务");
   await expect(page.locator("#gatewayApiKey")).toHaveAttribute("placeholder", "默认服务无需填写");
   await expect(page.locator("#gatewayModel")).toHaveValue("gpt-5.5");
+  await expect(page.locator("#gatewayCustomModelField")).toBeHidden();
+  await page.locator("#gatewayModel").selectOption("custom");
+  await expect(page.locator("#gatewayCustomModelField")).toBeVisible();
+  await page.locator("#gatewayCustomModel").fill("glm-5.2");
+  await expect(page.locator("#gatewayCustomModel")).toHaveValue("glm-5.2");
+  await page.locator("#gatewayModel").selectOption("gpt-5.5");
+  await expect(page.locator("#gatewayCustomModelField")).toBeHidden();
   await expect(page.locator("#gatewayThinkingIntensity")).toHaveValue("high");
   await expect(page.locator("#languageMode")).toHaveValue("auto");
   await expect(page.locator("#undoTargetWindowMode")).toHaveValue("leave_empty_target_window");
@@ -364,6 +371,65 @@ test("default gateway permission request is narrow and compact", async ({ page }
   await expect(page.locator(".preview").getByText("资料整理", { exact: true })).toBeVisible();
   await expect.poll(() => page.evaluate(() => window.__permissionRequests)).toEqual([{ origins: ["https://cliproxy.sylvanyu.io/*"] }]);
   await expect.poll(() => page.evaluate(() => window.__analyzeWindowId)).toBe(77);
+});
+
+test("custom model requires a custom gateway before permission request", async ({ page }) => {
+  await page.addInitScript(() => {
+    const settings = {
+      organizeMode: "current_window",
+      targetWindowMode: "current_window",
+      existingGroupMode: "preserve_existing_groups",
+      reviewGroupMode: "create_review_group",
+      undoTargetWindowMode: "leave_empty_target_window",
+      pageContextMode: "off",
+      hostPermissionRequestMode: "never",
+      pageSamplingConsentMode: "not_acknowledged",
+      urlPrivacyMode: "sanitized_url",
+      includePinnedTabs: false,
+      includeIncognitoTabs: false,
+      collapseGroupsAfterApply: true,
+      minConfidenceToApply: 0.65,
+      maxTabsPerGroup: 40,
+      promptPreset: "conservative",
+      plannerProvider: "gateway",
+      rememberProviderKeys: false,
+      gatewayBaseUrl: "",
+      gatewayModel: "custom",
+      gatewayCustomModel: "glm-5.2",
+      gatewayThinkingIntensity: "high",
+      gatewayApiKey: "",
+      customPrompt: ""
+    };
+    window.__permissionRequests = [];
+    window.__startAnalyzeCalled = false;
+    window.chrome = {
+      permissions: {
+        contains: async () => false,
+        request: async (request) => {
+          window.__permissionRequests.push(request);
+          return true;
+        }
+      },
+      runtime: {
+        sendMessage: async (message) => {
+          if (message.type === "settings:get") return { ok: true, result: settings };
+          if (message.type === "settings:save") return { ok: true, result: message.settings };
+          if (message.type === "tabs:getActiveJob") return { ok: true, result: null };
+          if (message.type === "tabs:startAnalyze") {
+            window.__startAnalyzeCalled = true;
+            return { ok: true, result: { operationId: "should_not_start" } };
+          }
+          return { ok: true, result: null };
+        }
+      }
+    };
+  });
+
+  await page.goto(`${baseUrl}/src/sidepanel/index.html`);
+  await page.getByRole("button", { name: "生成方案" }).click();
+  await expect(page.locator("#statusText")).toHaveText("自定义模型名需要先填写自定义 AI 网关地址。");
+  await expect.poll(() => page.evaluate(() => window.__permissionRequests.length)).toBe(0);
+  await expect.poll(() => page.evaluate(() => window.__startAnalyzeCalled)).toBe(false);
 });
 
 test("current-window generation without sourceWindowId uses the focused normal window", async ({ page }) => {

@@ -21,8 +21,10 @@ window only after preview and confirmation.
 
 The AI gateway address and key fields are blank by default. Leaving them blank
 uses the built-in service; filling the address switches to a custom
-chat-completions-compatible gateway. The floating window exposes
-only `gpt-5.5`, `claude-opus-4-8`, and `claude-sonnet-4-6` for tab planning.
+chat-completions-compatible gateway. The floating window exposes `gpt-5.5`,
+`claude-opus-4-8`, and `claude-sonnet-4-6` as presets, plus a custom model-name
+field for compatible gateways such as GLM or DeepSeek. For example, GLM can use
+`https://open.bigmodel.cn/api/paas/v4` with a custom model such as `glm-5.2`.
 Thinking intensity defaults to high and can be set to low, medium, high, or
 ultra-high from advanced settings.
 Large AI gateway jobs automatically use a coarse-then-refine strategy: a fast

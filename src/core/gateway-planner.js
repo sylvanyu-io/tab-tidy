@@ -1,9 +1,12 @@
 import {
   BUILTIN_GATEWAY_BASE_URL,
+  GATEWAY_CUSTOM_MODEL_VALUE,
   ORGANIZE_MODES,
   PROMPT_PRESET_TEXT,
   TARGET_WINDOW_MODES,
-  normalizeSettings
+  THINKING_INTENSITIES,
+  normalizeSettings,
+  resolveGatewayModel
 } from "../shared/settings.js";
 import { languageInstruction, localizedText, targetWindowTitle } from "../shared/language.js";
 import { fetchJsonWithTimeout } from "./fetch-timeout.js";
@@ -54,7 +57,7 @@ async function createSingleGatewayPlan(inventory, settings, fetchImpl, options =
     await emitProgress(options, { phase: "planning", progress: 45, message: "正在请求 AI 规划" });
   }
   const body = {
-    model: settings.gatewayModel,
+    model: requireGatewayModel(settings),
     messages: [
       { role: "system", content: buildPlannerSystemPrompt(settings) },
       { role: "user", content: buildGatewayUserPrompt(inventory, settings) }
@@ -174,6 +177,29 @@ export function gatewayChatCompletionsUrl(settings) {
 
 export function effectiveGatewayBaseUrl(settings) {
   return settings.gatewayBaseUrl || BUILTIN_GATEWAY_BASE_URL;
+}
+
+function requireGatewayModel(settings) {
+  const model = resolveGatewayModel(settings);
+  if (settings.gatewayModel === GATEWAY_CUSTOM_MODEL_VALUE && !settings.gatewayBaseUrl) {
+    throw new Error(
+      localizedText(
+        settings.languageMode,
+        "自定义模型名需要先填写自定义 AI 网关地址。",
+        "A custom model name requires a custom AI gateway URL."
+      )
+    );
+  }
+  if (!model) {
+    throw new Error(
+      localizedText(
+        settings.languageMode,
+        "请填写自定义模型名，或者选择一个预设模型。",
+        "Enter a custom model name or choose a preset model."
+      )
+    );
+  }
+  return model;
 }
 
 function gatewayHeaders(settings, requestMeta = {}) {
@@ -321,15 +347,15 @@ export function buildGatewayUserPrompt(inventory, settings) {
 
 async function createCoarseGatewayBuckets(inventory, settings, fetchImpl, options = {}) {
   const body = {
-    model: settings.gatewayModel,
+    model: requireGatewayModel(settings),
     messages: [
       { role: "system", content: buildCoarseSystemPrompt(settings, options) },
       { role: "user", content: buildCoarseUserPrompt(inventory, settings) }
     ],
     response_format: { type: "json_object" },
-    max_tokens: 8192,
-    reasoning_effort: "low"
+    max_tokens: 8192
   };
+  applyThinkingIntensity(body, settings, THINKING_INTENSITIES.LOW);
   const { response, data } = await fetchJsonWithTimeout(
     fetchImpl,
     gatewayChatCompletionsUrl(settings),
@@ -905,8 +931,25 @@ function clampConfidence(value) {
   return Math.min(1, Math.max(0, numeric));
 }
 
-function applyThinkingIntensity(body, settings) {
-  body.reasoning_effort = settings.gatewayThinkingIntensity === "ultra" ? "high" : settings.gatewayThinkingIntensity;
+function applyThinkingIntensity(body, settings, intensity = settings.gatewayThinkingIntensity) {
+  if (usesGlmThinking(settings)) {
+    body.thinking = { type: intensity === THINKING_INTENSITIES.LOW ? "disabled" : "enabled" };
+    return;
+  }
+
+  body.reasoning_effort = intensity === THINKING_INTENSITIES.ULTRA ? THINKING_INTENSITIES.HIGH : intensity;
+}
+
+function usesGlmThinking(settings) {
+  const model = resolveGatewayModel(settings).toLowerCase();
+  if (model.startsWith("glm-")) return true;
+
+  try {
+    const hostname = new URL(effectiveGatewayBaseUrl(settings)).hostname.toLowerCase();
+    return hostname.endsWith("bigmodel.cn") || hostname.endsWith("z.ai");
+  } catch {
+    return false;
+  }
 }
 
 function thinkingIntensityText(value) {

@@ -74,6 +74,8 @@ const LEGACY_DEFAULT_GATEWAY_BASE_URLS = new Set([
 ]);
 
 export const GATEWAY_MODELS = Object.freeze(["gpt-5.5", "claude-opus-4-8", "claude-sonnet-4-6"]);
+export const GATEWAY_CUSTOM_MODEL_VALUE = "custom";
+const MAX_CUSTOM_GATEWAY_MODEL_LENGTH = 160;
 
 export const THINKING_INTENSITIES = Object.freeze({
   LOW: "low",
@@ -116,6 +118,7 @@ export const DEFAULT_SETTINGS = Object.freeze({
   rememberProviderKeys: false,
   gatewayBaseUrl: DEFAULT_GATEWAY_BASE_URL,
   gatewayModel: "gpt-5.5",
+  gatewayCustomModel: "",
   gatewayThinkingIntensity: THINKING_INTENSITIES.HIGH,
   gatewayApiKey: ""
 });
@@ -154,6 +157,7 @@ export function normalizeSettings(input = {}) {
   merged.languageMode = normalizeLanguageMode(merged.languageMode);
   merged.customPrompt = String(merged.customPrompt || "").slice(0, 4000);
   merged.gatewayBaseUrl = normalizeOptionalBaseUrl(merged.gatewayBaseUrl);
+  merged.gatewayCustomModel = normalizeGatewayCustomModel(merged.gatewayCustomModel);
   merged.gatewayModel = normalizeGatewayModel(merged.gatewayModel);
   merged.gatewayApiKey = String(merged.gatewayApiKey || "").trim();
   if (!merged.gatewayBaseUrl) {
@@ -195,5 +199,20 @@ function normalizeOptionalBaseUrl(value) {
 
 function normalizeGatewayModel(value) {
   const model = String(value || "").trim();
+  if (model === GATEWAY_CUSTOM_MODEL_VALUE) return GATEWAY_CUSTOM_MODEL_VALUE;
   return GATEWAY_MODELS.includes(model) ? model : DEFAULT_SETTINGS.gatewayModel;
+}
+
+function normalizeGatewayCustomModel(value) {
+  return String(value || "")
+    .replace(/[\u0000-\u001f\u007f]/g, "")
+    .trim()
+    .slice(0, MAX_CUSTOM_GATEWAY_MODEL_LENGTH);
+}
+
+export function resolveGatewayModel(settings = DEFAULT_SETTINGS) {
+  if (settings.gatewayModel === GATEWAY_CUSTOM_MODEL_VALUE) {
+    return settings.gatewayCustomModel || "";
+  }
+  return settings.gatewayModel || DEFAULT_SETTINGS.gatewayModel;
 }

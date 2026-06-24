@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { createGatewayPlan } from "../src/core/gateway-planner.js";
 import { validatePlan } from "../src/core/plan-validator.js";
-import { DEFAULT_SETTINGS, PLANNER_PROVIDERS } from "../src/shared/settings.js";
+import { DEFAULT_SETTINGS, GATEWAY_CUSTOM_MODEL_VALUE, PLANNER_PROVIDERS } from "../src/shared/settings.js";
 
 const inventory = {
   scope: { kind: "current_window", currentWindowId: 1, windowIds: [1] },
@@ -113,6 +113,102 @@ test("AI gateway planner posts a chat-completions JSON request", async () => {
   );
 
   assert.deepEqual(plan, expectedPlan);
+});
+
+test("AI gateway planner sends a custom model name to custom gateways", async () => {
+  const expectedPlan = {
+    schemaVersion: 1,
+    mode: "current_window",
+    scope: { kind: "current_window", windowIds: [1] },
+    targetWindow: { kind: "current_window", windowId: 1, title: "Current Window" },
+    eligibleTabs: [
+      { tabId: 10, windowId: 1 },
+      { tabId: 11, windowId: 1 }
+    ],
+    excludedTabs: [],
+    groups: [
+      {
+        groupKey: "docs",
+        title: "Docs",
+        color: "blue",
+        confidence: 0.9,
+        tabRefs: [
+          { tabId: 10, windowId: 1 },
+          { tabId: 11, windowId: 1 }
+        ],
+        reason: "Documentation tabs."
+      }
+    ],
+    reviewTabs: []
+  };
+
+  const fetchImpl = async (url, options) => {
+    assert.equal(url, "https://open.bigmodel.cn/api/paas/v4/chat/completions");
+    const body = JSON.parse(options.body);
+    assert.equal(body.model, "glm-5.2");
+    assert.deepEqual(body.thinking, { type: "enabled" });
+    assert.equal(body.reasoning_effort, undefined);
+    assert.equal(options.headers.authorization, "Bearer glm-key");
+    return {
+      ok: true,
+      async json() {
+        return { choices: [{ message: { content: JSON.stringify(expectedPlan) } }] };
+      }
+    };
+  };
+
+  const plan = await createGatewayPlan(
+    inventory,
+    {
+      ...DEFAULT_SETTINGS,
+      plannerProvider: PLANNER_PROVIDERS.GATEWAY,
+      gatewayBaseUrl: "https://open.bigmodel.cn/api/paas/v4/",
+      gatewayModel: GATEWAY_CUSTOM_MODEL_VALUE,
+      gatewayCustomModel: "glm-5.2",
+      gatewayApiKey: "glm-key",
+      languageMode: "en-US"
+    },
+    fetchImpl
+  );
+
+  assert.deepEqual(plan, expectedPlan);
+});
+
+test("AI gateway planner rejects custom models on the built-in gateway", async () => {
+  await assert.rejects(
+    createGatewayPlan(
+      inventory,
+      {
+        ...DEFAULT_SETTINGS,
+        plannerProvider: PLANNER_PROVIDERS.GATEWAY,
+        gatewayModel: GATEWAY_CUSTOM_MODEL_VALUE,
+        gatewayCustomModel: "glm-5.2"
+      },
+      async () => {
+        throw new Error("fetch should not be called");
+      }
+    ),
+    /自定义模型名需要先填写自定义 AI 网关地址/
+  );
+});
+
+test("AI gateway planner rejects blank custom model names", async () => {
+  await assert.rejects(
+    createGatewayPlan(
+      inventory,
+      {
+        ...DEFAULT_SETTINGS,
+        plannerProvider: PLANNER_PROVIDERS.GATEWAY,
+        gatewayBaseUrl: "https://open.bigmodel.cn/api/paas/v4",
+        gatewayModel: GATEWAY_CUSTOM_MODEL_VALUE,
+        gatewayCustomModel: ""
+      },
+      async () => {
+        throw new Error("fetch should not be called");
+      }
+    ),
+    /请填写自定义模型名/
+  );
 });
 
 test("AI gateway payload omits excluded tab titles", async () => {

@@ -3,6 +3,7 @@ import test from "node:test";
 import { getSettings, saveSettings } from "../src/core/controller.js";
 import {
   DEFAULT_SETTINGS,
+  GATEWAY_CUSTOM_MODEL_VALUE,
   LANGUAGE_MODES,
   PAGE_SAMPLING_CONSENT_MODES,
   THINKING_INTENSITIES,
@@ -86,6 +87,30 @@ test("AI gateway settings normalize safely", () => {
   );
   assert.equal(normalizeSettings({ ...DEFAULT_SETTINGS, languageMode: "pirate" }).languageMode, LANGUAGE_MODES.AUTO);
   assert.equal(normalizeSettings({ ...DEFAULT_SETTINGS, languageMode: LANGUAGE_MODES.EN_US }).languageMode, LANGUAGE_MODES.EN_US);
+  assert.equal(
+    normalizeSettings({
+      ...DEFAULT_SETTINGS,
+      gatewayModel: GATEWAY_CUSTOM_MODEL_VALUE,
+      gatewayCustomModel: " glm-5.2\n "
+    }).gatewayModel,
+    GATEWAY_CUSTOM_MODEL_VALUE
+  );
+  assert.equal(
+    normalizeSettings({
+      ...DEFAULT_SETTINGS,
+      gatewayModel: GATEWAY_CUSTOM_MODEL_VALUE,
+      gatewayCustomModel: " glm-5.2\n "
+    }).gatewayCustomModel,
+    "glm-5.2"
+  );
+  assert.equal(
+    normalizeSettings({
+      ...DEFAULT_SETTINGS,
+      gatewayModel: "glm-5.2",
+      gatewayCustomModel: "glm-5.2"
+    }).gatewayModel,
+    DEFAULT_SETTINGS.gatewayModel
+  );
 });
 
 test("gateway key is not persisted unless explicitly remembered", async () => {

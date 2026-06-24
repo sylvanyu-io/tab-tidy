@@ -1,4 +1,4 @@
-import { BUILTIN_GATEWAY_BASE_URL } from "../shared/settings.js";
+import { BUILTIN_GATEWAY_BASE_URL, GATEWAY_CUSTOM_MODEL_VALUE } from "../shared/settings.js";
 import { localizedText, reviewGroupReason, reviewGroupTitle } from "../shared/language.js";
 
 const fields = {
@@ -15,6 +15,7 @@ const fields = {
   plannerProvider: document.querySelector("#plannerProvider"),
   gatewayBaseUrl: document.querySelector("#gatewayBaseUrl"),
   gatewayModel: document.querySelector("#gatewayModel"),
+  gatewayCustomModel: document.querySelector("#gatewayCustomModel"),
   gatewayThinkingIntensity: document.querySelector("#gatewayThinkingIntensity"),
   gatewayApiKey: document.querySelector("#gatewayApiKey"),
   customPrompt: document.querySelector("#customPrompt"),
@@ -84,7 +85,8 @@ const nodes = {
   previewCount: document.querySelector("#previewCount"),
   previewRoot: document.querySelector("#previewRoot"),
   detailsRoot: document.querySelector("#detailsRoot"),
-  detailsText: document.querySelector("#detailsText")
+  detailsText: document.querySelector("#detailsText"),
+  gatewayCustomModelField: document.querySelector("#gatewayCustomModelField")
 };
 
 let lastPreview = null;
@@ -128,9 +130,11 @@ function bindEvents() {
     persistSettings();
   });
   fields.customPrompt.addEventListener("input", debounce(persistSettings, 250));
+  fields.gatewayCustomModel.addEventListener("input", debounce(persistSettings, 250));
   fields.pageContextMode.addEventListener("change", updateConditionalUi);
   fields.organizeMode.addEventListener("change", updateConditionalUi);
   fields.plannerProvider.addEventListener("change", updateConditionalUi);
+  fields.gatewayModel.addEventListener("change", updateConditionalUi);
 
   nodes.analyzeBtn.addEventListener("click", handleAnalyzeClick);
   nodes.cancelBtn.addEventListener("click", cancelAnalyze);
@@ -197,6 +201,7 @@ function readSettings() {
     rememberProviderKeys: Boolean(fields.gatewayApiKey.value),
     gatewayBaseUrl: fields.gatewayBaseUrl.value,
     gatewayModel: fields.gatewayModel.value,
+    gatewayCustomModel: fields.gatewayCustomModel.value,
     gatewayThinkingIntensity: fields.gatewayThinkingIntensity.value,
     gatewayApiKey: fields.gatewayApiKey.value,
     customPrompt: fields.customPrompt.value,
@@ -258,6 +263,7 @@ function updateConditionalUi() {
   nodes.hostPermissionField.hidden =
     !samplingEnabled || fields.pageContextMode.value === "off";
   nodes.targetWindowField.hidden = fields.organizeMode.value !== "consolidate_one_window";
+  nodes.gatewayCustomModelField.hidden = fields.gatewayModel.value !== GATEWAY_CUSTOM_MODEL_VALUE;
   syncChoiceGroups();
   schedulePageSamplingOriginRefresh();
 }
@@ -275,6 +281,7 @@ async function analyze() {
   setBusy(true, "正在准备整理", { cancelable: true, progress: 4 });
   try {
     const settings = readSettings();
+    validateGatewaySettingsForAnalyze(settings);
     updateLocalProgress("正在检查权限", 8);
     await ensurePlannerHostPermission(settings);
     if (settings.pageContextMode !== "off" && settings.pageSamplingConsentMode !== "not_acknowledged") {
@@ -299,6 +306,16 @@ async function analyze() {
   } finally {
     stopProgressPolling();
     setBusy(false);
+  }
+}
+
+function validateGatewaySettingsForAnalyze(settings) {
+  if (settings.plannerProvider !== "gateway" || settings.gatewayModel !== GATEWAY_CUSTOM_MODEL_VALUE) return;
+  if (!settings.gatewayBaseUrl.trim()) {
+    throw new Error("自定义模型名需要先填写自定义 AI 网关地址。");
+  }
+  if (!settings.gatewayCustomModel.trim()) {
+    throw new Error("请填写自定义模型名，或者选择一个预设模型。");
   }
 }
 
@@ -976,6 +993,7 @@ async function mockMessage(message) {
       rememberProviderKeys: false,
       gatewayBaseUrl: "",
       gatewayModel: "gpt-5.5",
+      gatewayCustomModel: "",
       gatewayThinkingIntensity: "high",
       gatewayApiKey: "",
       customPrompt: ""

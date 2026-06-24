@@ -187,7 +187,19 @@
             <option value="gpt-5.5">gpt-5.5</option>
             <option value="claude-opus-4-8">claude-opus-4-8</option>
             <option value="claude-sonnet-4-6">claude-sonnet-4-6</option>
+            <option value="custom">自定义模型名</option>
           </select>
+        </div>
+
+        <div id="gatewayCustomModelField" class="field" hidden>
+          <label for="gatewayCustomModel">自定义模型名</label>
+          <input
+            id="gatewayCustomModel"
+            type="text"
+            autocomplete="off"
+            spellcheck="false"
+            placeholder="例如：glm-5.2、deepseek-v4-pro"
+          />
         </div>
 
         <div class="field">
