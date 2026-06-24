@@ -361,31 +361,46 @@ function renderPreview(job) {
   nodes.previewRoot.className = "preview-list";
   nodes.previewCount.textContent = `${visibleGroupCount} 组`;
   nodes.previewRoot.replaceChildren(
-    previewSummary(groups.length, reviewTabsCount, reviewGroupWillBeCreated),
+    previewSummary(groups.length, reviewTabsCount, reviewGroupWillBeCreated, preview.pageSampling),
     ...groups.map((group, index) => groupRow(group, swatchForIndex(index))),
     ...(reviewGroupWillBeCreated ? [reviewGroupRow(reviewTabsCount)] : [])
   );
 }
 
-function previewSummary(groupCount, reviewTabsCount, reviewGroupWillBeCreated) {
+function previewSummary(groupCount, reviewTabsCount, reviewGroupWillBeCreated, pageSampling) {
   const summary = document.createElement("div");
   summary.className = "preview-summary";
+  const main = document.createElement("span");
   if (!groupCount && reviewTabsCount) {
-    summary.textContent = reviewGroupWillBeCreated
+    main.textContent = reviewGroupWillBeCreated
       ? `AI 还没找到清晰主题；${reviewTabsCount} 个标签页会单独放入「待分类」。`
       : `AI 还没找到清晰主题；${reviewTabsCount} 个标签页暂不归类。`;
+    summary.append(main, pageSamplingLine(pageSampling));
     return summary;
   }
 
   if (reviewTabsCount) {
-    summary.textContent = reviewGroupWillBeCreated
+    main.textContent = reviewGroupWillBeCreated
       ? `将创建 ${groupCount} 个主题分组；另有 ${reviewTabsCount} 个标签页会单独放入「待分类」。`
       : `将创建 ${groupCount} 个主题分组；另有 ${reviewTabsCount} 个标签页暂不归类。`;
+    summary.append(main, pageSamplingLine(pageSampling));
     return summary;
   }
 
-  summary.textContent = groupCount ? `将创建 ${groupCount} 个主题分组。` : "没有可整理的标签页。";
+  main.textContent = groupCount ? `将创建 ${groupCount} 个主题分组。` : "没有可整理的标签页。";
+  summary.append(main, pageSamplingLine(pageSampling));
   return summary;
+}
+
+function pageSamplingLine(pageSampling) {
+  const line = document.createElement("small");
+  if (!pageSampling?.requested) return line;
+
+  const missed = Math.max(0, (pageSampling.permissionRequired || 0) + (pageSampling.blocked || 0));
+  line.textContent = missed
+    ? `页面摘要读到 ${pageSampling.ok}/${pageSampling.requested} 个标签页；${missed} 个只参考标题和网址。`
+    : `页面摘要读到 ${pageSampling.ok}/${pageSampling.requested} 个标签页。`;
+  return line;
 }
 
 function groupRow(group, swatchColor) {
@@ -949,6 +964,12 @@ function mockAnalysisJob() {
         reviewGroupWillBeCreated: true,
         excludedTabsCount: 1,
         lockedGroupsCount: 0,
+        pageSampling: {
+          requested: 3,
+          ok: 2,
+          permissionRequired: 1,
+          blocked: 0
+        },
         warnings: []
       }
   };

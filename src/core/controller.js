@@ -290,17 +290,24 @@ async function attachPageSamples(chromeApi, inventory, settings, options = {}) {
     return inventory;
   }
 
+  let sampledOk = 0;
+  let sampledBlocked = 0;
   for (const [index, tab] of candidates.entries()) {
     throwIfCanceled(options.signal);
     await options.onProgress?.({
       phase: "sampling",
       progress: 20 + Math.round((index / candidates.length) * 16),
-      message: `正在读取页面摘要 ${index + 1}/${candidates.length}`
+      message: `正在读取页面摘要 ${index + 1}/${candidates.length}，已读到 ${sampledOk} 个`
     });
     const liveTab = await getLiveTab(chromeApi, tab.tabId);
     const sampleResult = liveTab
       ? await requestPageSample(chromeApi, liveTab, settings, `Improve semantic grouping for tab ${tab.tabId}.`)
       : { status: "missing", reason: "Tab disappeared before sampling." };
+    if (sampleResult.status === "ok") {
+      sampledOk += 1;
+    } else {
+      sampledBlocked += 1;
+    }
     inventory.pageSamples.push({
       tabId: tab.tabId,
       windowId: tab.windowId,
@@ -310,7 +317,13 @@ async function attachPageSamples(chromeApi, inventory, settings, options = {}) {
       sample: sampleResult.sample || null
     });
   }
-  await options.onProgress?.({ phase: "sampling", progress: 36, message: "页面摘要读取完成" });
+  await options.onProgress?.({
+    phase: "sampling",
+    progress: 36,
+    message: sampledBlocked
+      ? `页面摘要：读到 ${sampledOk}/${candidates.length} 个，${sampledBlocked} 个只参考标题`
+      : `页面摘要：读到 ${sampledOk}/${candidates.length} 个`
+  });
   return inventory;
 }
 

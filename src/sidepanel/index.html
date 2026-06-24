@@ -23,60 +23,61 @@
         </button>
       </header>
 
-      <section class="launch-panel">
-        <div class="control-group">
-          <div class="control-label">
-            <span>范围</span>
+      <div class="scroll-region">
+        <section class="launch-panel">
+          <div class="control-group">
+            <div class="control-label">
+              <span>范围</span>
+            </div>
+
+            <div class="choice-grid compact-choice-grid" data-choice-for="organizeMode">
+              <button class="choice-card" type="button" data-value="current_window">
+                <span class="button-label">当前窗口</span>
+              </button>
+              <button class="choice-card" type="button" data-value="consolidate_one_window">
+                <span class="button-label">所有窗口</span>
+              </button>
+            </div>
           </div>
 
-          <div class="choice-grid compact-choice-grid" data-choice-for="organizeMode">
-            <button class="choice-card" type="button" data-value="current_window">
-              <span class="button-label">当前窗口</span>
-            </button>
-            <button class="choice-card" type="button" data-value="consolidate_one_window">
-              <span class="button-label">所有窗口</span>
-            </button>
+          <select id="organizeMode" class="native-select" aria-label="整理范围">
+            <option value="current_window">只整理当前窗口</option>
+            <option value="consolidate_one_window">合并并整理所有窗口</option>
+          </select>
+
+          <select id="plannerProvider" class="native-select" aria-hidden="true" tabindex="-1">
+            <option value="gateway">AI</option>
+            <option value="fake">Internal test</option>
+          </select>
+
+          <div class="preferences-panel">
+            <label class="switch-row emphasis-toggle">
+              <span>
+                <strong>参考页面短摘要</strong>
+                <small>标题不够明确时更准</small>
+              </span>
+              <input id="ackSampling" type="checkbox" />
+            </label>
+
+            <div id="samplingRisk" class="risk" hidden>
+              <strong>会读取页面文字摘要</strong>
+              <p>只读取标题、描述、标题层级和一小段可见文字；不会读取密码、表单内容、Cookie、本地存储或完整 HTML。</p>
+            </div>
+
+            <div class="field prompt-field">
+              <label for="customPrompt">自定义要求</label>
+              <textarea
+                id="customPrompt"
+                rows="3"
+                spellcheck="true"
+                placeholder="例如：找工作、AI 论文、当前项目分开；拿不准的先放到待分类。"
+              ></textarea>
+            </div>
           </div>
-        </div>
+        </section>
 
-        <select id="organizeMode" class="native-select" aria-label="整理范围">
-          <option value="current_window">只整理当前窗口</option>
-          <option value="consolidate_one_window">合并并整理所有窗口</option>
-        </select>
-
-        <select id="plannerProvider" class="native-select" aria-hidden="true" tabindex="-1">
-          <option value="gateway">AI</option>
-          <option value="fake">Internal test</option>
-        </select>
-
-        <div class="preferences-panel">
-          <label class="switch-row emphasis-toggle">
-            <span>
-              <strong>参考页面短摘要</strong>
-              <small>标题不够明确时更准</small>
-            </span>
-            <input id="ackSampling" type="checkbox" />
-          </label>
-
-          <div id="samplingRisk" class="risk" hidden>
-            <strong>会读取页面文字摘要</strong>
-            <p>只读取标题、描述、标题层级和一小段可见文字；不会读取密码、表单内容、Cookie、本地存储或完整 HTML。</p>
-          </div>
-
-          <div class="field prompt-field">
-            <label for="customPrompt">自定义要求</label>
-            <textarea
-              id="customPrompt"
-              rows="3"
-              spellcheck="true"
-              placeholder="例如：找工作、AI 论文、当前项目分开；拿不准的先放到待分类。"
-            ></textarea>
-          </div>
-        </div>
-      </section>
-
-      <details class="advanced-settings">
-        <summary>更多选项</summary>
+        <details class="advanced-settings">
+          <summary>更多选项</summary>
 
         <div id="targetWindowField" class="setting-toggle-field" hidden>
           <label class="switch-row compact-switch">
@@ -234,7 +235,23 @@
             <input id="maxTabsPerGroup" type="number" min="1" max="500" step="1" />
           </div>
         </div>
-      </details>
+        </details>
+
+        <section id="previewSection" class="preview" aria-live="polite" hidden>
+          <div class="section-heading">
+            <div>
+              <p class="step-label">整理预览</p>
+              <h2>即将创建的分组</h2>
+            </div>
+            <span id="previewCount" class="quiet-pill">待生成</span>
+          </div>
+          <div id="previewRoot" class="empty">还没有方案。</div>
+          <details id="detailsRoot" hidden>
+            <summary>诊断信息</summary>
+            <pre id="detailsText"></pre>
+          </details>
+        </section>
+      </div>
 
       <div class="actions">
         <div id="progressBar" class="task-progress" hidden>
@@ -252,20 +269,6 @@
         <button id="undoBtn" type="button"><span class="button-label">撤销</span></button>
       </div>
 
-      <section id="previewSection" class="preview" aria-live="polite" hidden>
-        <div class="section-heading">
-          <div>
-            <p class="step-label">整理预览</p>
-            <h2>即将创建的分组</h2>
-          </div>
-          <span id="previewCount" class="quiet-pill">待生成</span>
-        </div>
-        <div id="previewRoot" class="empty">还没有方案。</div>
-        <details id="detailsRoot" hidden>
-          <summary>诊断信息</summary>
-          <pre id="detailsText"></pre>
-        </details>
-      </section>
     </main>
 
     <script type="module" src="./sidepanel.js"></script>

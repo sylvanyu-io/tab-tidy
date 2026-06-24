@@ -40,11 +40,21 @@ test("floating window renders settings and mock preview", async ({ page }) => {
   await page.goto(`${baseUrl}/src/sidepanel/index.html`);
 
   await expect(page.getByRole("heading", { name: "Tab Tidy" })).toBeVisible();
-  await expect(page.locator(".actions")).toHaveCSS("position", "fixed");
+  await expect(page.locator(".actions")).toHaveCSS("position", "static");
   await expect(page.locator(".actions")).toHaveCSS("display", "grid");
+  await expect(page.locator(".scroll-region")).toHaveCSS("overflow-y", "auto");
   await expect(page.locator("#analyzeBtn")).toHaveCSS("background-color", "rgb(31, 85, 255)");
   await expect(page.locator("#analyzeBtn")).toHaveCSS("border-radius", "10px");
   await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  await expect
+    .poll(() =>
+      page.evaluate(() => {
+        const scrollRegion = document.querySelector(".scroll-region")?.getBoundingClientRect();
+        const actions = document.querySelector(".actions")?.getBoundingClientRect();
+        return Boolean(scrollRegion && actions && actions.top >= scrollRegion.bottom - 1 && document.body.scrollHeight <= window.innerHeight);
+      })
+    )
+    .toBe(true);
   await expect(page.locator(".segmented")).toHaveCount(0);
   await expect(page.locator("#previewSection")).toBeHidden();
   await expect(page.locator("#samplingRisk")).toBeHidden();
@@ -104,6 +114,7 @@ test("floating window renders settings and mock preview", async ({ page }) => {
   await expect(page.locator(".preview").getByText("当前项目", { exact: true })).toBeVisible();
   await expect(page.locator(".preview").getByText("待分类", { exact: true })).toBeVisible();
   await expect(page.locator(".preview").getByText("另有 3 个标签页会单独放入「待分类」")).toBeVisible();
+  await expect(page.locator(".preview").getByText("页面摘要读到 2/3 个标签页；1 个只参考标题和网址。")).toBeVisible();
   await expect(page.getByText("待确认")).toHaveCount(0);
   await expect(page.locator(".preview-stats")).toHaveCount(0);
   await expect(page.locator(".stat-chip")).toHaveCount(0);
