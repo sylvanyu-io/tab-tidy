@@ -44,16 +44,21 @@ console.log(`Generated README assets in ${assetDir}`);
 async function renderPanelShot(filename, { preview }) {
   const context = await browser.newContext({
     viewport: { width: 390, height: 560 },
-    deviceScaleFactor: 2
+    deviceScaleFactor: 2,
+    colorScheme: "light"
   });
   const page = await context.newPage();
   await installChromeMock(page);
   await page.goto(`${baseUrl}/src/sidepanel/index.html?sourceWindowId=42`);
   await page.evaluate(() => document.fonts?.ready);
+  await focusCapturePage(page);
+  await waitForPrimaryActionPaint(page, "#analyzeBtn");
 
   if (preview) {
     await page.getByRole("button", { name: "生成方案" }).click();
     await page.locator("#previewSection").waitFor({ state: "visible" });
+    await focusCapturePage(page);
+    await waitForPrimaryActionPaint(page, "#applyBtn");
   }
 
   await page.screenshot({
@@ -61,6 +66,24 @@ async function renderPanelShot(filename, { preview }) {
     clip: { x: 0, y: 0, width: 390, height: 560 }
   });
   await context.close();
+}
+
+async function focusCapturePage(page) {
+  await page.bringToFront();
+  await page.mouse.move(6, 6);
+  await page.evaluate(() => {
+    window.focus();
+  });
+  await page.waitForTimeout(80);
+}
+
+async function waitForPrimaryActionPaint(page, selector) {
+  await page.waitForFunction((targetSelector) => {
+    const button = document.querySelector(targetSelector);
+    if (!button) return false;
+    const style = getComputedStyle(button);
+    return style.backgroundColor === "rgb(31, 85, 255)" && style.color === "rgb(255, 255, 255)";
+  }, selector);
 }
 
 async function renderShowcase() {
