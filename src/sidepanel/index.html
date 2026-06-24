@@ -131,27 +131,19 @@
 
         <details class="advanced-settings">
           <summary>更多选项</summary>
+          <select id="targetWindowMode" class="setting-source" aria-hidden="true" tabindex="-1" hidden>
+            <option value="current_window">当前窗口</option>
+          </select>
+          <select id="undoTargetWindowMode" class="setting-source" aria-hidden="true" tabindex="-1" hidden>
+            <option value="leave_empty_target_window">保留空窗口</option>
+          </select>
 
           <div class="advanced-list advanced-switch-list">
-            <div id="targetWindowField" class="setting-toggle-field" hidden>
-              <label class="switch-row compact-switch">
-                <span>
-                  <strong>合并到当前窗口</strong>
-                  <small>关闭时会新开一个窗口</small>
-                </span>
-                <input id="targetWindowCurrentToggle" type="checkbox" />
-              </label>
-              <select id="targetWindowMode" class="setting-source" aria-hidden="true" tabindex="-1" hidden>
-                <option value="new_window">新窗口</option>
-                <option value="current_window">当前窗口</option>
-              </select>
-            </div>
-
             <div class="setting-toggle-field">
               <label class="switch-row compact-switch">
                 <span>
                   <strong>重新整理已有分组</strong>
-                  <small>关闭时保留现有分组</small>
+                  <small>已有分组也会纳入这次整理</small>
                 </span>
                 <input id="dissolveExistingGroupsToggle" type="checkbox" />
               </label>
@@ -164,28 +156,14 @@
             <div class="setting-toggle-field">
               <label class="switch-row compact-switch">
                 <span>
-                  <strong>拿不准的单独待分类</strong>
-                  <small>关闭时保持不分组</small>
+                  <strong>不确定页单独复核</strong>
+                  <small>更保守，避免硬塞进相近主题</small>
                 </span>
                 <input id="createReviewGroupToggle" type="checkbox" />
               </label>
               <select id="reviewGroupMode" class="setting-source" aria-hidden="true" tabindex="-1" hidden>
-                <option value="create_review_group">单独放到待分类</option>
-                <option value="leave_review_ungrouped">保持不分组</option>
-              </select>
-            </div>
-
-            <div class="setting-toggle-field">
-              <label class="switch-row compact-switch">
-                <span>
-                  <strong>撤销后关闭空窗口</strong>
-                  <small>关闭时保留空窗口</small>
-                </span>
-                <input id="closeEmptyTargetWindowToggle" type="checkbox" />
-              </label>
-              <select id="undoTargetWindowMode" class="setting-source" aria-hidden="true" tabindex="-1" hidden>
-                <option value="leave_empty_target_window">保留空窗口</option>
-                <option value="close_empty_created_target_window">关闭本次创建的空窗口</option>
+                <option value="create_review_group">单独复核</option>
+                <option value="leave_review_ungrouped">放入最接近主题</option>
               </select>
             </div>
 

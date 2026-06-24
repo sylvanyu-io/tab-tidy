@@ -66,14 +66,10 @@ const UI_COPY = Object.freeze({
     "customPrompt.label": "自定义要求",
     "customPrompt.placeholder": "例如：找工作、AI 论文、当前项目分开；拿不准的先放到待分类。",
     "advanced.summary": "更多选项",
-    "switch.targetCurrent.title": "合并到当前窗口",
-    "switch.targetCurrent.subtitle": "关闭时会新开一个窗口",
     "switch.dissolve.title": "重新整理已有分组",
-    "switch.dissolve.subtitle": "关闭时保留现有分组",
-    "switch.review.title": "拿不准的单独待分类",
-    "switch.review.subtitle": "关闭时保持不分组",
-    "switch.closeEmpty.title": "撤销后关闭空窗口",
-    "switch.closeEmpty.subtitle": "关闭时保留空窗口",
+    "switch.dissolve.subtitle": "已有分组也会纳入这次整理",
+    "switch.review.title": "不确定页单独复核",
+    "switch.review.subtitle": "更保守，避免硬塞进相近主题",
     "switch.pinned.title": "包含固定标签页",
     "switch.pinned.subtitle": "会参与移动和分组",
     "switch.incognito.title": "包含无痕标签页",
@@ -99,8 +95,8 @@ const UI_COPY = Object.freeze({
     "option.currentWindow": "当前窗口",
     "option.preserveGroups": "保留",
     "option.dissolveGroups": "重新整理",
-    "option.reviewCreate": "单独放到待分类",
-    "option.reviewUngrouped": "保持不分组",
+    "option.reviewCreate": "单独复核",
+    "option.reviewUngrouped": "放入最接近主题",
     "option.leaveEmpty": "保留空窗口",
     "option.closeEmpty": "关闭本次创建的空窗口",
     "option.urlTitleOnly": "只发标题",
@@ -137,7 +133,7 @@ const UI_COPY = Object.freeze({
     "confirm.applyMultiWindow": "这会移动多个窗口里的标签页，并创建浏览器分组。确认开始整理吗？",
     "confirm.changedHeader": "标签页在预览后发生了变化。",
     "confirm.newToReview": "{count} 个新增标签页会放进「{reviewTitle}」。",
-    "confirm.newUngrouped": "{count} 个新增标签页会保持未分组。",
+    "confirm.newUngrouped": "{count} 个新增标签页会放进最接近的分组。",
     "confirm.removed": "{count} 个已关闭的标签页会跳过。",
     "confirm.duplicate": "{count} 个重复引用会跳过。",
     "confirm.continue": "确认继续整理吗？",
@@ -207,14 +203,10 @@ const UI_COPY = Object.freeze({
     "customPrompt.label": "Custom instructions",
     "customPrompt.placeholder": "Example: keep job search, AI papers, and current projects separate; put uncertain pages in review.",
     "advanced.summary": "More options",
-    "switch.targetCurrent.title": "Merge into current window",
-    "switch.targetCurrent.subtitle": "Off opens a new window",
     "switch.dissolve.title": "Regroup existing groups",
-    "switch.dissolve.subtitle": "Off keeps current groups",
-    "switch.review.title": "Put uncertain tabs in review",
-    "switch.review.subtitle": "Off leaves them ungrouped",
-    "switch.closeEmpty.title": "Close empty window after undo",
-    "switch.closeEmpty.subtitle": "Off keeps the empty window",
+    "switch.dissolve.subtitle": "Existing groups are included in this run",
+    "switch.review.title": "Review uncertain tabs separately",
+    "switch.review.subtitle": "More conservative; avoids forcing weak matches",
     "switch.pinned.title": "Include pinned tabs",
     "switch.pinned.subtitle": "They may be moved and grouped",
     "switch.incognito.title": "Include incognito tabs",
@@ -241,7 +233,7 @@ const UI_COPY = Object.freeze({
     "option.preserveGroups": "Preserve",
     "option.dissolveGroups": "Regroup",
     "option.reviewCreate": "Put in review",
-    "option.reviewUngrouped": "Leave ungrouped",
+    "option.reviewUngrouped": "Use closest topic",
     "option.leaveEmpty": "Keep empty window",
     "option.closeEmpty": "Close the empty window created this time",
     "option.urlTitleOnly": "Titles only",
@@ -278,7 +270,7 @@ const UI_COPY = Object.freeze({
     "confirm.applyMultiWindow": "This will move tabs across windows and create browser tab groups. Continue?",
     "confirm.changedHeader": "Tabs changed after the preview.",
     "confirm.newToReview": "{count} new tabs will be added to \"{reviewTitle}\".",
-    "confirm.newUngrouped": "{count} new tabs will stay ungrouped.",
+    "confirm.newUngrouped": "{count} new tabs will be placed in the closest group.",
     "confirm.removed": "{count} closed tabs will be skipped.",
     "confirm.duplicate": "{count} duplicate references will be skipped.",
     "confirm.continue": "Continue organizing?",
@@ -318,12 +310,6 @@ const fields = {
 
 const settingSwitches = [
   {
-    field: "targetWindowMode",
-    input: document.querySelector("#targetWindowCurrentToggle"),
-    offValue: "new_window",
-    onValue: "current_window"
-  },
-  {
     field: "existingGroupMode",
     input: document.querySelector("#dissolveExistingGroupsToggle"),
     offValue: "preserve_existing_groups",
@@ -334,12 +320,6 @@ const settingSwitches = [
     input: document.querySelector("#createReviewGroupToggle"),
     offValue: "leave_review_ungrouped",
     onValue: "create_review_group"
-  },
-  {
-    field: "undoTargetWindowMode",
-    input: document.querySelector("#closeEmptyTargetWindowToggle"),
-    offValue: "leave_empty_target_window",
-    onValue: "close_empty_created_target_window"
   }
 ];
 
@@ -355,7 +335,6 @@ const nodes = {
   samplingRisk: document.querySelector("#samplingRisk"),
   continuousSummaryRisk: document.querySelector("#continuousSummaryRisk"),
   hostPermissionField: document.querySelector("#hostPermissionField"),
-  targetWindowField: document.querySelector("#targetWindowField"),
   progressBar: document.querySelector("#progressBar"),
   progressFill: document.querySelector("#progressFill"),
   progressLabel: document.querySelector("#progressLabel"),
@@ -513,10 +492,8 @@ function applyUiLanguage() {
   setAttribute("#customPrompt", "placeholder", t("customPrompt.placeholder"));
   setText(".advanced-settings > summary", t("advanced.summary"));
 
-  setSwitchText("#targetWindowCurrentToggle", "switch.targetCurrent.title", "switch.targetCurrent.subtitle");
   setSwitchText("#dissolveExistingGroupsToggle", "switch.dissolve.title", "switch.dissolve.subtitle");
   setSwitchText("#createReviewGroupToggle", "switch.review.title", "switch.review.subtitle");
-  setSwitchText("#closeEmptyTargetWindowToggle", "switch.closeEmpty.title", "switch.closeEmpty.subtitle");
   setSwitchText("#includePinnedTabs", "switch.pinned.title", "switch.pinned.subtitle");
   setSwitchText("#includeIncognitoTabs", "switch.incognito.title", "switch.incognito.subtitle");
   setSwitchText("#collapseGroupsAfterApply", "switch.collapse.title", "switch.collapse.subtitle");
@@ -537,14 +514,12 @@ function applyUiLanguage() {
   setAttribute("#gatewayBaseUrl", "placeholder", t("placeholder.gatewayUrl"));
   setAttribute("#gatewayApiKey", "placeholder", t("placeholder.gatewayKey"));
 
-  setOptionText("#targetWindowMode", "new_window", t("option.newWindow"));
   setOptionText("#targetWindowMode", "current_window", t("option.currentWindow"));
   setOptionText("#existingGroupMode", "preserve_existing_groups", t("option.preserveGroups"));
   setOptionText("#existingGroupMode", "dissolve_existing_groups", t("option.dissolveGroups"));
   setOptionText("#reviewGroupMode", "create_review_group", t("option.reviewCreate"));
   setOptionText("#reviewGroupMode", "leave_review_ungrouped", t("option.reviewUngrouped"));
   setOptionText("#undoTargetWindowMode", "leave_empty_target_window", t("option.leaveEmpty"));
-  setOptionText("#undoTargetWindowMode", "close_empty_created_target_window", t("option.closeEmpty"));
   setOptionText("#urlPrivacyMode", "title_only", t("option.urlTitleOnly"));
   setOptionText("#urlPrivacyMode", "sanitized_url", t("option.urlSanitized"));
   setOptionText("#urlPrivacyMode", "full_url", t("option.urlFull"));
@@ -673,10 +648,9 @@ function readSettings() {
   return {
     organizeMode: fields.organizeMode.value,
     existingGroupMode: fields.existingGroupMode.value,
-    targetWindowMode:
-      fields.organizeMode.value === "consolidate_one_window" ? fields.targetWindowMode.value : "current_window",
+    targetWindowMode: "current_window",
     reviewGroupMode: fields.reviewGroupMode.value,
-    undoTargetWindowMode: fields.undoTargetWindowMode.value,
+    undoTargetWindowMode: "leave_empty_target_window",
     urlPrivacyMode: fields.urlPrivacyMode.value,
     pageContextMode: effectivePageContextMode,
     hostPermissionRequestMode:
@@ -713,6 +687,8 @@ function readSettings() {
 function writeSettings(settings) {
   const displaySettings = {
     ...settings,
+    targetWindowMode: "current_window",
+    undoTargetWindowMode: "leave_empty_target_window",
     pageContextMode: normalizePanelPageContextMode(settings.pageContextMode)
   };
   for (const [key, element] of Object.entries(fields)) {
@@ -761,7 +737,6 @@ function updateConditionalUi() {
   nodes.continuousSummaryRisk.hidden = !contentAccessAvailable;
   nodes.hostPermissionField.hidden =
     !samplingEnabled || fields.pageContextMode.value === "off";
-  nodes.targetWindowField.hidden = fields.organizeMode.value !== "consolidate_one_window";
   nodes.gatewayCustomModelField.hidden = fields.gatewayModel.value !== GATEWAY_CUSTOM_MODEL_VALUE;
   syncChoiceGroups();
   schedulePageSamplingOriginRefresh();
@@ -901,7 +876,7 @@ function applyResultStatus(result) {
   const changedTabs = result.rebasedPlan?.changedTabsCount || 0;
   if (changedTabs) {
     const reviewCount = result.rebasedPlan?.addedReviewTabIds?.length || 0;
-    const reviewText = reviewCount
+    const reviewText = reviewCount && fields.reviewGroupMode.value === "create_review_group"
       ? t("status.applyReviewSuffix", { reviewCount, reviewTitle: reviewGroupTitle(currentResultLanguageMode()) })
       : "";
     return t("status.applyChanged", { groupCount, changedTabs, reviewText });
@@ -1103,10 +1078,15 @@ function renderDetails(payload) {
 }
 
 function renderError(error) {
-  nodes.previewSection.hidden = false;
-  nodes.detailsRoot.hidden = false;
-  nodes.previewCount.textContent = t("preview.error");
+  lastPreview = null;
+  lastCanApply = false;
+  nodes.previewSection.hidden = true;
+  nodes.previewCount.textContent = t("preview.pending");
+  nodes.previewRoot.className = "empty";
+  nodes.previewRoot.textContent = t("preview.empty");
+  nodes.detailsRoot.hidden = true;
   nodes.detailsText.textContent = JSON.stringify({ error: error.message }, null, 2);
+  syncActionState();
 }
 
 function resetToSetup() {
