@@ -3,10 +3,10 @@ import { spawnSync } from "node:child_process";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 
-test("extension uses a persistent action-launched popup window", async () => {
+test("extension uses a native action popup", async () => {
   const manifest = JSON.parse(await readFile("manifest.json", "utf8"));
 
-  assert.equal(manifest.action.default_popup, undefined);
+  assert.equal(manifest.action.default_popup, "src/sidepanel/index.html");
   assert.equal(manifest.background.service_worker, "src/background/service-worker.js");
   assert.equal(manifest.side_panel, undefined);
   assert.equal((manifest.permissions || []).includes("sidePanel"), false);

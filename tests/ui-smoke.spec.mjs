@@ -36,7 +36,7 @@ test.beforeEach(async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 680 });
 });
 
-test("floating window renders settings and mock preview", async ({ page }) => {
+test("popup renders settings and mock preview", async ({ page }) => {
   await page.goto(`${baseUrl}/src/sidepanel/index.html`);
 
   await expect(page.getByRole("heading", { name: "Tab Tidy" })).toBeVisible();
@@ -230,7 +230,7 @@ test("preview copy and review group follow the selected result language", async 
   ).toBeVisible();
 });
 
-test("floating window shows optimistic progress while waiting for AI", async ({ page }) => {
+test("popup shows optimistic progress while waiting for AI", async ({ page }) => {
   await page.addInitScript(() => {
     const settings = {
       organizeMode: "current_window",
@@ -841,13 +841,19 @@ test("page summary main toggle requests scripting and page origins", async ({ pa
         warnings: []
       }
     };
+    const grantedPermissions = new Set();
+    const grantedOrigins = new Set(["https://cliproxy.sylvanyu.io/*"]);
     window.__permissionRequests = [];
     window.__savedSettings = [];
     window.chrome = {
       permissions: {
-        contains: async (request) => Boolean(request.origins?.includes("https://cliproxy.sylvanyu.io/*")),
+        contains: async (request) =>
+          (request.permissions || []).every((permission) => grantedPermissions.has(permission)) &&
+          (request.origins || []).every((origin) => grantedOrigins.has(origin)),
         request: async (request) => {
           window.__permissionRequests.push(request);
+          (request.permissions || []).forEach((permission) => grantedPermissions.add(permission));
+          (request.origins || []).forEach((origin) => grantedOrigins.add(origin));
           return true;
         }
       },
@@ -879,18 +885,21 @@ test("page summary main toggle requests scripting and page origins", async ({ pa
   });
 
   await page.goto(`${baseUrl}/src/sidepanel/index.html?sourceWindowId=77`);
-  await page.locator("#ackSampling").check();
+  await page.locator("#ackSampling").click();
+  await expect(page.locator("#ackSampling")).toBeChecked();
   await expect.poll(() => page.evaluate(() => window.__savedSettings.at(-1)?.pageContextMode)).toBe("ambiguous_with_permission");
   await expect.poll(() => page.evaluate(() => window.__savedSettings.at(-1)?.hostPermissionRequestMode)).toBe(
     "ask_for_all_visible_origins"
   );
-
-  await page.getByRole("button", { name: "生成方案" }).click();
-  await expect(page.locator(".preview").getByText("需要授权", { exact: true })).toBeVisible();
   await expect.poll(() => page.evaluate(() => window.__permissionRequests)).toContainEqual({
     permissions: ["scripting"],
     origins: ["https://example.com/*"]
   });
+  const requestsAfterToggle = await page.evaluate(() => window.__permissionRequests.length);
+
+  await page.getByRole("button", { name: "生成方案" }).click();
+  await expect(page.locator(".preview").getByText("需要授权", { exact: true })).toBeVisible();
+  await expect.poll(() => page.evaluate(() => window.__permissionRequests.length)).toBe(requestsAfterToggle);
 });
 
 test("experimental continuous summaries request all-site optional access once", async ({ page }) => {
@@ -1008,7 +1017,7 @@ test("store manifest hides content-reading controls", async ({ page }) => {
   await expect(page.locator("#pageContextMode")).toBeHidden();
 });
 
-test("page summary permission denial stops generation", async ({ page }) => {
+test("page summary permission denial rolls back the toggle before generation", async ({ page }) => {
   await page.addInitScript(() => {
     let settings = {
       organizeMode: "current_window",
@@ -1070,8 +1079,8 @@ test("page summary permission denial stops generation", async ({ page }) => {
   });
 
   await page.goto(`${baseUrl}/src/sidepanel/index.html?sourceWindowId=77`);
-  await page.locator("#ackSampling").check();
-  await page.getByRole("button", { name: "生成方案" }).click();
+  await page.locator("#ackSampling").click();
+  await expect(page.locator("#ackSampling")).not.toBeChecked();
   await expect(page.locator("#statusText")).toHaveText("需要授权页面摘要权限，才能读取网页文字摘要。");
   await expect.poll(() => page.evaluate(() => window.__permissionRequests.length)).toBeGreaterThan(0);
   await expect.poll(() => page.evaluate(() => window.__startAnalyzeCalled)).toBe(false);
@@ -1239,7 +1248,7 @@ test("canceling generation returns to setup without error preview", async ({ pag
   await expect(page.locator("#previewSection")).toBeHidden();
 });
 
-test("page sampling permission request returns to the floating window flow", async ({ page }) => {
+test("generation does not request page sampling permissions from a stale enabled state", async ({ page }) => {
   await page.addInitScript(() => {
     const settings = {
       organizeMode: "current_window",
@@ -1288,7 +1297,8 @@ test("page sampling permission request returns to the floating window flow", asy
     };
     window.chrome = {
       permissions: {
-        contains: async (request) => Boolean(request.origins?.includes("https://cliproxy.sylvanyu.io/*")),
+        contains: async (request) =>
+          (request.permissions || []).length === 0 && Boolean(request.origins?.includes("https://cliproxy.sylvanyu.io/*")),
         request: async (request) => {
           window.__permissionRequests.push(request);
           return true;
@@ -1309,10 +1319,8 @@ test("page sampling permission request returns to the floating window flow", asy
 
   await page.goto(`${baseUrl}/src/sidepanel/index.html`);
   await page.getByRole("button", { name: "生成方案" }).click();
-  await expect(page.locator(".preview").getByText("页面摘要辅助", { exact: true })).toBeVisible();
-  await expect
-    .poll(() => page.evaluate(() => window.__permissionRequests.map((request) => request.permissions || [])))
-    .toEqual([["scripting"]]);
+  await expect(page.locator("#statusText")).toHaveText("需要先打开「参考页面短摘要」并完成授权，才能读取页面摘要。");
+  await expect.poll(() => page.evaluate(() => window.__permissionRequests)).toEqual([]);
 });
 
 function contentType(filePath) {
@@ -1323,6 +1331,10 @@ function contentType(filePath) {
       return "text/javascript; charset=utf-8";
     case ".css":
       return "text/css; charset=utf-8";
+    case ".svg":
+      return "image/svg+xml; charset=utf-8";
+    case ".png":
+      return "image/png";
     default:
       return "application/octet-stream";
   }

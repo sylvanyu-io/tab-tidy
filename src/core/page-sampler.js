@@ -1,5 +1,4 @@
 import {
-  HOST_PERMISSION_REQUEST_MODES,
   PAGE_CONTEXT_MODES,
   PAGE_SAMPLING_CONSENT_MODES,
   normalizeSettings
@@ -44,14 +43,8 @@ export async function requestPageSample(chromeApi, tab, rawSettings, reason = ""
 
   const origin = new URL(rawUrl).origin + "/*";
   const hasPermission = await containsHostPermission(chromeApi, origin);
-  if (!hasPermission && settings.hostPermissionRequestMode === HOST_PERMISSION_REQUEST_MODES.NEVER) {
-    return { status: "permission_required", origin, reason: "Host permission is required for page sampling." };
-  }
   if (!hasPermission) {
-    const granted = await chromeApi.permissions.request({ origins: [origin] });
-    if (!granted) {
-      return { status: "permission_denied", origin, reason: "User denied host permission." };
-    }
+    return { status: "permission_required", origin, reason: "Host permission is required for page sampling." };
   }
 
   try {

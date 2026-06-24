@@ -123,7 +123,7 @@ function bindEvents() {
     if (element === fields.ackSampling || element === fields.continuousPageSummaries) continue;
     element.addEventListener("change", persistSettings);
   }
-  fields.ackSampling.addEventListener("change", () => {
+  fields.ackSampling.addEventListener("change", async () => {
     if (fields.ackSampling.checked) {
       if (fields.pageContextMode.value === "off" || fields.pageContextMode.value === "active_tab_only") {
         fields.pageContextMode.value = "ambiguous_with_permission";
@@ -131,8 +131,28 @@ function bindEvents() {
       if (fields.hostPermissionRequestMode.value === "never") {
         fields.hostPermissionRequestMode.value = "ask_for_all_visible_origins";
       }
+      updateConditionalUi();
+      await persistSettings();
+      setStatus("正在请求页面摘要权限");
+      try {
+        await ensurePageSamplingPermissions(readSettings(), { requestMissing: true });
+      } catch (error) {
+        fields.ackSampling.checked = false;
+        fields.pageContextMode.value = "off";
+        fields.hostPermissionRequestMode.value = "never";
+        updateConditionalUi();
+        await persistSettings();
+        setStatus(error.message, true);
+        return;
+      }
+      await persistSettings();
+      setStatus("页面摘要已开启");
+      return;
+    } else {
+      fields.pageContextMode.value = "off";
+      fields.hostPermissionRequestMode.value = "never";
     }
-    persistSettings();
+    await persistSettings();
   });
   fields.continuousPageSummaries.addEventListener("change", async () => {
     if (fields.continuousPageSummaries.checked) {
@@ -311,8 +331,9 @@ async function analyze() {
     await ensurePlannerHostPermission(settings);
     if (settings.pageContextMode !== "off" && settings.pageSamplingConsentMode !== "not_acknowledged") {
       updateLocalProgress("正在检查页面摘要权限", 12);
+      await ensurePageSamplingPermissions(settings, { requestMissing: false });
+      settings.hostPermissionRequestMode = "never";
     }
-    await ensurePageSamplingPermissions(settings);
     updateLocalProgress("正在确认当前窗口", 14);
     const windowId = await resolveInvocationWindowId();
     updateLocalProgress("正在启动后台整理", 16);
@@ -908,12 +929,13 @@ async function ensureContinuousSummaryPermissions() {
   );
 }
 
-async function ensurePageSamplingPermissions(settings) {
+async function ensurePageSamplingPermissions(settings, options = {}) {
   if (settings.pageContextMode === "off" || settings.pageSamplingConsentMode === "not_acknowledged") return;
   if (!hasContentAccessFeature()) {
     throw new Error("当前构建不包含页面摘要功能。");
   }
   if (!globalThis.chrome?.permissions?.contains || !globalThis.chrome?.permissions?.request) return;
+  const requestMissing = Boolean(options.requestMissing);
 
   const shouldRequestHostOrigins =
     settings.pageContextMode !== "active_tab_only" && settings.hostPermissionRequestMode !== "never";
@@ -925,6 +947,13 @@ async function ensurePageSamplingPermissions(settings) {
   const hasScripting = await chrome.permissions.contains({ permissions: ["scripting"] });
   if (!hasScripting) missingPermissions.push("scripting");
   const missingOrigins = await getMissingOrigins(origins);
+
+  if (!requestMissing) {
+    if (missingPermissions.length) {
+      throw new Error("需要先打开「参考页面短摘要」并完成授权，才能读取页面摘要。");
+    }
+    return;
+  }
 
   if (settings.hostPermissionRequestMode === "ask_per_origin" && missingOrigins.length > 1) {
     const [firstOrigin, ...remainingOrigins] = missingOrigins;
@@ -1097,6 +1126,9 @@ async function resolveInvocationWindowId() {
     if (sourceWindow?.type === "normal") return sourceWindowId;
   }
 
+  const activeTabWindowId = await lastFocusedActiveTabWindowId();
+  if (Number.isInteger(activeTabWindowId)) return activeTabWindowId;
+
   if (!globalThis.chrome?.windows?.getCurrent) return null;
   try {
     if (globalThis.chrome?.windows?.getLastFocused) {
@@ -1108,6 +1140,16 @@ async function resolveInvocationWindowId() {
   } catch {
     return null;
   }
+}
+
+async function lastFocusedActiveTabWindowId() {
+  if (!globalThis.chrome?.tabs?.query) return null;
+  const [activeTab] = await chrome.tabs.query({ active: true, lastFocusedWindow: true }).catch(() => []);
+  if (!Number.isInteger(activeTab?.windowId)) return null;
+  if (!globalThis.chrome?.windows?.get) return activeTab.windowId;
+
+  const window = await chrome.windows.get(activeTab.windowId).catch(() => null);
+  return window?.type === "normal" ? activeTab.windowId : null;
 }
 
 function sourceWindowIdFromUrl() {
