@@ -78,6 +78,7 @@ test("AI gateway planner posts a chat-completions JSON request", async () => {
     const payload = JSON.parse(body.messages[1].content.slice(body.messages[1].content.indexOf("{")));
     assert.equal(payload.schema, "tab_tidy_compact_v1");
     assert.equal(payload.settings.languageMode, "en-US");
+    assert.equal(payload.settings.promptPreset, "conservative");
     assert.deepEqual(payload.excludedFields, ["id", "windowId", "reason"]);
     assert.deepEqual(payload.tabFields, [
       "id",

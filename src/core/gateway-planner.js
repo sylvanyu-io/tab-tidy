@@ -293,6 +293,7 @@ export function buildPlannerPayload(inventory, settings) {
       reviewGroupMode: settings.reviewGroupMode,
       urlPrivacyMode: settings.urlPrivacyMode,
       languageMode: settings.languageMode,
+      promptPreset: settings.promptPreset,
       minConfidenceToApply: settings.minConfidenceToApply,
       maxTabsPerGroup: settings.maxTabsPerGroup,
       thinkingIntensity: settings.gatewayThinkingIntensity
