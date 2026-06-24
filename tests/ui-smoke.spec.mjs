@@ -40,10 +40,11 @@ test("popup renders settings and mock preview", async ({ page }) => {
   await page.goto(`${baseUrl}/src/sidepanel/index.html`);
 
   await expect(page.getByRole("heading", { name: "Tab Tidy" })).toBeVisible();
-  await expect(page.locator(".app-shell")).toHaveCSS("border-top-width", "1px");
-  await expect(page.locator(".topbar")).toHaveCSS("border-bottom-width", "1px");
-  await expect(page.locator(".actions")).toHaveCSS("border-top-width", "1px");
-  await expect(page.locator(".actions")).toHaveCSS("position", "static");
+  await expect(page.locator(".app-shell")).toHaveCSS("border-top-width", "0px");
+  await expect(page.locator(".app-shell")).not.toHaveCSS("box-shadow", "none");
+  await expect(page.locator(".topbar")).toHaveCSS("border-bottom-width", "0px");
+  await expect(page.locator(".actions")).toHaveCSS("border-top-width", "0px");
+  await expect(page.locator(".actions")).toHaveCSS("position", "relative");
   await expect(page.locator(".actions")).toHaveCSS("display", "grid");
   await expect(page.locator(".scroll-region")).toHaveCSS("overflow-y", "auto");
   await expect.poll(() => page.evaluate(() => document.documentElement.getBoundingClientRect().height)).toBe(560);
