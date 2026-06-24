@@ -200,9 +200,10 @@ h2,
   align-content: start;
   gap: 10px;
   min-height: 0;
+  margin-right: -10px;
   overflow: auto;
   overscroll-behavior: contain;
-  padding: 16px 2px 12px;
+  padding: 16px 12px 12px 2px;
   scrollbar-width: thin;
   scrollbar-color: color-mix(in srgb, var(--line) 34%, transparent) transparent;
 }
@@ -284,10 +285,11 @@ h2 {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 3px;
-  min-width: 34px;
-  min-height: 28px;
-  padding: 0 1px;
+  width: 32px;
+  min-width: 32px;
+  height: 32px;
+  min-height: 32px;
+  padding: 0;
   color: var(--muted);
   background: transparent;
   border: 0;
@@ -301,18 +303,13 @@ h2 {
 }
 
 .language-toggle-icon {
-  width: 17px;
-  height: 17px;
+  width: 22px;
+  height: 22px;
   fill: none;
   stroke: currentColor;
   stroke-linecap: round;
   stroke-linejoin: round;
   stroke-width: 1.7;
-}
-
-.language-toggle-code {
-  min-width: 12px;
-  transform: translateY(0.5px);
 }
 
 .language-toggle:hover {
@@ -690,9 +687,7 @@ button:focus-visible {
 }
 
 .switch-row strong {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
+  display: inline;
   font-size: 14px;
   line-height: 1.25;
 }
@@ -860,7 +855,9 @@ button:focus-visible {
   box-shadow: none;
   font-style: normal;
   cursor: help;
-  transform: translateY(-1px);
+  margin-left: 5px;
+  transform: translateY(2px);
+  vertical-align: baseline;
 }
 
 .help-tip svg {

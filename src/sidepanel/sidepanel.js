@@ -112,7 +112,7 @@ const UI_COPY = Object.freeze({
     "option.permissionNever": "整理时不弹授权",
     "option.permissionOrigin": "按站点询问",
     "option.permissionVisible": "一次授权可见站点",
-    "option.langAuto": "自动判断",
+    "option.langAuto": "跟随界面",
     "option.langZh": "简体中文",
     "option.langEn": "English",
     "option.presetConservative": "智能主题",
@@ -121,7 +121,7 @@ const UI_COPY = Object.freeze({
     "option.presetHybrid": "方向 + 公共平台",
     "option.presetProject": "项目 / 任务",
     "option.presetReadLater": "稍后阅读",
-    "option.presetAggressive": "强力清理",
+    "option.presetAggressive": "强力归纳",
     "option.customModel": "自定义模型名",
     "option.thinkingLow": "低",
     "option.thinkingMedium": "中",
@@ -152,26 +152,26 @@ const UI_COPY = Object.freeze({
     "status.saved": "Preferences saved",
     "status.requestingPageSummaryPermission": "Requesting page-summary access",
     "status.pageSummaryEnabled": "Page summaries enabled",
-    "status.preparing": "Preparing cleanup",
+    "status.preparing": "Preparing organization",
     "status.checkingPermissions": "Checking permissions",
     "status.checkingPageSummaryPermissions": "Checking page-summary access",
     "status.resolvingWindow": "Finding the current window",
-    "status.startingBackground": "Starting background cleanup",
+    "status.startingBackground": "Starting background organization",
     "status.planReady": "Plan ready to review",
     "status.planNeedsReview": "Plan needs review",
-    "status.canceled": "Cleanup canceled.",
-    "status.canceling": "Canceling cleanup",
+    "status.canceled": "Organization canceled.",
+    "status.canceling": "Canceling organization",
     "status.organizing": "Organizing tabs",
     "status.organizingChanged": "Organizing changed tabs",
     "status.undoing": "Undoing changes",
     "status.previousFailed": "Last generation failed. Try again.",
-    "status.previousCanceled": "Last cleanup was canceled",
+    "status.previousCanceled": "Last organization run was canceled",
     "status.noTabs": "No tabs to organize.",
     "status.generatedButMissingPreview": "The plan finished, but the preview was not saved.",
-    "status.backgroundNotStarted": "The background cleanup did not start. Try again.",
-    "status.anotherJobRunning": "Another cleanup is running. Cancel it or wait for it to finish.",
-    "status.notComplete": "Cleanup did not finish.",
-    "status.permissionAiGateway": "Allow access to this AI gateway before sending the cleanup request.",
+    "status.backgroundNotStarted": "The background organization did not start. Try again.",
+    "status.anotherJobRunning": "Another organization run is active. Cancel it or wait for it to finish.",
+    "status.notComplete": "Organization did not finish.",
+    "status.permissionAiGateway": "Allow access to this AI gateway before sending the organization request.",
     "status.permissionContinuousSummary": "Allow page-reading access before accumulating page summaries.",
     "status.permissionPageSummary": "Allow page-summary access before reading page text summaries.",
     "status.permissionFirstEnablePageSummary": "Turn on page summaries and grant access before reading page summaries.",
@@ -201,8 +201,8 @@ const UI_COPY = Object.freeze({
     "sampling.tooltip": "Reads only title, description, headings, and a short visible-text excerpt. It will not read passwords, form values, cookies, local storage, or full HTML. Sleeping tabs are not awakened.",
     "sampling.aria": "Page summary details",
     "continuous.title": "Accumulate page summaries",
-    "continuous.subtitle": "Cache authorized pages for better future cleanup",
-    "continuous.tooltip": "Requests one-time page-reading access. After that, it stores short summaries only for authorized, awake, non-incognito pages so future cleanup is faster and more accurate. It will not wake sleeping tabs.",
+    "continuous.subtitle": "Cache authorized pages for better future organization",
+    "continuous.tooltip": "Requests one-time page-reading access. After that, it stores short summaries only for authorized, awake, non-incognito pages so future organization is faster and more accurate. It will not wake sleeping tabs.",
     "continuous.aria": "Accumulated summary details",
     "customPrompt.label": "Custom instructions",
     "customPrompt.placeholder": "Example: keep job search, AI papers, and current projects separate; put uncertain pages in review.",
@@ -225,7 +225,7 @@ const UI_COPY = Object.freeze({
     "field.pageContext": "Page summary range",
     "field.hostPermission": "Site access",
     "field.resultLanguage": "Result language",
-    "field.promptPreset": "Cleanup mode",
+    "field.promptPreset": "Organization mode",
     "field.gatewayModel": "AI model",
     "field.thinking": "Reasoning effort",
     "field.customModel": "Custom model name",
@@ -253,7 +253,7 @@ const UI_COPY = Object.freeze({
     "option.permissionNever": "Do not ask while organizing",
     "option.permissionOrigin": "Ask per site",
     "option.permissionVisible": "Allow visible sites once",
-    "option.langAuto": "Auto",
+    "option.langAuto": "Follow UI",
     "option.langZh": "Simplified Chinese",
     "option.langEn": "English",
     "option.presetConservative": "Smart topics",
@@ -262,7 +262,7 @@ const UI_COPY = Object.freeze({
     "option.presetHybrid": "Directions + platforms",
     "option.presetProject": "Projects / tasks",
     "option.presetReadLater": "Read later",
-    "option.presetAggressive": "Aggressive cleanup",
+    "option.presetAggressive": "Bold grouping",
     "option.customModel": "Custom model name",
     "option.thinkingLow": "Low",
     "option.thinkingMedium": "Medium",
@@ -577,16 +577,11 @@ function applyUiLanguage() {
   setButtonLabel(nodes.applyBtn, t("button.apply"));
   setButtonLabel(nodes.undoBtn, t("button.undo"));
   if (nodes.uiLanguageToggle) {
-    const languageCode = nodes.uiLanguageToggle.querySelector(".language-toggle-code");
-    if (languageCode) {
-      languageCode.textContent = t("button.language");
-    } else {
-      nodes.uiLanguageToggle.textContent = t("button.language");
-    }
     nodes.uiLanguageToggle.setAttribute("aria-label", t("button.languageAria"));
+    nodes.uiLanguageToggle.setAttribute("title", t("button.languageAria"));
   }
   if (lastPreview) {
-    renderPreview({ preview: lastPreview, validation: { ok: lastCanApply }, settings: { languageMode: fields.languageMode.value } });
+    renderPreview({ preview: lastPreview, validation: { ok: lastCanApply }, settings: { languageMode: currentResultLanguageMode() } });
   } else {
     nodes.previewCount.textContent = t("preview.pending");
     nodes.previewRoot.textContent = t("preview.empty");
@@ -629,6 +624,14 @@ function setTooltip(inputSelector, tooltipKey) {
   if (label) label.dataset.tooltip = tooltip;
   const helpTip = label?.querySelector(".help-tip");
   if (helpTip) helpTip.dataset.tooltip = tooltip;
+}
+
+function currentResultLanguageMode() {
+  return fields.languageMode.value === "auto" ? uiLanguage : fields.languageMode.value;
+}
+
+function effectiveResultLanguageMode(languageMode) {
+  return languageMode === "auto" ? uiLanguage : languageMode;
 }
 
 function bindChoiceGroups() {
@@ -778,6 +781,7 @@ async function analyze() {
   setBusy(true, t("status.preparing"), { cancelable: true, progress: 4 });
   try {
     const settings = readSettings();
+    settings.languageMode = effectiveResultLanguageMode(settings.languageMode);
     validateGatewaySettingsForAnalyze(settings);
     updateLocalProgress(t("status.checkingPermissions"), 8);
     await ensurePlannerHostPermission(settings);
@@ -876,7 +880,7 @@ function changedTabsConfirmationText(summary = {}) {
   const newCount = (summary.skippedNewTabIds || summary.addedReviewTabIds || []).length;
   const removedCount = (summary.removedTabIds || []).length;
   const duplicateCount = (summary.duplicateTabIds || []).length;
-  const reviewTitle = reviewGroupTitle(fields.languageMode.value);
+  const reviewTitle = reviewGroupTitle(currentResultLanguageMode());
   const lines = [t("confirm.changedHeader")];
 
   if (newCount) {
@@ -898,7 +902,7 @@ function applyResultStatus(result) {
   if (changedTabs) {
     const reviewCount = result.rebasedPlan?.addedReviewTabIds?.length || 0;
     const reviewText = reviewCount
-      ? t("status.applyReviewSuffix", { reviewCount, reviewTitle: reviewGroupTitle(fields.languageMode.value) })
+      ? t("status.applyReviewSuffix", { reviewCount, reviewTitle: reviewGroupTitle(currentResultLanguageMode()) })
       : "";
     return t("status.applyChanged", { groupCount, changedTabs, reviewText });
   }
@@ -922,7 +926,7 @@ async function undoLastApply() {
 function renderPreview(job) {
   nodes.previewSection.hidden = false;
   const preview = job.preview;
-  const resultLanguageMode = preview.languageMode || job.settings?.languageMode || fields.languageMode.value;
+  const resultLanguageMode = preview.languageMode || job.settings?.languageMode || currentResultLanguageMode();
   const groups = orderPreviewGroups(preview.groups || [], resultLanguageMode);
   const reviewTabsCount = preview.reviewTabsCount || 0;
   const reviewGroupWillBeCreated = Boolean(preview.reviewGroupWillBeCreated && reviewTabsCount);

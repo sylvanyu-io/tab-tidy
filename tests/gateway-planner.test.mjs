@@ -23,7 +23,7 @@ const inventory = {
   ]
 };
 
-test("planner prompt includes the selected cleanup preset", () => {
+test("planner prompt includes the selected organization preset", () => {
   const prompt = buildPlannerSystemPrompt({
     ...DEFAULT_SETTINGS,
     promptPreset: PROMPT_PRESETS.DIRECTION_WITH_PLATFORMS

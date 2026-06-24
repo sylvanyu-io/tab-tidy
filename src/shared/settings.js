@@ -89,7 +89,7 @@ export const THINKING_INTENSITIES = Object.freeze({
 
 export const PROMPT_PRESET_TEXT = Object.freeze({
   conservative:
-    "Default smart cleanup. Group by semantic topic, current task, and user intent. Use original tab adjacency as context. Avoid domain-only groups unless the platform itself is the task. Keep unknown or mixed pages in Review.",
+    "Default smart organization. Group by semantic topic, current task, and user intent. Use original tab adjacency as context. Avoid domain-only groups unless the platform itself is the task. Keep unknown or mixed pages in Review.",
   research:
     "Best for a pile of tabs left over from studying one or more directions. Group by research direction, concrete question, paper/project, library, benchmark, or implementation path. Keep source material, notes, docs, papers, and experiments together when they serve the same direction.",
   platform_source:
@@ -101,7 +101,7 @@ export const PROMPT_PRESET_TEXT = Object.freeze({
   read_later:
     "Best for reading queues. Group articles, videos, papers, docs, newsletters, and tutorials by topic and intended action. Separate quick reads, deep reads, watch later, reference docs, and items that look like follow-up tasks.",
   aggressive_cleanup:
-    "Reduce clutter more aggressively and merge small related groups, while still placing low-confidence tabs in Review."
+    "Use bolder grouping. Merge small related groups when the intent is close, while still placing low-confidence tabs in Review."
 });
 
 export const DEFAULT_SETTINGS = Object.freeze({

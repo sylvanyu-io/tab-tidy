@@ -52,6 +52,14 @@ test("popup renders settings and mock preview", async ({ page }) => {
   await expect(page.locator(".actions")).toHaveCSS("position", "relative");
   await expect(page.locator(".actions")).toHaveCSS("display", "grid");
   await expect(page.locator(".scroll-region")).toHaveCSS("overflow-y", "auto");
+  await expect
+    .poll(() =>
+      page.evaluate(() => {
+        const scrollRegion = document.querySelector(".scroll-region")?.getBoundingClientRect();
+        return Boolean(scrollRegion && scrollRegion.right >= window.innerWidth - 3);
+      })
+    )
+    .toBe(true);
   await expect.poll(() => page.evaluate(() => document.documentElement.getBoundingClientRect().height)).toBe(560);
   await expect.poll(() => page.evaluate(() => document.body.getBoundingClientRect().height)).toBe(560);
   await expect(page.locator("#analyzeBtn")).toHaveCSS("background-color", "rgb(31, 85, 255)");
@@ -79,7 +87,7 @@ test("popup renders settings and mock preview", async ({ page }) => {
   await expect(page.getByText("调整", { exact: true })).toHaveCount(0);
   await expect(page.locator("#settingsSummaryBtn")).toHaveCount(0);
   await expect(page.locator("#closeWindowBtn")).toHaveCount(0);
-  await expect(page.locator("#uiLanguageToggle")).toHaveText("EN");
+  await expect(page.locator("#uiLanguageToggle")).toHaveText("");
   await expect(page.locator("#uiLanguageToggle svg")).toBeVisible();
   await expect(page.getByLabel("整理方式")).toHaveValue("conservative");
   await expect(page.locator("#promptPreset")).toContainText("按研究方向");
@@ -108,6 +116,7 @@ test("popup renders settings and mock preview", async ({ page }) => {
   await expect(page.locator("#gatewayCustomModelField")).toBeHidden();
   await expect(page.locator("#gatewayThinkingIntensity")).toHaveValue("high");
   await expect(page.locator("#languageMode")).toHaveValue("auto");
+  await expect(page.locator("#languageMode")).toContainText("跟随界面");
   await expect(page.locator("#undoTargetWindowMode")).toHaveValue("leave_empty_target_window");
   await expect(page.locator("#hostPermissionRequestMode")).toContainText("一次授权可见站点");
   await expect(page.locator("#existingGroupMode")).toBeHidden();
@@ -166,7 +175,7 @@ test("popup renders settings and mock preview", async ({ page }) => {
   await expect(
     page
       .locator(".preview")
-      .getByText('AI reviewed 23 tabs, found 2 topic groups; 20 tabs will be grouped automatically, with 3 tabs set aside for "待分类".')
+      .getByText('AI reviewed 23 tabs, found 2 topic groups; 20 tabs will be grouped automatically, with 3 tabs set aside for "Needs Review".')
   ).toBeVisible();
   await page.locator("#uiLanguageToggle").click();
   await expect(page.locator("#previewCount")).toHaveText("3 组");
@@ -205,14 +214,109 @@ test("auto-selects English UI and can manually switch back", async ({ page }) =>
     "placeholder",
     "Example: keep job search, AI papers, and current projects separate; put uncertain pages in review."
   );
-  await expect(page.locator("#uiLanguageToggle")).toHaveText("中");
+  await expect(page.locator("#uiLanguageToggle")).toHaveText("");
   await expect(page.locator("#uiLanguageToggle")).toHaveAttribute("aria-label", "切换界面为中文");
   await expect(page.locator("#closeWindowBtn")).toHaveCount(0);
 
   await page.locator("#uiLanguageToggle").click();
   await expect(page.locator("#statusText")).toHaveText("AI 标签页整理");
   await expect(page.getByRole("button", { name: "生成方案" })).toBeVisible();
-  await expect(page.locator("#uiLanguageToggle")).toHaveText("EN");
+  await expect(page.locator("#uiLanguageToggle")).toHaveText("");
+});
+
+test("default result language follows the English UI when generating", async ({ page }) => {
+  await page.addInitScript(() => {
+    localStorage.removeItem("tabTidy.uiLanguage");
+    Object.defineProperty(navigator, "language", { get: () => "en-US" });
+    Object.defineProperty(navigator, "languages", { get: () => ["en-US"] });
+    const settings = {
+      organizeMode: "current_window",
+      targetWindowMode: "current_window",
+      existingGroupMode: "preserve_existing_groups",
+      reviewGroupMode: "create_review_group",
+      undoTargetWindowMode: "leave_empty_target_window",
+      pageContextMode: "off",
+      hostPermissionRequestMode: "never",
+      pageSamplingConsentMode: "not_acknowledged",
+      urlPrivacyMode: "sanitized_url",
+      languageMode: "auto",
+      includePinnedTabs: false,
+      includeIncognitoTabs: false,
+      collapseGroupsAfterApply: true,
+      continuousPageSummaries: false,
+      minConfidenceToApply: 0.65,
+      maxTabsPerGroup: 40,
+      promptPreset: "conservative",
+      plannerProvider: "gateway",
+      rememberProviderKeys: false,
+      gatewayBaseUrl: "",
+      gatewayModel: "gpt-5.5",
+      gatewayThinkingIntensity: "high",
+      gatewayApiKey: "",
+      customPrompt: ""
+    };
+    const activeJob = {
+      operationId: "job_follow_ui_language",
+      status: "complete",
+      phase: "complete",
+      progress: 100,
+      message: "Plan ready to review",
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      finishedAt: new Date().toISOString()
+    };
+    const job = {
+      settings: { ...settings, languageMode: "en-US" },
+      validation: { ok: true, warnings: [] },
+      preview: {
+        languageMode: "en-US",
+        requiresConfirmation: false,
+        groups: [{ title: "AI Tools", reason: "Related tools.", tabCount: 2 }],
+        eligibleTabsCount: 2,
+        groupedTabsCount: 2,
+        reviewTabsCount: 0,
+        reviewGroupWillBeCreated: true,
+        excludedTabsCount: 0,
+        lockedGroupsCount: 0,
+        warnings: []
+      }
+    };
+    window.__startedSettings = null;
+    window.__analysisStarted = false;
+    window.chrome = {
+      runtime: {
+        getManifest: () => ({ optional_permissions: ["scripting"], optional_host_permissions: ["https://*/*", "http://*/*"] }),
+        sendMessage: async (message) => {
+          if (message.type === "settings:get") return { ok: true, result: settings };
+          if (message.type === "settings:save") return { ok: true, result: message.settings };
+          if (message.type === "tabs:getActiveJob") return { ok: true, result: window.__analysisStarted ? activeJob : null };
+          if (message.type === "tabs:startAnalyze") {
+            window.__startedSettings = message.settings;
+            window.__analysisStarted = true;
+            return { ok: true, result: { operationId: activeJob.operationId } };
+          }
+          if (message.type === "tabs:getLastJob") return { ok: true, result: job };
+          return { ok: true, result: null };
+        }
+      },
+      permissions: {
+        contains: async () => true,
+        request: async () => true
+      },
+      tabs: {
+        query: async () => [{ id: 1, windowId: 1, active: true }]
+      },
+      windows: {
+        get: async () => ({ id: 1, type: "normal" }),
+        getLastFocused: async () => ({ id: 1, type: "normal" })
+      }
+    };
+  });
+
+  await page.goto(`${baseUrl}/src/sidepanel/index.html`);
+  await expect(page.locator("#languageMode")).toHaveValue("auto");
+  await page.getByRole("button", { name: "Generate plan" }).click();
+  await expect.poll(() => page.evaluate(() => window.__startedSettings?.languageMode)).toBe("en-US");
 });
 
 test("popup restores a completed background preview after reopening", async ({ page }) => {
