@@ -37,6 +37,10 @@ test("AI gateway settings normalize safely", () => {
     ""
   );
   assert.equal(
+    normalizeSettings({ ...DEFAULT_SETTINGS, gatewayBaseUrl: "https://cliproxy.sylvanyu.io/v1/" }).gatewayBaseUrl,
+    ""
+  );
+  assert.equal(
     normalizeSettings({ ...DEFAULT_SETTINGS, gatewayBaseUrl: "https://api.openai.com/v1" }).gatewayBaseUrl,
     ""
   );

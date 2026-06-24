@@ -1,6 +1,5 @@
 import {
   BUILTIN_GATEWAY_BASE_URL,
-  BUILTIN_GATEWAY_PUBLIC_TOKEN,
   ORGANIZE_MODES,
   PROMPT_PRESET_TEXT,
   TARGET_WINDOW_MODES,
@@ -69,7 +68,7 @@ async function createSingleGatewayPlan(inventory, settings, fetchImpl, options =
     gatewayChatCompletionsUrl(settings),
     {
       method: "POST",
-      headers: gatewayHeaders(settings),
+      headers: gatewayHeaders(settings, gatewayRequestMeta(inventory, options)),
       body: JSON.stringify(body)
     },
     "AI gateway planner",
@@ -169,13 +168,25 @@ export function effectiveGatewayBaseUrl(settings) {
   return settings.gatewayBaseUrl || BUILTIN_GATEWAY_BASE_URL;
 }
 
-function gatewayHeaders(settings) {
+function gatewayHeaders(settings, requestMeta = {}) {
   const headers = { "content-type": "application/json" };
-  const apiKey = settings.gatewayBaseUrl ? settings.gatewayApiKey : BUILTIN_GATEWAY_PUBLIC_TOKEN;
-  if (apiKey) {
-    headers.authorization = `Bearer ${apiKey}`;
+  if (settings.gatewayBaseUrl && settings.gatewayApiKey) {
+    headers.authorization = `Bearer ${settings.gatewayApiKey}`;
+  }
+  if (!settings.gatewayBaseUrl && requestMeta.installId) {
+    headers["x-tab-tidy-install-id"] = requestMeta.installId;
+  }
+  if (!settings.gatewayBaseUrl && requestMeta.hasPageSamples) {
+    headers["x-tab-tidy-page-summary"] = "1";
   }
   return headers;
+}
+
+function gatewayRequestMeta(inventory, options = {}) {
+  return {
+    installId: options.installId || "",
+    hasPageSamples: (inventory.pageSamples || []).some((sample) => sample.status === "ok")
+  };
 }
 
 function gatewayErrorMessage(response, data, settings) {
@@ -304,7 +315,7 @@ async function createCoarseGatewayBuckets(inventory, settings, fetchImpl, option
     gatewayChatCompletionsUrl(settings),
     {
       method: "POST",
-      headers: gatewayHeaders(settings),
+      headers: gatewayHeaders(settings, gatewayRequestMeta(inventory, options)),
       body: JSON.stringify(body)
     },
     "AI gateway coarse planner",

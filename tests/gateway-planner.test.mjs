@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { createGatewayPlan } from "../src/core/gateway-planner.js";
 import { validatePlan } from "../src/core/plan-validator.js";
-import { BUILTIN_GATEWAY_PUBLIC_TOKEN, DEFAULT_SETTINGS, PLANNER_PROVIDERS } from "../src/shared/settings.js";
+import { DEFAULT_SETTINGS, PLANNER_PROVIDERS } from "../src/shared/settings.js";
 
 const inventory = {
   scope: { kind: "current_window", currentWindowId: 1, windowIds: [1] },
@@ -297,9 +297,12 @@ test("AI gateway planner can call a custom free gateway without an API key", asy
   assert.equal(plan.reviewTabs.length, 2);
 });
 
-test("AI gateway planner uses the built-in public token for the default service", async () => {
-  const fetchImpl = async (_url, options) => {
-    assert.equal(options.headers.authorization, `Bearer ${BUILTIN_GATEWAY_PUBLIC_TOKEN}`);
+test("AI gateway planner uses the default free gateway without exposing authorization", async () => {
+  const fetchImpl = async (url, options) => {
+    assert.equal(url, "https://cliproxy.sylvanyu.io/v1/chat/completions");
+    assert.equal(options.headers.authorization, undefined);
+    assert.equal(options.headers["x-tab-tidy-install-id"], "install-test");
+    assert.equal(options.headers["x-tab-tidy-page-summary"], "1");
     return {
       ok: true,
       async json() {
@@ -334,14 +337,16 @@ test("AI gateway planner uses the built-in public token for the default service"
   const plan = await createGatewayPlan(
     inventory,
     { ...DEFAULT_SETTINGS, plannerProvider: PLANNER_PROVIDERS.GATEWAY, gatewayApiKey: "" },
-    fetchImpl
+    fetchImpl,
+    { installId: "install-test" }
   );
   assert.equal(plan.reviewTabs.length, 2);
 });
 
 test("AI gateway planner ignores stale user keys for the built-in free gateway", async () => {
   const fetchImpl = async (_url, options) => {
-    assert.equal(options.headers.authorization, `Bearer ${BUILTIN_GATEWAY_PUBLIC_TOKEN}`);
+    assert.equal(options.headers.authorization, undefined);
+    assert.equal(options.headers["x-tab-tidy-install-id"], "install-test");
     return {
       ok: true,
       async json() {
@@ -376,7 +381,8 @@ test("AI gateway planner ignores stale user keys for the built-in free gateway",
   const plan = await createGatewayPlan(
     inventory,
     { ...DEFAULT_SETTINGS, plannerProvider: PLANNER_PROVIDERS.GATEWAY, gatewayApiKey: "stale-key" },
-    fetchImpl
+    fetchImpl,
+    { installId: "install-test" }
   );
   assert.equal(plan.reviewTabs.length, 2);
 });

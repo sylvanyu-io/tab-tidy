@@ -513,6 +513,81 @@ test("startAnalyzeTabs returns immediately while the background job writes final
   assert.equal(lastJob.preview.groups.length > 0, true);
 });
 
+test("gateway analyses create and reuse an anonymous install id", async () => {
+  const chrome = createFakeChrome({
+    windows: [
+      {
+        id: 1,
+        focused: true,
+        tabs: [
+          { id: 10, title: "Chrome tabs API docs", url: "https://developer.chrome.com/docs/extensions/reference/api/tabs", active: true },
+          { id: 11, title: "Chrome tabGroups API docs", url: "https://developer.chrome.com/docs/extensions/reference/api/tabGroups" }
+        ]
+      }
+    ]
+  });
+  const originalFetch = globalThis.fetch;
+  const requestHeaders = [];
+  globalThis.fetch = async (_url, options) => {
+    requestHeaders.push(options.headers);
+    return {
+      ok: true,
+      status: 200,
+      async json() {
+        return {
+          choices: [
+            {
+              message: {
+                content: JSON.stringify({
+                  schemaVersion: 1,
+                  mode: "current_window",
+                  scope: { kind: "current_window", windowIds: [1] },
+                  targetWindow: { kind: "current_window", windowId: 1, title: "Current Window" },
+                  eligibleTabs: [
+                    { tabId: 10, windowId: 1 },
+                    { tabId: 11, windowId: 1 }
+                  ],
+                  excludedTabs: [],
+                  groups: [
+                    {
+                      groupKey: "chrome-docs",
+                      title: "Chrome Docs",
+                      color: "blue",
+                      confidence: 0.9,
+                      tabRefs: [
+                        { tabId: 10, windowId: 1 },
+                        { tabId: 11, windowId: 1 }
+                      ],
+                      reason: "Chrome extension documentation."
+                    }
+                  ],
+                  reviewTabs: []
+                })
+              }
+            }
+          ]
+        };
+      }
+    };
+  };
+
+  try {
+    const settings = { ...DEFAULT_SETTINGS, plannerProvider: PLANNER_PROVIDERS.GATEWAY };
+    await analyzeTabs(chrome, settings, { windowId: 1 });
+    const firstInstallId = chrome.__state.storage[STORAGE_KEYS.installId];
+    await analyzeTabs(chrome, settings, { windowId: 1 });
+
+    assert.match(firstInstallId, /^install_/);
+    assert.equal(chrome.__state.storage[STORAGE_KEYS.installId], firstInstallId);
+    assert.equal(requestHeaders.length, 2);
+    assert.equal(requestHeaders[0].authorization, undefined);
+    assert.equal(requestHeaders[0]["x-tab-tidy-install-id"], firstInstallId);
+    assert.equal(requestHeaders[1]["x-tab-tidy-install-id"], firstInstallId);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
 test("canceling during preview cannot be overwritten by completion", async () => {
   const chrome = createFakeChrome({
     windows: [

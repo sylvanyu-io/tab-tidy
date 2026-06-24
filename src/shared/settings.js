@@ -61,10 +61,13 @@ export const PLANNER_PROVIDERS = Object.freeze({
   GATEWAY: "gateway"
 });
 
-export const BUILTIN_GATEWAY_BASE_URL = "http://127.0.0.1:8317/v1";
-export const BUILTIN_GATEWAY_PUBLIC_TOKEN = "7f1262f810e1074eaa51a1adc430cfae4c5a1b21d8807a78114658317bc1f91e";
+export const BUILTIN_GATEWAY_BASE_URL = "https://cliproxy.sylvanyu.io/v1";
 export const DEFAULT_GATEWAY_BASE_URL = "";
-const LEGACY_DEFAULT_GATEWAY_BASE_URLS = new Set([BUILTIN_GATEWAY_BASE_URL, "https://api.openai.com/v1"]);
+const LEGACY_DEFAULT_GATEWAY_BASE_URLS = new Set([
+  BUILTIN_GATEWAY_BASE_URL,
+  "http://127.0.0.1:8317/v1",
+  "https://api.openai.com/v1"
+]);
 
 export const GATEWAY_MODELS = Object.freeze(["gpt-5.5", "claude-opus-4-8", "claude-sonnet-4-6"]);
 

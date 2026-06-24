@@ -102,10 +102,17 @@ async function runActiveAnalysis(chromeApi, rawSettings, invocation, operationId
     });
     throwIfCanceled(abortController.signal);
 
-    await reportProgress({ phase: "planning", progress: 40, message: "正在生成 AI 方案" });
-    const { plan, validation } = await createValidatedPlan(inventory, settings, {
+    const planOptions = {
       signal: abortController.signal,
       onProgress: reportProgress
+    };
+    if (settings.plannerProvider === PLANNER_PROVIDERS.GATEWAY) {
+      planOptions.installId = await getOrCreateInstallId(chromeApi);
+    }
+
+    await reportProgress({ phase: "planning", progress: 40, message: "正在生成 AI 方案" });
+    const { plan, validation } = await createValidatedPlan(inventory, settings, {
+      ...planOptions
     });
     throwIfCanceled(abortController.signal);
 
@@ -316,6 +323,26 @@ async function assertNoRunningAnalysis(chromeApi) {
 
 function createOperationId() {
   return `job_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+}
+
+async function getOrCreateInstallId(chromeApi) {
+  const existing = await getLocal(chromeApi, STORAGE_KEYS.installId, "");
+  if (isValidInstallId(existing)) return existing;
+
+  const installId = createInstallId();
+  await setLocal(chromeApi, STORAGE_KEYS.installId, installId);
+  return installId;
+}
+
+function createInstallId() {
+  if (globalThis.crypto?.randomUUID) {
+    return `install_${globalThis.crypto.randomUUID()}`;
+  }
+  return `install_${Date.now()}_${Math.random().toString(36).slice(2, 12)}`;
+}
+
+function isValidInstallId(value) {
+  return /^install_[a-zA-Z0-9_-]{8,80}$/.test(String(value || ""));
 }
 
 async function updateActiveJob(chromeApi, operationId, patch) {

@@ -5,7 +5,7 @@
   "description": "AI-assisted semantic organization for large sets of browser tabs.",
   "minimum_chrome_version": "116",
   "permissions": ["tabs", "tabGroups", "storage", "activeTab"],
-  "host_permissions": ["http://127.0.0.1/*"],
+  "host_permissions": ["https://cliproxy.sylvanyu.io/*"],
   "optional_permissions": ["scripting"],
   "optional_host_permissions": ["https://*/*", "http://*/*"],
   "background": {
