@@ -28,8 +28,17 @@ test("worker validates models and token caps before forwarding", async () => {
   assert.equal(badModel.status, 400);
   assert.equal((await badModel.json()).error.code, "model_not_allowed");
 
-  const progressCopyModel = await handle(chatRequest({ model: "gpt-5.3-codex-spark" }), env);
+  const progressCopyModel = await handle(
+    chatRequest({ model: "gpt-5.3-codex-spark", response_format: { type: "json_object" }, max_tokens: 1200 }),
+    env
+  );
   assert.equal(progressCopyModel.status, 200);
+  const sparkToolRequest = await handle(
+    chatRequest({ model: "gpt-5.3-codex-spark", response_format: { type: "json_object" }, tools: [{ type: "function" }] }),
+    env
+  );
+  assert.equal(sparkToolRequest.status, 400);
+  assert.equal((await sparkToolRequest.json()).error.code, "spark_tools_not_allowed");
 
   const tooManyTokens = await handle(chatRequest({ max_tokens: 9000 }), env);
   assert.equal(tooManyTokens.status, 400);
@@ -101,6 +110,22 @@ test("worker applies install id, ip, global, and page-summary quotas", async () 
       .status,
     429
   );
+});
+
+test("page-summary quota failures do not consume the general install quota", async () => {
+  const env = envWithKv({ INSTALL_DAILY_REQUESTS: "2", INSTALL_DAILY_PAGE_SUMMARY_REQUESTS: "1" });
+  assert.equal((await handle(chatRequest(undefined, { "x-tab-tidy-install-id": "install-a", "x-tab-tidy-page-summary": "1" }), env)).status, 200);
+  assert.equal((await handle(chatRequest(undefined, { "x-tab-tidy-install-id": "install-a", "x-tab-tidy-page-summary": "1" }), env)).status, 429);
+  assert.equal((await handle(chatRequest(undefined, { "x-tab-tidy-install-id": "install-a" }), env)).status, 200);
+});
+
+test("worker CORS is limited to extension and local debug origins", async () => {
+  const extensionResponse = await handle(chatRequest(undefined, { origin: "chrome-extension://abcdefghijklmnop" }), envWithKv());
+  assert.equal(extensionResponse.headers.get("access-control-allow-origin"), "chrome-extension://abcdefghijklmnop");
+
+  const webResponse = await handle(chatRequest(undefined, { origin: "https://random.example" }), envWithKv());
+  assert.equal(webResponse.status, 200);
+  assert.equal(webResponse.headers.get("access-control-allow-origin"), null);
 });
 
 function chatRequest(overrides = {}, headers = {}) {

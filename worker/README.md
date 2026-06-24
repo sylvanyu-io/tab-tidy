@@ -23,8 +23,10 @@ brake for an open-source browser extension before login exists.
 
 ## Required Cloudflare Resources
 
-Create a Workers KV namespace and bind it as `RATE_LIMIT_KV`. Copy
-`wrangler.toml.example` to `wrangler.toml`, then fill in the KV namespace ID.
+Create a Workers KV namespace and bind it as `RATE_LIMIT_KV`. This repository
+includes `worker/wrangler.toml` for the current public route. For another
+deployment, copy `worker/wrangler.toml.example` to your own config and fill in
+the KV namespace ID.
 
 Use a Worker route for the public extension domain:
 

@@ -20,49 +20,49 @@ export function createWorkerHandler(options = {}) {
 
 export async function handleRequest(request, env = {}, ctx = {}, options = {}) {
   const url = new URL(request.url);
-  if (request.method === "OPTIONS") return emptyResponse(204);
+  if (request.method === "OPTIONS") return emptyResponse(204, request);
   if (url.pathname === "/healthz" && request.method === "GET") {
-    return jsonResponse({ ok: true }, 200);
+    return jsonResponse({ ok: true }, 200, {}, request);
   }
   if (url.pathname !== "/v1/chat/completions") {
-    return jsonError("Not found.", 404, "not_found");
+    return jsonError("Not found.", 404, "not_found", {}, request);
   }
   if (request.method !== "POST") {
-    return jsonError("Method not allowed.", 405, "method_not_allowed");
+    return jsonError("Method not allowed.", 405, "method_not_allowed", {}, request);
   }
 
   const limits = readLimits(env);
   const bodyText = await readBodyText(request, limits.bodyBytes);
   if (!bodyText.ok) {
-    return jsonError(bodyText.message, 413, "request_too_large");
+    return jsonError(bodyText.message, 413, "request_too_large", {}, request);
   }
 
   let body;
   try {
     body = JSON.parse(bodyText.text);
   } catch {
-    return jsonError("Request body must be valid JSON.", 400, "invalid_json");
+    return jsonError("Request body must be valid JSON.", 400, "invalid_json", {}, request);
   }
 
   const validation = validateChatRequest(body, env, limits);
   if (!validation.ok) {
-    return jsonError(validation.message, 400, validation.code);
+    return jsonError(validation.message, 400, validation.code, {}, request);
   }
 
   const rateLimit = await checkRateLimits(request, env, limits);
   if (!rateLimit.ok) {
-    return jsonError(rateLimit.message, 429, rateLimit.code, rateLimit.headers);
+    return jsonError(rateLimit.message, 429, rateLimit.code, rateLimit.headers, request);
   }
 
   const upstream = upstreamConfig(env);
   if (!upstream.ok) {
-    return jsonError(upstream.message, 503, "upstream_not_configured");
+    return jsonError(upstream.message, 503, "upstream_not_configured", {}, request);
   }
 
   const fetchImpl = options.fetchImpl || fetch;
   const upstreamResponse = await fetchImpl(upstream.url, upstreamRequest(bodyText.text, upstream, request.signal));
 
-  return relayUpstreamResponse(upstreamResponse);
+  return relayUpstreamResponse(upstreamResponse, request);
 }
 
 function readLimits(env) {
@@ -102,8 +102,31 @@ function validateChatRequest(body, env, limits) {
   if (Number(body.max_tokens || 0) > limits.maxTokens) {
     return { ok: false, code: "max_tokens_exceeded", message: `max_tokens must be <= ${limits.maxTokens}.` };
   }
+  if (body.model === "gpt-5.3-codex-spark") {
+    const sparkValidation = validateProgressCopyRequest(body);
+    if (!sparkValidation.ok) return sparkValidation;
+  }
   if (body.base_url || body.baseURL || body.provider_url) {
     return { ok: false, code: "proxy_target_not_allowed", message: "Custom upstream targets are not allowed." };
+  }
+  return { ok: true };
+}
+
+function validateProgressCopyRequest(body) {
+  if (body.stream) {
+    return { ok: false, code: "spark_stream_not_allowed", message: "Progress copy requests cannot use streaming." };
+  }
+  if (body.tools || body.functions || body.tool_choice || body.function_call) {
+    return { ok: false, code: "spark_tools_not_allowed", message: "Progress copy requests cannot use tools." };
+  }
+  if (Number(body.n || 1) > 1) {
+    return { ok: false, code: "spark_multi_choice_not_allowed", message: "Progress copy requests must request one choice." };
+  }
+  if (Number(body.max_tokens || 0) > 1200) {
+    return { ok: false, code: "spark_token_cap_exceeded", message: "Progress copy max_tokens must be <= 1200." };
+  }
+  if (body.response_format?.type !== "json_object") {
+    return { ok: false, code: "spark_json_required", message: "Progress copy requests must use JSON object output." };
   }
   return { ok: true };
 }
@@ -134,28 +157,24 @@ async function checkRateLimits(request, env, limits) {
     ]);
   }
 
+  const currentCounts = [];
   for (const [kind, key, limit, ttlSeconds] of checks) {
-    const result = await incrementCounter(env.RATE_LIMIT_KV, key, ttlSeconds, limit);
-    if (!result.ok) {
+    const current = Number(await env.RATE_LIMIT_KV.get(key)) || 0;
+    if (current + 1 > limit) {
       return {
         ok: false,
         code: `${kind}_rate_limited`,
         message: "The free gateway is temporarily rate limited. Please try later or use a custom gateway.",
-        headers: { "retry-after": String(result.retryAfterSeconds) }
+        headers: { "retry-after": String(Math.min(ttlSeconds, 3600)) }
       };
     }
+    currentCounts.push([key, current + 1, ttlSeconds]);
+  }
+
+  for (const [key, next, ttlSeconds] of currentCounts) {
+    await env.RATE_LIMIT_KV.put(key, String(next), { expirationTtl: ttlSeconds });
   }
   return { ok: true };
-}
-
-async function incrementCounter(kv, key, ttlSeconds, limit) {
-  const current = Number(await kv.get(key)) || 0;
-  const next = current + 1;
-  if (next > limit) {
-    return { ok: false, retryAfterSeconds: Math.min(ttlSeconds, 3600) };
-  }
-  await kv.put(key, String(next), { expirationTtl: ttlSeconds });
-  return { ok: true, count: next };
 }
 
 function upstreamConfig(env) {
@@ -183,11 +202,9 @@ function upstreamRequest(bodyText, upstream, signal) {
   return { method: "POST", headers, body: bodyText, signal };
 }
 
-function relayUpstreamResponse(response) {
+function relayUpstreamResponse(response, request) {
   const headers = {
-    "access-control-allow-origin": "*",
-    "access-control-allow-methods": "GET,POST,OPTIONS",
-    "access-control-allow-headers": "content-type,authorization,x-tab-tidy-install-id,x-tab-tidy-page-summary",
+    ...corsHeaders(request),
     "cache-control": "no-store",
     "content-type": response.headers.get("content-type") || "application/json"
   };
@@ -234,32 +251,46 @@ function positiveInteger(value, fallback) {
   return Number.isInteger(numeric) && numeric > 0 ? numeric : fallback;
 }
 
-function jsonError(message, status, code, extraHeaders = {}) {
-  return jsonResponse({ error: { message, code } }, status, extraHeaders);
+function jsonError(message, status, code, extraHeaders = {}, request = null) {
+  return jsonResponse({ error: { message, code } }, status, extraHeaders, request);
 }
 
-function jsonResponse(value, status = 200, extraHeaders = {}) {
+function jsonResponse(value, status = 200, extraHeaders = {}, request = null) {
   return new Response(JSON.stringify(value), {
     status,
     headers: {
       "content-type": "application/json; charset=utf-8",
-      "access-control-allow-origin": "*",
-      "access-control-allow-methods": "GET,POST,OPTIONS",
-      "access-control-allow-headers": "content-type,authorization,x-tab-tidy-install-id,x-tab-tidy-page-summary",
+      ...corsHeaders(request),
       "cache-control": "no-store",
       ...extraHeaders
     }
   });
 }
 
-function emptyResponse(status) {
+function emptyResponse(status, request = null) {
   return new Response(null, {
     status,
     headers: {
-      "access-control-allow-origin": "*",
-      "access-control-allow-methods": "GET,POST,OPTIONS",
-      "access-control-allow-headers": "content-type,authorization,x-tab-tidy-install-id,x-tab-tidy-page-summary",
+      ...corsHeaders(request),
       "cache-control": "no-store"
     }
   });
+}
+
+function corsHeaders(request) {
+  const origin = request?.headers?.get?.("origin") || "";
+  const allowedOrigin = allowedCorsOrigin(origin);
+  return {
+    ...(allowedOrigin ? { "access-control-allow-origin": allowedOrigin } : {}),
+    "access-control-allow-methods": "GET,POST,OPTIONS",
+    "access-control-allow-headers": "content-type,authorization,x-tab-tidy-install-id,x-tab-tidy-page-summary",
+    vary: "Origin"
+  };
+}
+
+function allowedCorsOrigin(origin) {
+  if (!origin) return "*";
+  if (/^(chrome|moz)-extension:\/\/[a-z0-9_-]+$/i.test(origin)) return origin;
+  if (/^http:\/\/(127\.0\.0\.1|localhost)(:\d+)?$/i.test(origin)) return origin;
+  return "";
 }
