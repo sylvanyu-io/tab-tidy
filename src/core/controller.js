@@ -7,6 +7,7 @@ import {
   TARGET_WINDOW_MODES,
   normalizeSettings
 } from "../shared/settings.js";
+import { shouldShowPageSampleCount } from "../shared/page-sampling-copy.js";
 import { applyValidatedPlan, createRollbackSnapshot, undoFromRollback } from "./chrome-executor.js";
 import { cachedPageSampleForTab, rememberPageSummary } from "./page-summary-cache.js";
 import { requestPageSample } from "./page-sampler.js";
@@ -26,7 +27,6 @@ const PROGRESS_COPY_COUNT = 90;
 const PROGRESS_COPY_MAX_LENGTH = 18;
 const PAGE_SAMPLE_CONCURRENCY = 6;
 const PAGE_SAMPLE_TIMEOUT_MS = 1800;
-const PAGE_SAMPLE_COUNT_COPY_THRESHOLD = 8;
 
 export async function handleRuntimeMessage(chromeApi, message) {
   switch (message?.type) {
@@ -608,11 +608,12 @@ async function createValidatedPlan(inventory, settings, options = {}) {
 async function attachPageSamples(chromeApi, inventory, settings, options = {}) {
   inventory.pageSamples = [];
   const cachedTabIds = await attachCachedPageSamples(chromeApi, inventory, settings, options);
+  const totalTabsForCopy = inventory.plannerTabs?.length || 0;
   if (settings.pageContextMode === PAGE_CONTEXT_MODES.OFF) {
     await options.onProgress?.({
       phase: "sampling",
       progress: 24,
-      message: cachedTabIds.size ? `使用已缓存页面摘要 ${cachedTabIds.size} 个` : "页面摘要已关闭"
+      message: cachedTabIds.size ? pageSamplingCachedMessage(cachedTabIds.size, totalTabsForCopy) : "页面摘要已关闭"
     });
     return inventory;
   }
@@ -622,7 +623,7 @@ async function attachPageSamples(chromeApi, inventory, settings, options = {}) {
     await options.onProgress?.({
       phase: "sampling",
       progress: 30,
-      message: cachedTabIds.size ? `使用已缓存页面摘要 ${cachedTabIds.size} 个` : "没有需要读取摘要的页面"
+      message: cachedTabIds.size ? pageSamplingCachedMessage(cachedTabIds.size, totalTabsForCopy) : "没有需要补充页面线索"
     });
     return inventory;
   }
@@ -646,18 +647,19 @@ async function attachPageSamples(chromeApi, inventory, settings, options = {}) {
   }
 
   const workerCount = Math.min(PAGE_SAMPLE_CONCURRENCY, runnableCandidates.length);
+  const totalTabsForProgress = totalTabsForCopy || candidates.length;
 
   await options.onProgress?.({
     phase: "sampling",
     progress: 20 + Math.round((completed / candidates.length) * 16),
-    message: pageSamplingProgressMessage(sampledOk)
+    message: pageSamplingProgressMessage(sampledOk, totalTabsForProgress)
   });
 
   const sampleOne = async (tab) => {
     await options.onProgress?.({
       phase: "sampling",
       progress: 20 + Math.round((completed / candidates.length) * 16),
-      message: pageSamplingProgressMessage(sampledOk)
+      message: pageSamplingProgressMessage(sampledOk, totalTabsForProgress)
     });
     const liveTab = await getLiveTab(chromeApi, tab.tabId);
     const sampleResult = liveTab
@@ -683,7 +685,7 @@ async function attachPageSamples(chromeApi, inventory, settings, options = {}) {
     await options.onProgress?.({
       phase: "sampling",
       progress: 20 + Math.round((completed / candidates.length) * 16),
-      message: pageSamplingProgressMessage(sampledOk)
+      message: pageSamplingProgressMessage(sampledOk, totalTabsForProgress)
     });
   };
 
@@ -704,17 +706,21 @@ async function attachPageSamples(chromeApi, inventory, settings, options = {}) {
   await options.onProgress?.({
     phase: "sampling",
     progress: 36,
-    message: pageSamplingDoneMessage(sampledOk)
+    message: pageSamplingDoneMessage(sampledOk, totalTabsForProgress)
   });
   return inventory;
 }
 
-function pageSamplingProgressMessage(sampledOk) {
-  return sampledOk >= PAGE_SAMPLE_COUNT_COPY_THRESHOLD ? `正在补充页面线索，已补充 ${sampledOk} 个` : "正在补充页面线索";
+function pageSamplingCachedMessage(cachedCount, totalTabs) {
+  return shouldShowPageSampleCount(cachedCount, totalTabs) ? `使用已缓存页面摘要 ${cachedCount} 个` : "使用已缓存页面线索";
 }
 
-function pageSamplingDoneMessage(sampledOk) {
-  if (sampledOk >= PAGE_SAMPLE_COUNT_COPY_THRESHOLD) return `已补充 ${sampledOk} 个页面摘要`;
+function pageSamplingProgressMessage(sampledOk, totalTabs) {
+  return shouldShowPageSampleCount(sampledOk, totalTabs) ? `正在补充页面线索，已补充 ${sampledOk} 个` : "正在补充页面线索";
+}
+
+function pageSamplingDoneMessage(sampledOk, totalTabs) {
+  if (shouldShowPageSampleCount(sampledOk, totalTabs)) return `已补充 ${sampledOk} 个页面摘要`;
   if (sampledOk > 0) return "已补充部分页面线索";
   return "继续参考标题、网址和原始顺序";
 }

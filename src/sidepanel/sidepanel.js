@@ -1,5 +1,6 @@
 import { BUILTIN_GATEWAY_BASE_URL, GATEWAY_CUSTOM_MODEL_VALUE } from "../shared/settings.js";
 import { localizedText, reviewGroupReason, reviewGroupTitle } from "../shared/language.js";
+import { shouldShowPageSampleCount } from "../shared/page-sampling-copy.js";
 
 const fields = {
   organizeMode: document.querySelector("#organizeMode"),
@@ -60,7 +61,6 @@ const AI_WAIT_RAMP_MS = 45000;
 const AI_WAIT_COPY_INTERVAL_SECONDS = 4;
 const ACTIVE_JOB_POLL_MS = 600;
 const GENERATED_COPY_CACHE_LIMIT = 4;
-const PAGE_SAMPLE_COUNT_COPY_THRESHOLD = 8;
 const AI_WAIT_COPY = Object.freeze({
   planning: ["理解标题线索", "寻找相邻任务", "避开域名硬分组", "检查不确定页", "整理分组边界"],
   coarse_planning: ["快速扫一遍", "寻找跨窗口主题", "切出候选大组", "标记模糊标签"],
@@ -534,7 +534,7 @@ function previewSummary(preview, groupCount, reviewTabsCount, reviewGroupWillBeC
   summary.className = "preview-summary";
   const main = document.createElement("span");
   main.textContent = previewSummaryText(preview, groupCount, reviewTabsCount, reviewGroupWillBeCreated, languageMode);
-  summary.append(main, pageSamplingLine(preview.pageSampling, languageMode), excludedTabsLine(preview, languageMode));
+  summary.append(main, pageSamplingLine(preview, languageMode), excludedTabsLine(preview, languageMode));
   return summary;
 }
 
@@ -575,16 +575,19 @@ function previewSummaryText(preview, groupCount, reviewTabsCount, reviewGroupWil
   return `AI 已梳理 ${handledTabs} 个标签页，${subjectText}；${groupedTabs} 个已自动归类${reviewText}。`;
 }
 
-function pageSamplingLine(pageSampling, languageMode) {
+function pageSamplingLine(preview, languageMode) {
   const line = document.createElement("small");
+  const pageSampling = preview?.pageSampling;
   if (!pageSampling?.requested || !pageSampling.ok) return line;
 
+  const totalTabsForCopy = preview?.eligibleTabsCount || preview?.totalTabsCount || pageSampling.requested;
+  const shouldShowCount = shouldShowPageSampleCount(pageSampling.ok, totalTabsForCopy);
   line.textContent =
     languageMode === "en-US"
-      ? pageSampling.ok >= PAGE_SAMPLE_COUNT_COPY_THRESHOLD
+      ? shouldShowCount
         ? `Referenced ${pageSampling.ok} page summaries plus titles, URLs, and tab order.`
         : "Added extra page context where available, then organized with titles, URLs, and tab order."
-      : pageSampling.ok >= PAGE_SAMPLE_COUNT_COPY_THRESHOLD
+      : shouldShowCount
         ? `已参考 ${pageSampling.ok} 个页面摘要，并结合标题、网址和原始顺序整理。`
         : "已补充部分页面线索，并结合标题、网址和原始顺序整理。";
   return line;
