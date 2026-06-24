@@ -259,7 +259,7 @@ async function installChromeMock(page) {
       minConfidenceToApply: 0.65,
       maxTabsPerGroup: 40,
       languageMode: "zh-CN",
-      promptPreset: "project_work",
+      promptPreset: "conservative",
       plannerProvider: "gateway",
       rememberProviderKeys: false,
       gatewayBaseUrl: "",

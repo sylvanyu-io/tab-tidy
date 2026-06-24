@@ -226,10 +226,9 @@ function localizedRuleTitle(rule, languageMode) {
 function adjustConfidence(base, settings, haystack) {
   let confidence = base;
   if (settings.promptPreset === "aggressive_cleanup") confidence += 0.05;
-  if (settings.promptPreset === "research" && /paper|arxiv|docs|model|api/.test(haystack)) confidence += 0.04;
-  if (settings.promptPreset === "platform_source" && /github|youtube|bilibili|docs|arxiv|mail|notion|figma/.test(haystack)) confidence += 0.03;
-  if (settings.promptPreset === "direction_with_platforms" && /github|docs|paper|arxiv|model|api|dashboard/.test(haystack)) confidence += 0.03;
-  if (settings.promptPreset === "project_work" && /github|jira|linear|localhost/.test(haystack)) confidence += 0.04;
+  if (settings.promptPreset === "platform_source" && /github|youtube|bilibili|docs|arxiv|mail|notion|figma|dashboard|article|blog/.test(haystack)) {
+    confidence += 0.03;
+  }
   if (settings.promptPreset === "read_later" && /article|blog|paper|arxiv|video|youtube|tutorial|newsletter/.test(haystack)) confidence += 0.04;
   return Math.min(0.95, confidence);
 }

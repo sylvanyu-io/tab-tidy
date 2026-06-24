@@ -41,7 +41,7 @@ type HostPermissionRequestMode = "never" | "ask_per_origin" | "ask_for_all_visib
 type PageSamplingConsentMode = "not_acknowledged" | "acknowledged_for_session" | "acknowledged_persistently";
 type UrlPrivacyMode = "title_only" | "sanitized_url" | "full_url";
 type UndoTargetWindowMode = "leave_empty_target_window" | "close_empty_created_target_window";
-type PromptPreset = "conservative" | "research" | "project_work" | "aggressive_cleanup";
+type PromptPreset = "conservative" | "platform_source" | "read_later" | "aggressive_cleanup";
 ```
 
 Recommended settings:
@@ -159,16 +159,16 @@ Presets should be short, opinionated clauses appended to the planner prompt.
 - avoid moving pinned tabs;
 - avoid merging tabs with weak semantic evidence.
 
-`research`:
+`platform_source`:
 
-- group by research topic, paper/project, library, and question;
-- keep source material, notes, and implementation docs together;
-- tolerate cross-domain groups when the topic matches.
+- group by web page type when that helps more than topic;
+- keep docs, code/issues/PRs, papers, videos, articles, dashboards, search results, mail/chat, shopping/finance, and local tools distinct;
+- split unrelated work inside a large page type.
 
-`project_work`:
+`read_later`:
 
-- group by active project or task;
-- keep issue trackers, PRs, docs, dashboards, and local app tabs together when they refer to the same workstream.
+- organize reading queues by topic and intended action;
+- separate quick reads, deep reads, watch later, reference docs, and follow-up tasks.
 
 `aggressive_cleanup`:
 

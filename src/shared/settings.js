@@ -55,10 +55,7 @@ export const URL_PRIVACY_MODES = Object.freeze({
 
 export const PROMPT_PRESETS = Object.freeze({
   CONSERVATIVE: "conservative",
-  RESEARCH: "research",
-  PLATFORM_SOURCE: "platform_source",
-  DIRECTION_WITH_PLATFORMS: "direction_with_platforms",
-  PROJECT_WORK: "project_work",
+  WEB_TYPE: "platform_source",
   READ_LATER: "read_later",
   AGGRESSIVE_CLEANUP: "aggressive_cleanup"
 });
@@ -90,14 +87,8 @@ export const THINKING_INTENSITIES = Object.freeze({
 export const PROMPT_PRESET_TEXT = Object.freeze({
   conservative:
     "Default smart organization. Group by semantic topic, current task, and user intent. Use original tab adjacency as context. Avoid domain-only groups unless the platform itself is the task. Keep unknown or mixed pages in Review.",
-  research:
-    "Best for a pile of tabs left over from studying one or more directions. Group by research direction, concrete question, paper/project, library, benchmark, or implementation path. Keep source material, notes, docs, papers, and experiments together when they serve the same direction.",
   platform_source:
-    "Group primarily by platform or source type when that is more useful than topic: GitHub, documentation, papers, videos, social/news, shopping, finance, dashboards, local tools, and search results. Still split unrelated work inside a large platform.",
-  direction_with_platforms:
-    "Hybrid style. First group by research/work direction or user intent. Then keep truly cross-cutting public platforms separate, such as mail, chat, search, GitHub home, docs portals, video queues, dashboards, downloads, and generic tool entry points.",
-  project_work:
-    "Group by active project or task. Keep issue trackers, PRs, docs, dashboards, and local app tabs together when they refer to the same workstream.",
+    "Group primarily by web page type when that is more useful than topic: docs, code/issues/PRs, papers, videos, articles/news, dashboards, shopping/finance, search results, mail/chat, and local tools. Still split unrelated work inside a large page type.",
   read_later:
     "Best for reading queues. Group articles, videos, papers, docs, newsletters, and tutorials by topic and intended action. Separate quick reads, deep reads, watch later, reference docs, and items that look like follow-up tasks.",
   aggressive_cleanup:

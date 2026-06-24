@@ -111,11 +111,8 @@ const UI_COPY = Object.freeze({
     "option.langAuto": "跟随界面",
     "option.langZh": "简体中文",
     "option.langEn": "English",
-    "option.presetConservative": "智能主题",
-    "option.presetResearch": "按研究方向",
-    "option.presetPlatform": "按平台来源",
-    "option.presetHybrid": "方向 + 公共平台",
-    "option.presetProject": "项目 / 任务",
+    "option.presetConservative": "智能整理",
+    "option.presetPlatform": "按网页类型",
     "option.presetReadLater": "稍后阅读",
     "option.presetAggressive": "强力归纳",
     "option.customModel": "自定义模型名",
@@ -248,11 +245,8 @@ const UI_COPY = Object.freeze({
     "option.langAuto": "Follow UI",
     "option.langZh": "Simplified Chinese",
     "option.langEn": "English",
-    "option.presetConservative": "Smart topics",
-    "option.presetResearch": "Research directions",
-    "option.presetPlatform": "Platforms & sources",
-    "option.presetHybrid": "Directions + platforms",
-    "option.presetProject": "Projects / tasks",
+    "option.presetConservative": "Smart organize",
+    "option.presetPlatform": "Page types",
     "option.presetReadLater": "Read later",
     "option.presetAggressive": "Bold grouping",
     "option.customModel": "Custom model name",
@@ -532,10 +526,7 @@ function applyUiLanguage() {
   setOptionText("#languageMode", "zh-CN", t("option.langZh"));
   setOptionText("#languageMode", "en-US", t("option.langEn"));
   setOptionText("#promptPreset", "conservative", t("option.presetConservative"));
-  setOptionText("#promptPreset", "research", t("option.presetResearch"));
   setOptionText("#promptPreset", "platform_source", t("option.presetPlatform"));
-  setOptionText("#promptPreset", "direction_with_platforms", t("option.presetHybrid"));
-  setOptionText("#promptPreset", "project_work", t("option.presetProject"));
   setOptionText("#promptPreset", "read_later", t("option.presetReadLater"));
   setOptionText("#promptPreset", "aggressive_cleanup", t("option.presetAggressive"));
   setOptionText("#gatewayModel", "custom", t("option.customModel"));

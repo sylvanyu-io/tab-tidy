@@ -90,8 +90,16 @@ test("popup renders settings and mock preview", async ({ page }) => {
   await expect(page.locator("#uiLanguageToggle")).toHaveText("");
   await expect(page.locator("#uiLanguageToggle svg")).toBeVisible();
   await expect(page.getByLabel("整理方式")).toHaveValue("conservative");
-  await expect(page.locator("#promptPreset")).toContainText("按研究方向");
-  await expect(page.locator("#promptPreset")).toContainText("方向 + 公共平台");
+  await expect.poll(() =>
+    page.locator("#promptPreset option").evaluateAll((options) =>
+      options.map((option) => ({ value: option.value, text: option.textContent?.trim() }))
+    )
+  ).toEqual([
+    { value: "conservative", text: "智能整理" },
+    { value: "platform_source", text: "按网页类型" },
+    { value: "read_later", text: "稍后阅读" },
+    { value: "aggressive_cleanup", text: "强力归纳" }
+  ]);
 
   await page.locator("#ackSampling").check();
   await expect(page.locator("#samplingRisk")).toBeVisible();

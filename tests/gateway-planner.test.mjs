@@ -26,12 +26,12 @@ const inventory = {
 test("planner prompt includes the selected organization preset", () => {
   const prompt = buildPlannerSystemPrompt({
     ...DEFAULT_SETTINGS,
-    promptPreset: PROMPT_PRESETS.DIRECTION_WITH_PLATFORMS
+    promptPreset: PROMPT_PRESETS.WEB_TYPE
   });
 
-  assert.match(prompt, /Hybrid style/);
-  assert.match(prompt, /public platforms/);
-  assert.match(prompt, /direction or user intent/);
+  assert.match(prompt, /web page type/);
+  assert.match(prompt, /code\/issues\/PRs/);
+  assert.match(prompt, /shopping\/finance/);
 });
 
 test("AI gateway planner posts a chat-completions JSON request", async () => {
