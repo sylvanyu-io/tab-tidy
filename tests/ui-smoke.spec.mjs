@@ -101,7 +101,7 @@ test("popup renders settings and mock preview", async ({ page }) => {
   await expect(page.locator("#pageContextMode option[value='active_tab_only']")).toHaveCount(0);
 
   await page.getByText("更多选项").click();
-  await expect(page.getByLabel("补读范围")).toHaveValue("ambiguous_with_permission");
+  await expect(page.getByLabel("补读页面摘要范围")).toHaveValue("ambiguous_with_permission");
   await expect(page.locator("#pageContextMode")).toContainText("尽量读取已授权页面");
   await expect(page.locator("#gatewayBaseUrl")).toHaveValue("");
   await expect(page.locator("#gatewayBaseUrl")).toHaveAttribute("placeholder", "不填则使用默认服务");
@@ -1232,6 +1232,68 @@ test("page summary main toggle requests scripting and page origins", async ({ pa
   await expect.poll(() => page.evaluate(() => window.__permissionRequests.length)).toBe(requestsAfterToggle);
 });
 
+test("page summary range can be changed while the main toggle is off", async ({ page }) => {
+  await page.addInitScript(() => {
+    let settings = {
+      organizeMode: "current_window",
+      targetWindowMode: "current_window",
+      existingGroupMode: "preserve_existing_groups",
+      reviewGroupMode: "create_review_group",
+      undoTargetWindowMode: "leave_empty_target_window",
+      pageContextMode: "ambiguous_with_permission",
+      hostPermissionRequestMode: "never",
+      pageSamplingConsentMode: "not_acknowledged",
+      urlPrivacyMode: "sanitized_url",
+      includePinnedTabs: false,
+      includeIncognitoTabs: false,
+      collapseGroupsAfterApply: true,
+      minConfidenceToApply: 0.65,
+      maxTabsPerGroup: 40,
+      promptPreset: "conservative",
+      plannerProvider: "gateway",
+      rememberProviderKeys: false,
+      gatewayBaseUrl: "",
+      gatewayModel: "gpt-5.5",
+      gatewayThinkingIntensity: "high",
+      gatewayApiKey: "",
+      customPrompt: ""
+    };
+    window.__savedSettings = [];
+    window.chrome = {
+      runtime: {
+        getManifest: () => ({
+          optional_permissions: ["scripting"],
+          optional_host_permissions: ["https://*/*", "http://*/*"]
+        }),
+        sendMessage: async (message) => {
+          if (message.type === "settings:get") return { ok: true, result: settings };
+          if (message.type === "settings:save") {
+            settings = message.settings;
+            window.__savedSettings.push(settings);
+            return { ok: true, result: settings };
+          }
+          if (message.type === "tabs:getActiveJob") return { ok: true, result: null };
+          return { ok: true, result: null };
+        }
+      }
+    };
+  });
+
+  await page.goto(`${baseUrl}/src/sidepanel/index.html`);
+  await page.getByText("更多选项").click();
+  await expect(page.locator("#ackSampling")).not.toBeChecked();
+  await expect(page.getByLabel("补读页面摘要范围")).toHaveValue("ambiguous_with_permission");
+
+  await page.getByLabel("补读页面摘要范围").selectOption("all_granted_origins");
+
+  await expect(page.locator("#ackSampling")).not.toBeChecked();
+  await expect(page.getByLabel("补读页面摘要范围")).toHaveValue("all_granted_origins");
+  await expect.poll(() => page.evaluate(() => window.__savedSettings.at(-1)?.pageContextMode)).toBe("all_granted_origins");
+  await expect.poll(() => page.evaluate(() => window.__savedSettings.at(-1)?.pageSamplingConsentMode)).toBe(
+    "not_acknowledged"
+  );
+});
+
 test("continuous summaries request all-site optional access once", async ({ page }) => {
   await page.addInitScript(() => {
     let settings = {
@@ -1261,10 +1323,16 @@ test("continuous summaries request all-site optional access once", async ({ page
     };
     window.__permissionRequests = [];
     window.__savedSettings = [];
+    window.__events = [];
     window.chrome = {
       permissions: {
         contains: async () => false,
         request: async (request) => {
+          window.__events.push({
+            type: "permission_request",
+            savedContinuous: window.__savedSettings.at(-1)?.continuousPageSummaries,
+            savedConsent: window.__savedSettings.at(-1)?.pageSamplingConsentMode
+          });
           window.__permissionRequests.push(request);
           return true;
         }
@@ -1298,6 +1366,12 @@ test("continuous summaries request all-site optional access once", async ({ page
   await expect.poll(() => page.evaluate(() => window.__savedSettings.at(-1)?.pageSamplingConsentMode)).toBe(
     "acknowledged_persistently"
   );
+  await expect(page.locator("#continuousPageSummaries")).toBeChecked();
+  await expect.poll(() => page.evaluate(() => window.__events.at(0))).toEqual({
+    type: "permission_request",
+    savedContinuous: true,
+    savedConsent: "acknowledged_persistently"
+  });
 });
 
 test("store manifest hides content-reading controls", async ({ page }) => {

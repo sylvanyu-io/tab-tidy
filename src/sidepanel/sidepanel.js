@@ -77,7 +77,7 @@ const UI_COPY = Object.freeze({
     "switch.collapse.title": "整理后收起分组",
     "switch.collapse.subtitle": "新分组默认折叠",
     "field.urlPrivacy": "发送给 AI 的网址信息",
-    "field.pageContext": "补读范围",
+    "field.pageContext": "补读页面摘要范围",
     "field.hostPermission": "站点授权",
     "field.resultLanguage": "结果语言",
     "field.promptPreset": "整理方式",
@@ -103,7 +103,7 @@ const UI_COPY = Object.freeze({
     "option.urlSanitized": "精简网址",
     "option.urlFull": "完整网址",
     "option.pageOff": "不补读页面摘要",
-    "option.pageAmbiguous": "默认：只读拿不准的页面",
+    "option.pageAmbiguous": "开启补读时：只读拿不准的页面",
     "option.pageGranted": "尽量读取已授权页面",
     "option.permissionNever": "整理时不弹授权",
     "option.permissionOrigin": "按站点询问",
@@ -240,7 +240,7 @@ const UI_COPY = Object.freeze({
     "option.urlSanitized": "Short URLs",
     "option.urlFull": "Full URLs",
     "option.pageOff": "Do not read page summaries",
-    "option.pageAmbiguous": "Default: only unclear pages",
+    "option.pageAmbiguous": "When enabled: only unclear pages",
     "option.pageGranted": "Read authorized pages when possible",
     "option.permissionNever": "Do not ask while organizing",
     "option.permissionOrigin": "Ask per site",
@@ -399,10 +399,9 @@ function bindEvents() {
       await persistSettings();
       setStatusKey("status.requestingPageSummaryPermission");
       try {
-        await ensurePageSamplingPermissions(readSettings(), { requestMissing: true });
+        await ensurePageSamplingPermissions(readSettings({ effectiveForAnalysis: true }), { requestMissing: true });
       } catch (error) {
         fields.ackSampling.checked = false;
-        fields.pageContextMode.value = "off";
         fields.hostPermissionRequestMode.value = "never";
         updateConditionalUi();
         await persistSettings();
@@ -412,22 +411,22 @@ function bindEvents() {
       await persistSettings();
       setStatusKey("status.pageSummaryEnabled");
       return;
-    } else {
-      fields.pageContextMode.value = "off";
-      fields.hostPermissionRequestMode.value = "never";
     }
     await persistSettings();
   });
   fields.continuousPageSummaries.addEventListener("change", async () => {
     if (fields.continuousPageSummaries.checked) {
+      await persistSettings();
       try {
         await ensureContinuousSummaryPermissions();
       } catch (error) {
         fields.continuousPageSummaries.checked = false;
+        await persistSettings();
         setStatus(error.message, true);
+        return;
       }
     }
-    persistSettings();
+    await persistSettings();
   });
   fields.customPrompt.addEventListener("input", debounce(persistSettings, 250));
   fields.gatewayCustomModel.addEventListener("input", debounce(persistSettings, 250));
@@ -635,16 +634,21 @@ function bindSettingSwitches() {
   }
 }
 
-function readSettings() {
+function readSettings(options = {}) {
+  const effectiveForAnalysis = Boolean(options.effectiveForAnalysis);
   const contentAccessAvailable = hasContentAccessFeature();
-  const pageContextMode = normalizePanelPageContextMode(fields.pageContextMode.value);
-  const effectivePageContextMode =
-    contentAccessAvailable && fields.ackSampling.checked
-      ? pageContextMode === "off"
-        ? "ambiguous_with_permission"
-        : pageContextMode
-      : "off";
+  const selectedPageContextMode = normalizePanelPageContextMode(fields.pageContextMode.value);
+  const pageSummaryEnabled = contentAccessAvailable && fields.ackSampling.checked;
+  const effectivePageContextMode = effectiveForAnalysis
+    ? effectivePageContextModeForRun(selectedPageContextMode, pageSummaryEnabled)
+    : selectedPageContextMode;
   const continuousPageSummaries = contentAccessAvailable && fields.continuousPageSummaries.checked;
+  const effectiveHostPermissionRequestMode =
+    effectiveForAnalysis &&
+    pageSummaryEnabled &&
+    fields.hostPermissionRequestMode.value === "never"
+      ? "ask_for_all_visible_origins"
+      : fields.hostPermissionRequestMode.value;
   return {
     organizeMode: fields.organizeMode.value,
     existingGroupMode: fields.existingGroupMode.value,
@@ -653,16 +657,11 @@ function readSettings() {
     undoTargetWindowMode: "leave_empty_target_window",
     urlPrivacyMode: fields.urlPrivacyMode.value,
     pageContextMode: effectivePageContextMode,
-    hostPermissionRequestMode:
-      contentAccessAvailable &&
-      fields.ackSampling.checked &&
-      fields.hostPermissionRequestMode.value === "never"
-        ? "ask_for_all_visible_origins"
-        : fields.hostPermissionRequestMode.value,
+    hostPermissionRequestMode: effectiveHostPermissionRequestMode,
     pageSamplingConsentMode:
       continuousPageSummaries
         ? "acknowledged_persistently"
-        : contentAccessAvailable && fields.ackSampling.checked
+        : pageSummaryEnabled
         ? "acknowledged_for_session"
         : "not_acknowledged",
     languageMode: fields.languageMode.value,
@@ -684,6 +683,11 @@ function readSettings() {
   };
 }
 
+function effectivePageContextModeForRun(selectedPageContextMode, pageSummaryEnabled) {
+  if (!pageSummaryEnabled) return "off";
+  return selectedPageContextMode === "off" ? "ambiguous_with_permission" : selectedPageContextMode;
+}
+
 function writeSettings(settings) {
   const displaySettings = {
     ...settings,
@@ -693,7 +697,10 @@ function writeSettings(settings) {
   };
   for (const [key, element] of Object.entries(fields)) {
     if (key === "ackSampling") {
-      element.checked = hasContentAccessFeature() && displaySettings.pageContextMode !== "off";
+      element.checked =
+        hasContentAccessFeature() &&
+        displaySettings.pageContextMode !== "off" &&
+        displaySettings.pageSamplingConsentMode !== "not_acknowledged";
     } else if (key === "plannerProvider") {
       element.value = allowInternalFakeProvider() && displaySettings[key] === "fake" ? "fake" : "gateway";
     } else if (element.type === "checkbox") {
@@ -755,7 +762,7 @@ async function handleAnalyzeClick() {
 async function analyze() {
   setBusy(true, t("status.preparing"), { cancelable: true, progress: 4 });
   try {
-    const settings = readSettings();
+    const settings = readSettings({ effectiveForAnalysis: true });
     settings.languageMode = effectiveResultLanguageMode(settings.languageMode);
     validateGatewaySettingsForAnalyze(settings);
     updateLocalProgress(t("status.checkingPermissions"), 8);
@@ -1570,7 +1577,7 @@ async function refreshPageSamplingOriginCache() {
     globalThis.__semanticTabAgentPageSamplingOrigins = pageSamplingOriginCache;
     return;
   }
-  const settings = readSettings();
+  const settings = readSettings({ effectiveForAnalysis: true });
   const shouldCollect =
     settings.pageContextMode !== "off" &&
     settings.pageSamplingConsentMode !== "not_acknowledged" &&
