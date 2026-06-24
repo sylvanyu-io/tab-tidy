@@ -7,7 +7,7 @@ extension that can be published after the gates below are satisfied.
 
 Implemented:
 
-- Manifest V3 extension shell with an action-launched persistent floating window.
+- Manifest V3 extension shell with a native action popup.
 - Current-window organization by default.
 - Explicit consolidate-to-one-window mode for all eligible normal-window tabs.
 - Metadata-only inventory and URL sanitization.
@@ -29,7 +29,7 @@ Implemented:
   undoable.
 - Fake Chrome harness, Playwright UI smoke test, and real-extension stress
   runner against an isolated Chromium profile.
-- Active analysis jobs expose coarse progress states in the floating window and can be
+- Active analysis jobs expose coarse progress states in the popup and can be
   canceled; cancellation aborts provider fetches when the request is still live.
 - Large AI gateway jobs use a coarse-then-refine planner: a low-effort coarse
   bucket pass, followed by high-effort refinement for oversized or uncertain
@@ -57,7 +57,7 @@ Blocking gates:
 - Page sampling active-tab mode cannot sample background tabs.
 - Bulk page sampling returns `permission_required` without host permission.
 - Bulk page sampling can request `scripting` plus visible-site host permissions
-  from the floating-window user gesture and sample page body text.
+  from the explicit page-summary switch gesture and sample page body text.
 - Low-confidence groups below the apply threshold fail validation.
 - Current-window and selected-window targets must match user settings, not model
   preference.
