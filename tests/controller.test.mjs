@@ -113,6 +113,72 @@ test("collapse toggle can leave newly created groups expanded", async () => {
   assert.equal((await chrome.tabGroups.query({ windowId: 1 })).find((group) => group.id === groupedTab.groupId)?.collapsed, false);
 });
 
+test("apply rebases small tab changes since preview", async () => {
+  const chrome = createFakeChrome({
+    windows: [
+      {
+        id: 1,
+        focused: true,
+        tabs: [
+          { id: 10, title: "GitHub pull request", url: "https://github.com/acme/repo/pull/1", active: true },
+          { id: 11, title: "Chrome tabs API docs", url: "https://developer.chrome.com/docs/extensions/reference/api/tabs" }
+        ]
+      }
+    ]
+  });
+
+  const job = await analyzeTabs(chrome, FAKE_PLANNER_SETTINGS, { windowId: 1 });
+  assert.equal(job.validation.ok, true);
+
+  const window = chrome.__state.windows.get(1);
+  window.tabs = [
+    { ...window.tabs[0], index: 0 },
+    {
+      ...window.tabs[1],
+      id: 12,
+      index: 1,
+      title: "Untitled workspace",
+      url: "https://example.com/workspace",
+      groupId: -1
+    }
+  ];
+
+  const result = await applyLastPlan(chrome);
+  assert.equal(result.rebasedPlan.changedTabsCount, 2);
+  assert.deepEqual(result.rebasedPlan.removedTabIds, [11]);
+  assert.deepEqual(result.rebasedPlan.addedReviewTabIds, [12]);
+  assert.notEqual((await chrome.tabs.get(10)).groupId, -1);
+  assert.notEqual((await chrome.tabs.get(12)).groupId, -1);
+});
+
+test("apply asks to regenerate when too many tabs changed since preview", async () => {
+  const originalTabs = Array.from({ length: 8 }, (_, index) => ({
+    id: 100 + index,
+    title: `Chrome API docs ${index}`,
+    url: `https://developer.chrome.com/docs/${index}`,
+    active: index === 0
+  }));
+  const chrome = createFakeChrome({
+    windows: [{ id: 1, focused: true, tabs: originalTabs }]
+  });
+
+  const job = await analyzeTabs(chrome, FAKE_PLANNER_SETTINGS, { windowId: 1 });
+  assert.equal(job.validation.ok, true);
+
+  const window = chrome.__state.windows.get(1);
+  window.tabs = Array.from({ length: 8 }, (_, index) => ({
+    ...window.tabs[0],
+    id: 200 + index,
+    index,
+    title: `New workspace ${index}`,
+    url: `https://example.com/new-${index}`,
+    active: index === 0,
+    groupId: -1
+  }));
+
+  await assert.rejects(() => applyLastPlan(chrome), /标签页变化较多，请重新生成方案。变化标签页 16 个。/);
+});
+
 test("review group title follows the selected result language when applying", async () => {
   const chrome = createFakeChrome({
     windows: [

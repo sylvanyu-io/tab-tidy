@@ -340,13 +340,22 @@ async function applyLastPlan() {
   try {
     const result = await sendMessage({ type: "tabs:applyLastPlan" });
     canUndo = true;
-    setStatus(`已创建 ${result.createdGroupIds?.length || 0} 个分组`);
+    setStatus(applyResultStatus(result));
     renderDetails({ applyResult: result });
   } catch (error) {
     setStatus(error.message, true);
   } finally {
     setBusy(false);
   }
+}
+
+function applyResultStatus(result) {
+  const groupCount = result.createdGroupIds?.length || 0;
+  const changedTabs = result.rebasedPlan?.changedTabsCount || 0;
+  if (changedTabs) {
+    return `已创建 ${groupCount} 个分组；${changedTabs} 个变化标签页已跳过或留待分类`;
+  }
+  return `已创建 ${groupCount} 个分组`;
 }
 
 async function undoLastApply() {

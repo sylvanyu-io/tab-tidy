@@ -1,4 +1,11 @@
-import { DEFAULT_SETTINGS, PAGE_CONTEXT_MODES, PLANNER_PROVIDERS, normalizeSettings } from "../shared/settings.js";
+import {
+  DEFAULT_SETTINGS,
+  ORGANIZE_MODES,
+  PAGE_CONTEXT_MODES,
+  PLANNER_PROVIDERS,
+  TARGET_WINDOW_MODES,
+  normalizeSettings
+} from "../shared/settings.js";
 import { applyValidatedPlan, createRollbackSnapshot, undoFromRollback } from "./chrome-executor.js";
 import { requestPageSample } from "./page-sampler.js";
 import { createPlan } from "./planner.js";
@@ -10,6 +17,8 @@ import { validatePlan } from "./plan-validator.js";
 
 const activeAnalyses = new Map();
 const ACTIVE_JOB_TERMINAL_STATUSES = new Set(["complete", "canceled", "error"]);
+const APPLY_REBASE_MAX_CHANGED_TABS = 25;
+const APPLY_REBASE_MAX_CHANGED_RATIO = 0.2;
 
 export async function handleRuntimeMessage(chromeApi, message) {
   switch (message?.type) {
@@ -205,9 +214,19 @@ export async function applyLastPlan(chromeApi) {
   }
 
   const latestInventory = await collectTabInventory(chromeApi, job.settings, job.invocation);
-  const latestValidation = validatePlan(job.plan, latestInventory, job.settings);
+  let planForApply = job.plan;
+  let rebaseSummary = null;
+  let latestValidation = validatePlan(planForApply, latestInventory, job.settings);
   if (!latestValidation.ok) {
-    throw new Error(`Tabs changed since preview: ${latestValidation.errors.join(" ")}`);
+    const rebased = rebasePlanForLatestInventory(job.plan, latestInventory, job.settings);
+    if (!rebased.validation.ok) {
+      throw new Error(`标签页变化较多，请重新生成方案。${rebased.validation.errors.join(" ")}`);
+    }
+    if (shouldRejectRebasedPlan(rebased.summary, latestInventory)) {
+      throw new Error(`标签页变化较多，请重新生成方案。变化标签页 ${rebased.summary.changedTabsCount} 个。`);
+    }
+    planForApply = rebased.plan;
+    rebaseSummary = rebased.summary;
   }
 
   const rollbackSnapshot = await createRollbackSnapshot(chromeApi, latestInventory, job.settings);
@@ -215,14 +234,140 @@ export async function applyLastPlan(chromeApi) {
 
   const { rollback, result } = await applyValidatedPlan(
     chromeApi,
-    job.plan,
+    planForApply,
     latestInventory,
     job.settings,
     rollbackSnapshot,
     (nextRollback) => setLocal(chromeApi, STORAGE_KEYS.lastRollback, nextRollback)
   );
   await setLocal(chromeApi, STORAGE_KEYS.lastRollback, rollback);
-  return result;
+  return rebaseSummary ? { ...result, rebasedPlan: rebaseSummary } : result;
+}
+
+function rebasePlanForLatestInventory(plan, latestInventory, rawSettings = {}) {
+  const settings = normalizeSettings(rawSettings);
+  const latestTabsById = new Map((latestInventory.plannerTabs || []).map((tab) => [tab.tabId, tab]));
+  const seen = new Set();
+  const summary = {
+    removedTabIds: [],
+    addedReviewTabIds: [],
+    duplicateTabIds: [],
+    droppedGroupKeys: [],
+    changedTabsCount: 0
+  };
+
+  const rebaseRef = (ref, owner) => {
+    if (!ref || typeof ref.tabId !== "number") return null;
+    const tab = latestTabsById.get(ref.tabId);
+    if (!tab) {
+      summary.removedTabIds.push(ref.tabId);
+      return null;
+    }
+    if (seen.has(ref.tabId)) {
+      summary.duplicateTabIds.push(ref.tabId);
+      return null;
+    }
+    seen.add(ref.tabId);
+    return {
+      tabId: tab.tabId,
+      windowId: tab.windowId,
+      reason: ref.reason || (owner === "review" ? "Kept for review after tabs changed since preview." : undefined)
+    };
+  };
+
+  const groups = [];
+  for (const group of Array.isArray(plan.groups) ? plan.groups : []) {
+    const tabRefs = (Array.isArray(group?.tabRefs) ? group.tabRefs : [])
+      .map((ref) => rebaseRef(ref, group.groupKey || group.title || "group"))
+      .filter(Boolean);
+    if (tabRefs.length) {
+      groups.push({ ...group, tabRefs });
+    } else {
+      summary.droppedGroupKeys.push(group?.groupKey || group?.title || "<unknown>");
+    }
+  }
+
+  const reviewTabs = (Array.isArray(plan.reviewTabs) ? plan.reviewTabs : [])
+    .map((ref) => rebaseRef(ref, "review"))
+    .filter(Boolean);
+
+  for (const tab of latestInventory.plannerTabs || []) {
+    if (seen.has(tab.tabId)) continue;
+    seen.add(tab.tabId);
+    summary.addedReviewTabIds.push(tab.tabId);
+    reviewTabs.push({
+      tabId: tab.tabId,
+      windowId: tab.windowId,
+      reason: "Tab appeared or changed after preview; left for review."
+    });
+  }
+
+  const rebasedPlan = {
+    ...plan,
+    mode: settings.organizeMode,
+    targetWindow: rebaseTargetWindow(plan.targetWindow, latestInventory, settings),
+    groups,
+    reviewTabs,
+    excludedTabs: (latestInventory.excludedTabs || []).map((tab) => ({
+      tabId: tab.tabId,
+      windowId: tab.windowId,
+      reason: tab.exclusionReason || "Excluded by current settings."
+    }))
+  };
+
+  summary.removedTabIds = uniqueNumbers(summary.removedTabIds);
+  summary.addedReviewTabIds = uniqueNumbers(summary.addedReviewTabIds);
+  summary.duplicateTabIds = uniqueNumbers(summary.duplicateTabIds);
+  summary.changedTabsCount = summary.removedTabIds.length + summary.addedReviewTabIds.length + summary.duplicateTabIds.length;
+
+  return {
+    plan: rebasedPlan,
+    validation: validatePlan(rebasedPlan, latestInventory, settings),
+    summary
+  };
+}
+
+function rebaseTargetWindow(targetWindow, inventory, settings) {
+  if (settings.organizeMode === ORGANIZE_MODES.CURRENT_WINDOW) {
+    return {
+      ...(targetWindow || {}),
+      kind: TARGET_WINDOW_MODES.CURRENT_WINDOW,
+      windowId: inventory.scope?.currentWindowId ?? targetWindow?.windowId ?? null,
+      title: targetWindow?.title || "Current Window"
+    };
+  }
+
+  if (settings.targetWindowMode === TARGET_WINDOW_MODES.CURRENT_WINDOW) {
+    return {
+      ...(targetWindow || {}),
+      kind: TARGET_WINDOW_MODES.CURRENT_WINDOW,
+      windowId: inventory.scope?.invocationWindowId ?? targetWindow?.windowId ?? null,
+      title: targetWindow?.title || "Current Window"
+    };
+  }
+
+  if (settings.targetWindowMode === TARGET_WINDOW_MODES.SELECTED_WINDOW) {
+    return {
+      ...(targetWindow || {}),
+      kind: TARGET_WINDOW_MODES.SELECTED_WINDOW,
+      windowId: settings.selectedTargetWindowId,
+      title: targetWindow?.title || "Selected Window"
+    };
+  }
+
+  return { ...(targetWindow || {}), kind: TARGET_WINDOW_MODES.NEW_WINDOW };
+}
+
+function shouldRejectRebasedPlan(summary, inventory) {
+  const changed = summary.changedTabsCount || 0;
+  if (!changed) return false;
+  const eligible = Math.max(1, (inventory.plannerTabs || []).length);
+  const allowedChanges = Math.max(5, Math.min(APPLY_REBASE_MAX_CHANGED_TABS, Math.ceil(eligible * APPLY_REBASE_MAX_CHANGED_RATIO)));
+  return changed > allowedChanges;
+}
+
+function uniqueNumbers(values) {
+  return [...new Set(values.filter((value) => typeof value === "number"))];
 }
 
 export async function undoLastApply(chromeApi) {
