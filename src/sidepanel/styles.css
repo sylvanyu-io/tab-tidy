@@ -116,12 +116,12 @@ h2,
 .app-shell {
   display: grid;
   grid-template-rows: auto minmax(0, 1fr) auto;
-  gap: 10px;
+  gap: 7px;
   width: 100%;
   max-width: 390px;
   height: 100vh;
   margin: 0 auto;
-  padding: 14px;
+  padding: 8px 12px 12px;
   overflow: hidden;
 }
 
@@ -133,10 +133,10 @@ h2,
 .topbar {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) auto;
-  gap: 10px;
+  gap: 8px;
   align-items: center;
-  min-height: 36px;
-  padding: 0 0 4px;
+  min-height: 28px;
+  padding: 0 0 1px;
 }
 
 .scroll-region {
@@ -174,19 +174,19 @@ h2,
 
 .brand-mark {
   display: grid;
-  gap: 3px;
-  width: 32px;
-  height: 32px;
-  padding: 8px;
+  gap: 2px;
+  width: 26px;
+  height: 26px;
+  padding: 6px;
   background: var(--line-strong);
   border: 1px solid var(--line);
-  border-radius: 10px;
+  border-radius: 8px;
   box-shadow: var(--shadow-sm);
 }
 
 .brand-mark span {
   display: block;
-  height: 3px;
+  height: 2.5px;
   background: #c9ff4a;
   border-radius: 2px;
 }
@@ -218,7 +218,7 @@ h2,
 
 h1 {
   flex: 0 0 auto;
-  font-size: 16px;
+  font-size: 15px;
   line-height: 1.08;
   font-weight: 900;
 }
@@ -232,11 +232,11 @@ h2 {
 #statusText {
   min-width: 0;
   margin-top: 0;
-  padding-left: 10px;
+  padding-left: 8px;
   overflow: hidden;
   border-left: 1px solid var(--line);
   color: var(--muted);
-  font-size: 12px;
+  font-size: 11.5px;
   line-height: 1.2;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -249,8 +249,8 @@ h2 {
 .window-close {
   display: inline-grid;
   place-items: center;
-  width: 30px;
-  height: 30px;
+  width: 26px;
+  height: 26px;
   padding: 0;
   color: var(--muted);
   background: var(--surface);
@@ -995,7 +995,7 @@ pre {
 
 @media (max-width: 360px) {
   .app-shell {
-    padding: 12px;
+    padding: 8px 10px 10px;
   }
 
   .choice-grid:not(.compact-choice-grid) {
