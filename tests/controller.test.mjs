@@ -4,6 +4,7 @@ import {
   analyzeTabs,
   applyLastPlan,
   cancelActiveJob,
+  clearAnalysisState,
   generateProgressCopy,
   getActiveJob,
   getLastJob,
@@ -971,6 +972,39 @@ test("canceling during preview cannot be overwritten by completion", async () =>
   assert.equal(finalJob.status, "canceled");
   assert.equal(finalJob.message, "已取消整理。");
   assert.equal(await getLastJob(chrome), null);
+});
+
+test("clearAnalysisState removes terminal previews but preserves running jobs", async () => {
+  const chrome = createFakeChrome({
+    windows: [
+      {
+        id: 1,
+        focused: true,
+        tabs: [
+          { id: 10, title: "Chrome tabs API docs", url: "https://developer.chrome.com/docs/extensions/reference/api/tabs", active: true },
+          { id: 11, title: "Chrome tabGroups API docs", url: "https://developer.chrome.com/docs/extensions/reference/api/tabGroups" }
+        ]
+      }
+    ]
+  });
+
+  await analyzeTabs(chrome, FAKE_PLANNER_SETTINGS, { windowId: 1 });
+  assert.equal((await getActiveJob(chrome))?.status, "complete");
+  assert.notEqual(await getLastJob(chrome), null);
+
+  assert.deepEqual(await clearAnalysisState(chrome), { cleared: true });
+  assert.equal(await getActiveJob(chrome), null);
+  assert.equal(await getLastJob(chrome), null);
+
+  chrome.__state.storage[STORAGE_KEYS.activeJob] = {
+    operationId: "running-test",
+    status: "running",
+    phase: "planning",
+    progress: 40,
+    message: "正在整理"
+  };
+  await assert.rejects(() => clearAnalysisState(chrome), /正在整理中/);
+  assert.equal(chrome.__state.storage[STORAGE_KEYS.activeJob].status, "running");
 });
 
 async function waitForActiveJob(chrome, predicate) {

@@ -302,9 +302,8 @@ function updateConditionalUi() {
   const contentAccessAvailable = hasContentAccessFeature();
   nodes.appShell.dataset.contentAccess = contentAccessAvailable ? "on" : "off";
   const samplingEnabled = contentAccessAvailable && (fields.ackSampling.checked || fields.pageContextMode.value !== "off");
-  const continuousEnabled = contentAccessAvailable && fields.continuousPageSummaries.checked;
-  nodes.samplingRisk.hidden = !samplingEnabled;
-  nodes.continuousSummaryRisk.hidden = !continuousEnabled;
+  nodes.samplingRisk.hidden = !contentAccessAvailable;
+  nodes.continuousSummaryRisk.hidden = !contentAccessAvailable;
   nodes.hostPermissionField.hidden =
     !samplingEnabled || fields.pageContextMode.value === "off";
   nodes.targetWindowField.hidden = fields.organizeMode.value !== "consolidate_one_window";
@@ -313,8 +312,9 @@ function updateConditionalUi() {
   schedulePageSamplingOriginRefresh();
 }
 
-function handleAnalyzeClick() {
+async function handleAnalyzeClick() {
   if (lastPreview) {
+    await clearAnalysisState();
     resetToSetup();
     setStatus("AI 标签页整理");
     return;
@@ -409,8 +409,10 @@ async function applyLastPlan() {
       result = await sendMessage({ type: "tabs:applyLastPlan", confirmChangedTabs: true });
     }
     canUndo = true;
-    setStatus(applyResultStatus(result));
-    renderDetails({ applyResult: result });
+    const status = applyResultStatus(result);
+    await clearAnalysisState();
+    resetToSetup();
+    setStatus(status);
   } catch (error) {
     setStatus(error.message, true);
   } finally {
@@ -669,6 +671,10 @@ function resetToSetup() {
   nodes.detailsRoot.hidden = true;
   nodes.detailsText.textContent = "";
   syncActionState();
+}
+
+async function clearAnalysisState() {
+  await sendMessage({ type: "tabs:clearAnalysisState" }).catch(() => null);
 }
 
 function replacerForDetails(key, value) {
@@ -1285,6 +1291,11 @@ async function mockMessage(message) {
   if (message.type === "tabs:applyLastPlan") return { createdGroupIds: [1, 2] };
   if (message.type === "tabs:undoLastApply") return { restoredTabs: 20 };
   if (message.type === "tabs:getActiveJob") return mockActiveJob;
+  if (message.type === "tabs:clearAnalysisState") {
+    mockActiveJob = null;
+    mockLastJob = null;
+    return { cleared: true };
+  }
   if (message.type === "tabs:cancelActiveJob") return { canceled: false, job: mockActiveJob };
   throw new Error(`Mock does not implement ${message.type}`);
 }

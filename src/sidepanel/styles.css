@@ -619,6 +619,7 @@ button:focus-visible {
 
 .switch-row {
   display: flex;
+  position: relative;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
@@ -630,17 +631,25 @@ button:focus-visible {
   padding: 10px 12px;
 }
 
+.switch-row:has(.help-tip:hover),
+.switch-row:has(.help-tip:focus-visible) {
+  z-index: 30;
+}
+
 .compact-switch {
   min-height: 54px;
 }
 
-.switch-row span {
+.switch-row > span {
   display: grid;
   gap: 2px;
   min-width: 0;
 }
 
 .switch-row strong {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   font-size: 14px;
   line-height: 1.25;
 }
@@ -739,23 +748,44 @@ button:focus-visible {
   display: none;
 }
 
-.risk {
-  display: grid;
-  gap: 6px;
+.help-tip {
+  position: relative;
+  display: inline-grid;
+  place-items: center;
+  flex: 0 0 auto;
+  width: 18px;
+  height: 18px;
+  color: var(--amber-text);
+  background: color-mix(in srgb, var(--amber-bg) 86%, var(--surface));
+  border: 1px solid color-mix(in srgb, var(--amber-line) 70%, var(--line));
+  border-radius: 999px;
+  font-size: 11px;
+  font-style: normal;
+  font-weight: 900;
+  line-height: 1;
+  cursor: help;
+}
+
+.switch-row:has(.help-tip:hover)::after,
+.switch-row:has(.help-tip:focus-visible)::after {
+  content: attr(data-tooltip);
+  position: absolute;
+  z-index: 40;
+  top: calc(100% + 6px);
+  right: 12px;
+  left: 12px;
+  padding: 9px 10px;
   color: var(--amber-text);
   background: var(--amber-bg);
-  border: 1px solid var(--amber-line);
-  border-radius: var(--radius-md);
-  padding: 11px 12px;
-}
-
-.risk strong {
-  font-size: 13px;
-}
-
-.risk p {
+  border: 1px solid color-mix(in srgb, var(--amber-line) 72%, var(--line));
+  border-radius: var(--radius-sm);
+  box-shadow: 0 10px 24px rgba(42, 38, 31, 0.18);
   font-size: 12px;
-  line-height: 1.48;
+  font-weight: 700;
+  line-height: 1.45;
+  pointer-events: none;
+  text-align: left;
+  white-space: normal;
 }
 
 .advanced-settings {

@@ -63,7 +63,11 @@ test("popup renders settings and mock preview", async ({ page }) => {
     .toBe(true);
   await expect(page.locator(".segmented")).toHaveCount(0);
   await expect(page.locator("#previewSection")).toBeHidden();
-  await expect(page.locator("#samplingRisk")).toBeHidden();
+  await expect(page.locator("#samplingRisk")).toBeVisible();
+  await expect(page.locator("#samplingRisk")).toHaveText("?");
+  await expect(page.locator("#samplingRisk")).toHaveAttribute("data-tooltip", /不会读取密码/);
+  await expect(page.getByText("会读取页面文字摘要")).toHaveCount(0);
+  await expect(page.getByText("会在后台保存短摘要")).toHaveCount(0);
   await expect(page.getByText("整理偏好")).toHaveCount(0);
   await expect(page.getByText("开发版功能")).toHaveCount(0);
   await expect(page.getByText("商店版")).toHaveCount(0);
@@ -155,9 +159,6 @@ test("popup renders settings and mock preview", async ({ page }) => {
   await expect(page.locator(".preview").getByText("AI 研究", { exact: true })).toBeVisible();
 
   await page.getByRole("button", { name: "开始整理" }).click();
-  await expect(page.getByRole("button", { name: "撤销" })).toBeVisible();
-
-  await page.getByRole("button", { name: "重新生成" }).click();
   await expect(page.locator("#previewSection")).toBeHidden();
   await expect(page.getByRole("button", { name: "生成方案" })).toBeVisible();
   await expect(page.getByRole("button", { name: "撤销" })).toBeVisible();
@@ -190,7 +191,10 @@ test("popup restores a completed background preview after reopening", async ({ p
       gatewayApiKey: "",
       customPrompt: ""
     };
-    const activeJob = {
+    const wasCleared = localStorage.getItem("tabTidyClearedPreview") === "1";
+    let activeJob = wasCleared
+      ? null
+      : {
       operationId: "job_en_preview",
       status: "complete",
       phase: "complete",
@@ -199,7 +203,9 @@ test("popup restores a completed background preview after reopening", async ({ p
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString()
     };
-    const job = {
+    let job = wasCleared
+      ? null
+      : {
       settings,
       validation: { ok: true, warnings: [] },
       preview: {
@@ -224,7 +230,15 @@ test("popup restores a completed background preview after reopening", async ({ p
           if (message.type === "settings:save") return { ok: true, result: message.settings };
           if (message.type === "tabs:getActiveJob") return { ok: true, result: activeJob };
           if (message.type === "tabs:getLastJob") return { ok: true, result: job };
-          if (message.type === "tabs:startAnalyze") return { ok: true, result: { operationId: activeJob.operationId } };
+          if (message.type === "tabs:startAnalyze") {
+            return { ok: true, result: { operationId: activeJob?.operationId || "new_job" } };
+          }
+          if (message.type === "tabs:clearAnalysisState") {
+            localStorage.setItem("tabTidyClearedPreview", "1");
+            activeJob = null;
+            job = null;
+            return { ok: true, result: { cleared: true } };
+          }
           return { ok: true, result: null };
         }
       }
@@ -243,6 +257,12 @@ test("popup restores a completed background preview after reopening", async ({ p
       .getByText("AI reviewed 3 tabs, found 1 topic group; 2 tabs will be grouped automatically, with 1 tab set aside for Needs Review.")
   ).toBeVisible();
   await expect.poll(() => page.evaluate(() => window.__messageTypes.includes("tabs:startAnalyze"))).toBe(false);
+
+  await page.getByRole("button", { name: "重新生成" }).click();
+  await expect(page.locator("#previewSection")).toBeHidden();
+  await page.reload();
+  await expect(page.locator("#previewSection")).toBeHidden();
+  await expect(page.getByRole("button", { name: "生成方案" })).toBeVisible();
 });
 
 test("popup restores a background planning error after reopening", async ({ page }) => {

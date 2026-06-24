@@ -41,6 +41,8 @@ export async function handleRuntimeMessage(chromeApi, message) {
       return getActiveJob(chromeApi);
     case "tabs:getLastJob":
       return getLastJob(chromeApi);
+    case "tabs:clearAnalysisState":
+      return clearAnalysisState(chromeApi);
     case "tabs:cancelActiveJob":
       return cancelActiveJob(chromeApi);
     case "progressCopy:generate":
@@ -177,6 +179,16 @@ async function runActiveAnalysis(chromeApi, rawSettings, invocation, operationId
 
 export async function getLastJob(chromeApi) {
   return getLocal(chromeApi, STORAGE_KEYS.lastJob);
+}
+
+export async function clearAnalysisState(chromeApi) {
+  const job = await getLocal(chromeApi, STORAGE_KEYS.activeJob);
+  if (job && !ACTIVE_JOB_TERMINAL_STATUSES.has(job.status)) {
+    throw new Error("正在整理中，不能清空当前方案。");
+  }
+  await removeLocal(chromeApi, STORAGE_KEYS.activeJob);
+  await removeLocal(chromeApi, STORAGE_KEYS.lastJob);
+  return { cleared: true };
 }
 
 export async function getActiveJob(chromeApi) {

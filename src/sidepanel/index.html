@@ -47,31 +47,45 @@
           </select>
 
           <div class="preferences-panel">
-            <label class="switch-row emphasis-toggle content-access-feature">
+            <label
+              class="switch-row emphasis-toggle content-access-feature"
+              data-tooltip="只读取标题、描述、标题层级和一小段可见文字；不会读取密码、表单内容、Cookie、本地存储或完整 HTML。休眠标签页不会被唤醒。"
+            >
               <span>
-                <strong>需要时补读页面摘要</strong>
+                <strong>
+                  需要时补读页面摘要
+                  <i
+                    id="samplingRisk"
+                    class="help-tip content-access-feature"
+                    tabindex="0"
+                    aria-label="页面摘要说明"
+                    data-tooltip="只读取标题、描述、标题层级和一小段可见文字；不会读取密码、表单内容、Cookie、本地存储或完整 HTML。休眠标签页不会被唤醒。"
+                  >?</i>
+                </strong>
                 <small>默认只读拿不准的可访问页面</small>
               </span>
               <input id="ackSampling" type="checkbox" />
             </label>
 
-            <div id="samplingRisk" class="risk content-access-feature" hidden>
-              <strong>会读取页面文字摘要</strong>
-              <p>只读取标题、描述、标题层级和一小段可见文字；不会读取密码、表单内容、Cookie、本地存储或完整 HTML。休眠标签页不会被唤醒。</p>
-            </div>
-
-            <label class="switch-row emphasis-toggle content-access-feature continuous-summary-toggle">
+            <label
+              class="switch-row emphasis-toggle content-access-feature continuous-summary-toggle"
+              data-tooltip="开启后会请求一次性网页读取权限；之后只在已授权、未休眠、非无痕页面上保存短摘要，方便下次更快、更准地分类。不会主动唤醒标签页。"
+            >
               <span>
-                <strong>持续积累页面摘要</strong>
+                <strong>
+                  持续积累页面摘要
+                  <i
+                    id="continuousSummaryRisk"
+                    class="help-tip content-access-feature"
+                    tabindex="0"
+                    aria-label="持续摘要说明"
+                    data-tooltip="开启后会请求一次性网页读取权限；之后只在已授权、未休眠、非无痕页面上保存短摘要，方便下次更快、更准地分类。不会主动唤醒标签页。"
+                  >?</i>
+                </strong>
                 <small>后台缓存已授权页面，之后整理更准</small>
               </span>
               <input id="continuousPageSummaries" type="checkbox" />
             </label>
-
-            <div id="continuousSummaryRisk" class="risk content-access-feature" hidden>
-              <strong>会在后台保存短摘要</strong>
-              <p>开启后会请求一次性网页读取权限；之后只在已授权、未休眠、非无痕页面上保存短摘要，方便下次更快、更准地分类。不会主动唤醒标签页。</p>
-            </div>
 
             <div class="field prompt-field">
               <label for="customPrompt">自定义要求</label>
