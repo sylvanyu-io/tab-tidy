@@ -832,13 +832,13 @@ button:focus-visible {
   align-items: center;
   justify-content: center;
   flex: 0 0 auto;
-  width: 15px;
-  height: 15px;
+  width: 16px;
+  height: 16px;
   color: color-mix(in srgb, var(--primary) 82%, var(--text));
-  background: color-mix(in srgb, var(--primary-soft) 68%, var(--surface));
-  border: 1px solid color-mix(in srgb, var(--primary) 26%, var(--line));
+  background: transparent;
+  border: 0;
   border-radius: 999px;
-  box-shadow: inset 0 1px 0 color-mix(in srgb, #ffffff 42%, transparent);
+  box-shadow: none;
   font-style: normal;
   cursor: help;
   transform: translateY(-1px);
@@ -846,8 +846,8 @@ button:focus-visible {
 
 .help-tip svg {
   display: block;
-  width: 13px;
-  height: 13px;
+  width: 16px;
+  height: 16px;
   overflow: visible;
 }
 
@@ -871,9 +871,8 @@ button:focus-visible {
 
 .help-tip:hover,
 .help-tip:focus-visible {
-  color: #ffffff;
-  background: var(--primary);
-  border-color: color-mix(in srgb, var(--primary-hover) 70%, var(--line));
+  color: var(--primary-hover);
+  background: transparent;
 }
 
 .switch-row:has(.help-tip:hover)::after,
