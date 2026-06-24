@@ -38,6 +38,24 @@ test("missing host permission returns permission_required when requests are disa
   assert.equal(result.origin, "https://example.com/*");
 });
 
+test("localhost page sampling uses Chrome match patterns without ports", async () => {
+  const chrome = createFakeChrome({ grantedOrigins: ["http://127.0.0.1/*"] });
+  const result = await requestPageSample(
+    chrome,
+    { id: 10, active: false, url: "http://127.0.0.1:53405/article" },
+    {
+      ...DEFAULT_SETTINGS,
+      pageContextMode: PAGE_CONTEXT_MODES.ALL_GRANTED_ORIGINS,
+      hostPermissionRequestMode: HOST_PERMISSION_REQUEST_MODES.ASK_FOR_ALL_VISIBLE_ORIGINS,
+      pageSamplingConsentMode: PAGE_SAMPLING_CONSENT_MODES.ACKNOWLEDGED_FOR_SESSION
+    },
+    "localhost permission check"
+  );
+
+  assert.equal(result.status, "ok");
+  assert.equal(result.origin, "http://127.0.0.1/*");
+});
+
 test("active_tab_only rejects background tabs", async () => {
   const chrome = createFakeChrome();
   const result = await requestPageSample(

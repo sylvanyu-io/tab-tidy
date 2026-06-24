@@ -29,19 +29,19 @@ export async function requestPageSample(chromeApi, tab, rawSettings, reason = ""
     try {
       return {
         status: "ok",
-        origin: new URL(rawUrl).origin + "/*",
+        origin: hostPermissionPattern(rawUrl),
         sample: await executePageSample(chromeApi, tab, reason)
       };
     } catch {
       return {
         status: "permission_required",
-        origin: new URL(rawUrl).origin + "/*",
+        origin: hostPermissionPattern(rawUrl),
         reason: "Temporary activeTab access is not available for this tab."
       };
     }
   }
 
-  const origin = new URL(rawUrl).origin + "/*";
+  const origin = hostPermissionPattern(rawUrl);
   const hasPermission = await containsHostPermission(chromeApi, origin);
   if (!hasPermission) {
     return { status: "permission_required", origin, reason: "Host permission is required for page sampling." };
@@ -55,6 +55,16 @@ export async function requestPageSample(chromeApi, tab, rawSettings, reason = ""
       origin,
       reason: executionPermissionReason(error)
     };
+  }
+}
+
+function hostPermissionPattern(rawUrl) {
+  try {
+    const url = new URL(rawUrl);
+    if (!["http:", "https:"].includes(url.protocol)) return "";
+    return `${url.protocol}//${url.hostname}/*`;
+  } catch {
+    return "";
   }
 }
 

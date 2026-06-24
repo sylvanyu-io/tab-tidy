@@ -4,6 +4,7 @@ import {
   analyzeTabs,
   applyLastPlan,
   cancelActiveJob,
+  canUndoLastApply,
   clearAnalysisState,
   generateProgressCopy,
   getActiveJob,
@@ -154,12 +155,91 @@ test("apply rebases small tab changes since preview", async () => {
   assert.equal((await chrome.tabs.get(10)).groupId, -1);
   assert.equal((await chrome.tabs.get(12)).groupId, -1);
 
-  const result = await applyLastPlan(chrome, { confirmChangedTabs: true });
+  const result = await applyLastPlan(chrome, {
+    confirmChangedTabs: true,
+    confirmationToken: confirmation.rebasedPlan.confirmationToken
+  });
   assert.equal(result.rebasedPlan.changedTabsCount, 2);
   assert.deepEqual(result.rebasedPlan.removedTabIds, [11]);
   assert.deepEqual(result.rebasedPlan.addedReviewTabIds, [12]);
   assert.notEqual((await chrome.tabs.get(10)).groupId, -1);
   assert.notEqual((await chrome.tabs.get(12)).groupId, -1);
+});
+
+test("apply treats same-id page changes as changed tabs requiring fresh confirmation", async () => {
+  const chrome = createFakeChrome({
+    windows: [
+      {
+        id: 1,
+        focused: true,
+        tabs: [
+          { id: 10, title: "GitHub pull request", url: "https://github.com/acme/repo/pull/1", active: true },
+          { id: 11, title: "Chrome tabs API docs", url: "https://developer.chrome.com/docs/extensions/reference/api/tabs" }
+        ]
+      }
+    ]
+  });
+
+  const job = await analyzeTabs(chrome, FAKE_PLANNER_SETTINGS, { windowId: 1 });
+  assert.equal(job.validation.ok, true);
+
+  await chrome.tabs.update(11, {
+    title: "Shopping cart",
+    url: "https://shop.example/cart"
+  });
+
+  const confirmation = await applyLastPlan(chrome);
+  assert.equal(confirmation.requiresChangedTabsConfirmation, true);
+  assert.deepEqual(confirmation.rebasedPlan.changedContentTabIds, [11]);
+  assert.equal((await chrome.tabs.get(10)).groupId, -1);
+  assert.equal((await chrome.tabs.get(11)).groupId, -1);
+
+  const result = await applyLastPlan(chrome, {
+    confirmChangedTabs: true,
+    confirmationToken: confirmation.rebasedPlan.confirmationToken
+  });
+  assert.equal(result.rebasedPlan.changedTabsCount, 1);
+  assert.notEqual((await chrome.tabs.get(10)).groupId, -1);
+  assert.notEqual((await chrome.tabs.get(11)).groupId, -1);
+});
+
+test("changed-tab confirmation tokens expire when the tab inventory changes again", async () => {
+  const chrome = createFakeChrome({
+    windows: [
+      {
+        id: 1,
+        focused: true,
+        tabs: [
+          { id: 10, title: "GitHub pull request", url: "https://github.com/acme/repo/pull/1", active: true },
+          { id: 11, title: "Chrome tabs API docs", url: "https://developer.chrome.com/docs/extensions/reference/api/tabs" }
+        ]
+      }
+    ]
+  });
+
+  const job = await analyzeTabs(chrome, FAKE_PLANNER_SETTINGS, { windowId: 1 });
+  assert.equal(job.validation.ok, true);
+  await chrome.tabs.update(11, { title: "Different topic", url: "https://example.com/different" });
+  const firstConfirmation = await applyLastPlan(chrome);
+  assert.equal(firstConfirmation.requiresChangedTabsConfirmation, true);
+
+  const window = chrome.__state.windows.get(1);
+  window.tabs.push({
+    ...window.tabs[0],
+    id: 12,
+    index: window.tabs.length,
+    title: "New tab after confirmation",
+    url: "https://example.com/new",
+    groupId: -1
+  });
+
+  const staleConfirmation = await applyLastPlan(chrome, {
+    confirmChangedTabs: true,
+    confirmationToken: firstConfirmation.rebasedPlan.confirmationToken
+  });
+  assert.equal(staleConfirmation.requiresChangedTabsConfirmation, true);
+  assert.notEqual(staleConfirmation.rebasedPlan.confirmationToken, firstConfirmation.rebasedPlan.confirmationToken);
+  assert.equal(staleConfirmation.rebasedPlan.changedTabsCount, 2);
 });
 
 test("apply asks to regenerate when too many tabs changed since preview", async () => {
@@ -212,6 +292,54 @@ test("review group title follows the selected result language when applying", as
   const groups = await chrome.tabGroups.query({ windowId: 1 });
   assert.equal(groups.length, 1);
   assert.equal(groups[0].title, "Needs Review");
+});
+
+test("apply preserves planned order when excluded tabs sit between planned tabs", async () => {
+  const chrome = createFakeChrome({
+    windows: [
+      {
+        id: 1,
+        focused: true,
+        tabs: [
+          { id: 10, title: "Chrome tabs API docs", url: "https://developer.chrome.com/docs/extensions/reference/api/tabs", active: true },
+          { id: 99, title: "Pinned mail", url: "https://mail.example.com", pinned: true },
+          { id: 11, title: "Chrome tabGroups API docs", url: "https://developer.chrome.com/docs/extensions/reference/api/tabGroups" }
+        ]
+      }
+    ]
+  });
+
+  const job = await analyzeTabs(chrome, FAKE_PLANNER_SETTINGS, { windowId: 1 });
+  assert.equal(job.validation.ok, true);
+  await applyLastPlan(chrome);
+
+  const window = await chrome.windows.get(1, { populate: true });
+  assert.deepEqual(
+    window.tabs.map((tab) => tab.id),
+    [99, 10, 11]
+  );
+});
+
+test("undo availability is hydrated from the stored rollback snapshot", async () => {
+  const chrome = createFakeChrome({
+    windows: [
+      {
+        id: 1,
+        focused: true,
+        tabs: [
+          { id: 10, title: "GitHub pull request", url: "https://github.com/acme/repo/pull/1", active: true },
+          { id: 11, title: "OpenAI API docs", url: "https://platform.openai.com/docs" }
+        ]
+      }
+    ]
+  });
+
+  assert.equal((await canUndoLastApply(chrome)).canUndo, false);
+  await analyzeTabs(chrome, FAKE_PLANNER_SETTINGS, { windowId: 1 });
+  await applyLastPlan(chrome);
+  assert.equal((await canUndoLastApply(chrome)).canUndo, true);
+  await undoLastApply(chrome);
+  assert.equal((await canUndoLastApply(chrome)).canUndo, false);
 });
 
 test("applying a plan keeps review-like groups after topic groups", async () => {
@@ -342,7 +470,10 @@ test("consolidate_one_window merges all eligible normal-window tabs into the inv
   assert.equal(job.preview.requiresConfirmation, true);
   assert.equal(job.plan.targetWindow.windowId, 1);
 
-  const result = await applyLastPlan(chrome);
+  const blocked = await applyLastPlan(chrome);
+  assert.equal(blocked.requiresMultiWindowConfirmation, true);
+
+  const result = await applyLastPlan(chrome, { confirmMultiWindow: true });
   assert.equal(result.movedTabsCount, 2);
   assert.deepEqual(result.createdWindowIds, []);
   assert.equal(result.targetWindowId, 1);
@@ -384,7 +515,7 @@ test("consolidate_one_window can use the invocation window as target", async () 
   assert.equal(job.validation.ok, true);
   assert.equal(job.plan.targetWindow.windowId, 1);
 
-  const result = await applyLastPlan(chrome);
+  const result = await applyLastPlan(chrome, { confirmMultiWindow: true });
   assert.equal(result.targetWindowId, 1);
   assert.deepEqual(result.createdWindowIds, []);
   const targetWindow = await chrome.windows.get(1, { populate: true });
@@ -419,7 +550,7 @@ test("consolidate_one_window with no eligible tabs is a no-op", async () => {
   assert.equal(job.validation.ok, true);
   assert.equal(job.preview.excludedTabsCount, 2);
 
-  const result = await applyLastPlan(chrome);
+  const result = await applyLastPlan(chrome, { confirmMultiWindow: true });
   assert.equal(result.movedTabsCount, 0);
   assert.equal(result.createdWindowIds.length, 0);
   const windows = await chrome.windows.getAll({ populate: true, windowTypes: ["normal"] });
@@ -494,7 +625,7 @@ test("new-window apply failure after seed move can still undo", async () => {
     return originalMove(tabIds, moveProperties);
   };
 
-  await assert.rejects(() => applyLastPlan(chrome), /simulated move failure/);
+  await assert.rejects(() => applyLastPlan(chrome, { confirmMultiWindow: true }), /simulated move failure/);
 
   chrome.tabs.move = originalMove;
   const undo = await undoLastApply(chrome);
@@ -693,8 +824,13 @@ test("active tab page samples are attached to analysis preview", async () => {
 
   assert.equal(job.inventory.pageSamples.length, 1);
   assert.equal(job.inventory.pageSamples[0].status, "ok");
+  assert.equal(job.inventory.pageSamples[0].sample, undefined);
   assert.equal(job.preview.pageSampling.ok, 1);
   assert.equal(job.preview.pageSampling.requested, 1);
+
+  const storedJob = await getLastJob(chrome);
+  assert.equal(JSON.stringify(storedJob).includes("Visible page text"), false);
+  assert.equal(storedJob.inventory.pageSamples[0].sample, undefined);
 });
 
 test("page sampling timeouts fall back without blocking analysis", async () => {

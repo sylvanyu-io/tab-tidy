@@ -263,7 +263,7 @@ async function installChromeMock(page) {
       plannerProvider: "gateway",
       rememberProviderKeys: false,
       gatewayBaseUrl: "",
-      gatewayModel: "gpt-5.5",
+      gatewayModel: "claude-sonnet-4-6",
       gatewayCustomModel: "",
       gatewayThinkingIntensity: "high",
       gatewayApiKey: "",

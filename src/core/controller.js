@@ -11,6 +11,7 @@ import { shouldShowPageSampleCount } from "../shared/page-sampling-copy.js";
 import { applyValidatedPlan, createRollbackSnapshot, undoFromRollback } from "./chrome-executor.js";
 import { cachedPageSampleForTab, rememberPageSummary } from "./page-summary-cache.js";
 import { requestPageSample } from "./page-sampler.js";
+import { fetchJsonWithTimeout } from "./fetch-timeout.js";
 import { createPlan } from "./planner.js";
 import { normalizePlanForSettings } from "./plan-normalizer.js";
 import { buildPreview } from "./preview.js";
@@ -25,6 +26,7 @@ const APPLY_REBASE_MAX_CHANGED_RATIO = 0.2;
 const PROGRESS_COPY_MODEL = "gpt-5.3-codex-spark";
 const PROGRESS_COPY_COUNT = 90;
 const PROGRESS_COPY_MAX_LENGTH = 18;
+const PROGRESS_COPY_TIMEOUT_MS = 12_000;
 const PAGE_SAMPLE_CONCURRENCY = 6;
 const PAGE_SAMPLE_TIMEOUT_MS = 1800;
 
@@ -49,7 +51,13 @@ export async function handleRuntimeMessage(chromeApi, message) {
     case "progressCopy:generate":
       return generateProgressCopy(chromeApi, message);
     case "tabs:applyLastPlan":
-      return applyLastPlan(chromeApi, { confirmChangedTabs: Boolean(message.confirmChangedTabs) });
+      return applyLastPlan(chromeApi, {
+        confirmChangedTabs: Boolean(message.confirmChangedTabs),
+        confirmationToken: message.confirmationToken || "",
+        confirmMultiWindow: Boolean(message.confirmMultiWindow)
+      });
+    case "tabs:canUndo":
+      return canUndoLastApply(chromeApi);
     case "tabs:undoLastApply":
       return undoLastApply(chromeApi);
     default:
@@ -64,6 +72,9 @@ export async function getSettings(chromeApi) {
 export async function saveSettings(chromeApi, nextSettings) {
   const settings = normalizeSettings(nextSettings);
   await setLocal(chromeApi, STORAGE_KEYS.settings, settingsForPersistence(settings));
+  if (!settings.continuousPageSummaries) {
+    await removeLocal(chromeApi, STORAGE_KEYS.pageSummaryCache);
+  }
   return settings;
 }
 
@@ -153,7 +164,8 @@ async function runActiveAnalysis(chromeApi, rawSettings, invocation, operationId
       preview
     };
 
-    await setLocal(chromeApi, STORAGE_KEYS.lastJob, job);
+    const storedJob = sanitizeJobForStorage(job);
+    await setLocal(chromeApi, STORAGE_KEYS.lastJob, storedJob);
     await reportProgress({
       status: "complete",
       phase: "complete",
@@ -161,7 +173,7 @@ async function runActiveAnalysis(chromeApi, rawSettings, invocation, operationId
       message: validation?.ok ? "方案好了，可以先检查" : "方案需要检查",
       finishedAt: new Date().toISOString()
     });
-    return job;
+    return storedJob;
   } catch (error) {
     const canceled = abortController.signal.aborted;
     const message = canceled ? "已取消整理。" : error.message;
@@ -265,15 +277,20 @@ export async function generateProgressCopy(chromeApi, request = {}) {
     max_tokens: 1200
   };
 
-  const response = await fetch(`${BUILTIN_GATEWAY_BASE_URL}/chat/completions`, {
-    method: "POST",
-    headers: {
-      "content-type": "application/json",
-      "x-tab-tidy-install-id": installId
+  const { response, data } = await fetchJsonWithTimeout(
+    fetch,
+    `${BUILTIN_GATEWAY_BASE_URL}/chat/completions`,
+    {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "x-tab-tidy-install-id": installId
+      },
+      body: JSON.stringify(body)
     },
-    body: JSON.stringify(body)
-  });
-  const data = await response.json().catch(() => ({}));
+    "Progress copy generation",
+    PROGRESS_COPY_TIMEOUT_MS
+  );
   if (!response.ok) {
     throw new Error(data?.error?.message || `Progress copy generation failed with status ${response.status}.`);
   }
@@ -290,13 +307,16 @@ export async function applyLastPlan(chromeApi, options = {}) {
   if (!job.validation?.ok) {
     throw new Error(`Cannot apply an invalid plan: ${(job.validation?.errors || []).join(" ")}`);
   }
+  if (job.settings?.organizeMode === ORGANIZE_MODES.CONSOLIDATE_ONE_WINDOW && !options.confirmMultiWindow) {
+    return { requiresMultiWindowConfirmation: true };
+  }
 
   const latestInventory = await collectTabInventory(chromeApi, job.settings, job.invocation);
   let planForApply = job.plan;
   let inventoryForApply = latestInventory;
   let rebaseSummary = null;
   let latestValidation = validatePlan(planForApply, latestInventory, job.settings);
-  if (!latestValidation.ok) {
+  if (!latestValidation.ok || hasPlannerTabDrift(job.inventory, latestInventory)) {
     const rebased = rebasePlanForLatestInventory(job.plan, job.inventory, latestInventory, job.settings, {
       includeUnpreviewedTabsInReview: Boolean(options.confirmChangedTabs)
     });
@@ -306,7 +326,10 @@ export async function applyLastPlan(chromeApi, options = {}) {
     if (shouldRejectRebasedPlan(rebased.summary, job.inventory, latestInventory)) {
       throw new Error(`标签页变化较多，请重新生成方案。变化标签页 ${rebased.summary.changedTabsCount} 个。`);
     }
-    if (rebased.summary.changedTabsCount && !options.confirmChangedTabs) {
+    if (
+      rebased.summary.changedTabsCount &&
+      (!options.confirmChangedTabs || options.confirmationToken !== rebased.summary.confirmationToken)
+    ) {
       return {
         requiresChangedTabsConfirmation: true,
         rebasedPlan: rebased.summary
@@ -336,16 +359,26 @@ function rebasePlanForLatestInventory(plan, originalInventory, latestInventory, 
   const settings = normalizeSettings(rawSettings);
   const originalEligibleIds = new Set((originalInventory?.tabs || []).map((tab) => tab.tabId));
   const originalPlannerIds = new Set((originalInventory?.plannerTabs || []).map((tab) => tab.tabId));
+  const originalPlannerById = new Map((originalInventory?.plannerTabs || []).map((tab) => [tab.tabId, tab]));
   const includeUnpreviewedTabsInReview = Boolean(options.includeUnpreviewedTabsInReview);
+  const changedPlannerTabs = (latestInventory.plannerTabs || []).filter((tab) => {
+    const original = originalPlannerById.get(tab.tabId);
+    return original && tabFingerprint(original) !== tabFingerprint(tab);
+  });
+  const changedPlannerIds = new Set(changedPlannerTabs.map((tab) => tab.tabId));
   const inventoryForApply = filterInventoryForApply(latestInventory, originalEligibleIds, originalPlannerIds, {
-    includeUnpreviewedTabsInReview
+    includeUnpreviewedTabsInReview,
+    changedPlannerIds
   });
   const latestTabsById = new Map((inventoryForApply.plannerTabs || []).map((tab) => [tab.tabId, tab]));
+  const rawLatestTabsById = new Map((latestInventory.plannerTabs || []).map((tab) => [tab.tabId, tab]));
   const unpreviewedPlannerTabs = (latestInventory.plannerTabs || []).filter((tab) => !originalPlannerIds.has(tab.tabId));
   const seen = new Set();
   const summary = {
     removedTabIds: [],
     addedReviewTabIds: includeUnpreviewedTabsInReview ? unpreviewedPlannerTabs.map((tab) => tab.tabId) : [],
+    changedReviewTabIds: includeUnpreviewedTabsInReview ? changedPlannerTabs.map((tab) => tab.tabId) : [],
+    changedContentTabIds: changedPlannerTabs.map((tab) => tab.tabId),
     skippedNewTabIds: includeUnpreviewedTabsInReview ? [] : unpreviewedPlannerTabs.map((tab) => tab.tabId),
     duplicateTabIds: [],
     droppedGroupKeys: [],
@@ -354,9 +387,14 @@ function rebasePlanForLatestInventory(plan, originalInventory, latestInventory, 
 
   const rebaseRef = (ref, owner) => {
     if (!ref || typeof ref.tabId !== "number") return null;
+    if (changedPlannerIds.has(ref.tabId)) {
+      return null;
+    }
     const tab = latestTabsById.get(ref.tabId);
     if (!tab) {
-      summary.removedTabIds.push(ref.tabId);
+      if (!rawLatestTabsById.has(ref.tabId)) {
+        summary.removedTabIds.push(ref.tabId);
+      }
       return null;
     }
     if (seen.has(ref.tabId)) {
@@ -397,6 +435,15 @@ function rebasePlanForLatestInventory(plan, originalInventory, latestInventory, 
         reason: "Tab appeared after preview; user confirmed placing it in review."
       });
     }
+    for (const tab of changedPlannerTabs) {
+      if (seen.has(tab.tabId)) continue;
+      seen.add(tab.tabId);
+      reviewTabs.push({
+        tabId: tab.tabId,
+        windowId: tab.windowId,
+        reason: "Tab changed after preview; user confirmed placing it in review."
+      });
+    }
   }
 
   const rebasedPlan = {
@@ -415,10 +462,18 @@ function rebasePlanForLatestInventory(plan, originalInventory, latestInventory, 
 
   summary.removedTabIds = uniqueNumbers(summary.removedTabIds);
   summary.addedReviewTabIds = uniqueNumbers(summary.addedReviewTabIds);
+  summary.changedReviewTabIds = uniqueNumbers(summary.changedReviewTabIds);
+  summary.changedContentTabIds = uniqueNumbers(summary.changedContentTabIds);
   summary.skippedNewTabIds = uniqueNumbers(summary.skippedNewTabIds);
   summary.duplicateTabIds = uniqueNumbers(summary.duplicateTabIds);
-  summary.changedTabsCount =
-    summary.removedTabIds.length + summary.addedReviewTabIds.length + summary.skippedNewTabIds.length + summary.duplicateTabIds.length;
+  summary.changedTabsCount = uniqueNumbers([
+    ...summary.removedTabIds,
+    ...summary.addedReviewTabIds,
+    ...summary.skippedNewTabIds,
+    ...summary.duplicateTabIds,
+    ...summary.changedContentTabIds
+  ]).length;
+  summary.confirmationToken = rebaseConfirmationToken(summary);
 
   return {
     plan: normalizedRebasedPlan,
@@ -430,12 +485,14 @@ function rebasePlanForLatestInventory(plan, originalInventory, latestInventory, 
 
 function filterInventoryForApply(inventory, originalEligibleIds, originalPlannerIds, options = {}) {
   const includeUnpreviewedTabsInReview = Boolean(options.includeUnpreviewedTabsInReview);
+  const changedPlannerIds = options.changedPlannerIds || new Set();
   const latestPlannerIds = new Set((inventory.plannerTabs || []).map((tab) => tab.tabId));
   const shouldIncludeTab = (tab) =>
-    originalEligibleIds.has(tab.tabId) || (includeUnpreviewedTabsInReview && latestPlannerIds.has(tab.tabId));
+    (originalEligibleIds.has(tab.tabId) && !changedPlannerIds.has(tab.tabId)) ||
+    (includeUnpreviewedTabsInReview && latestPlannerIds.has(tab.tabId));
   const stablePlannerTabs = includeUnpreviewedTabsInReview
     ? inventory.plannerTabs || []
-    : (inventory.plannerTabs || []).filter((tab) => originalPlannerIds.has(tab.tabId));
+    : (inventory.plannerTabs || []).filter((tab) => originalPlannerIds.has(tab.tabId) && !changedPlannerIds.has(tab.tabId));
   return {
     ...inventory,
     tabs: (inventory.tabs || []).filter(shouldIncludeTab),
@@ -487,6 +544,46 @@ function shouldRejectRebasedPlan(summary, originalInventory, latestInventory) {
   const eligible = Math.max(1, (originalInventory?.plannerTabs || latestInventory.plannerTabs || []).length);
   const allowedChanges = Math.max(5, Math.min(APPLY_REBASE_MAX_CHANGED_TABS, Math.ceil(eligible * APPLY_REBASE_MAX_CHANGED_RATIO)));
   return changed > allowedChanges;
+}
+
+function hasPlannerTabDrift(originalInventory, latestInventory) {
+  const originalById = new Map((originalInventory?.plannerTabs || []).map((tab) => [tab.tabId, tab]));
+  for (const tab of latestInventory?.plannerTabs || []) {
+    const original = originalById.get(tab.tabId);
+    if (original && tabFingerprint(original) !== tabFingerprint(tab)) return true;
+  }
+  return false;
+}
+
+function tabFingerprint(tab = {}) {
+  return JSON.stringify([
+    tab.title || "",
+    tab.hostname || "",
+    tab.sanitizedUrl || "",
+    tab.urlKind || "",
+    tab.groupTitle || "",
+    Boolean(tab.discarded)
+  ]);
+}
+
+function rebaseConfirmationToken(summary = {}) {
+  const payload = {
+    removed: uniqueNumbers(summary.removedTabIds || []).sort((a, b) => a - b),
+    added: uniqueNumbers([...(summary.addedReviewTabIds || []), ...(summary.skippedNewTabIds || [])]).sort((a, b) => a - b),
+    changed: uniqueNumbers(summary.changedContentTabIds || []).sort((a, b) => a - b),
+    duplicate: uniqueNumbers(summary.duplicateTabIds || []).sort((a, b) => a - b),
+    dropped: [...new Set(summary.droppedGroupKeys || [])].sort()
+  };
+  return `rebase_${hashString(JSON.stringify(payload))}`;
+}
+
+function hashString(value) {
+  let hash = 2166136261;
+  for (let index = 0; index < value.length; index += 1) {
+    hash ^= value.charCodeAt(index);
+    hash = Math.imul(hash, 16777619);
+  }
+  return (hash >>> 0).toString(36);
 }
 
 function uniqueNumbers(values) {
@@ -560,8 +657,35 @@ export async function undoLastApply(chromeApi) {
   return result;
 }
 
+export async function canUndoLastApply(chromeApi) {
+  const rollback = await getLocal(chromeApi, STORAGE_KEYS.lastRollback);
+  return { canUndo: Boolean(rollback) };
+}
+
 function redactSettingsForJob(settings) {
   return { ...settings, gatewayApiKey: "" };
+}
+
+function sanitizeJobForStorage(job) {
+  if (!job) return job;
+  return {
+    ...job,
+    settings: job.settings ? redactSettingsForJob(job.settings) : job.settings,
+    inventory: sanitizeInventoryForStorage(job.inventory)
+  };
+}
+
+function sanitizeInventoryForStorage(inventory) {
+  if (!inventory) return inventory;
+  return {
+    ...inventory,
+    pageSamples: (inventory.pageSamples || []).map((sample) => ({
+      tabId: sample.tabId,
+      windowId: sample.windowId,
+      status: sample.status,
+      reason: sample.reason || ""
+    }))
+  };
 }
 
 function settingsForPersistence(settings) {
@@ -798,7 +922,9 @@ function raceWithTimeoutAndAbort(promise, timeoutMs, signal) {
 
 function safeOriginPattern(rawUrl) {
   try {
-    return new URL(rawUrl).origin + "/*";
+    const url = new URL(rawUrl);
+    if (!["http:", "https:"].includes(url.protocol)) return "";
+    return `${url.protocol}//${url.hostname}/*`;
   } catch {
     return "";
   }

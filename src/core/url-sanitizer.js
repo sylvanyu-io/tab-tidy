@@ -31,8 +31,8 @@ export function sanitizeTabUrl(rawUrl, mode) {
     if (!["http:", "https:"].includes(url.protocol)) {
       return {
         urlKind: classifyUrl(rawUrl),
-        hostname: url.protocol.replace(":", ""),
-        sanitizedUrl: `${url.protocol}//${url.hostname || ""}`,
+        hostname: "",
+        sanitizedUrl: "",
         fullUrl: ""
       };
     }

@@ -66,7 +66,7 @@ test("AI gateway planner posts a chat-completions JSON request", async () => {
     assert.equal(options.method, "POST");
     assert.equal(options.headers.authorization, "Bearer gateway-test-key");
     const body = JSON.parse(options.body);
-    assert.equal(body.model, "gpt-5.5");
+    assert.equal(body.model, "claude-sonnet-4-6");
     assert.equal(body.response_format.type, "json_object");
     assert.equal(body.reasoning_effort, "high");
     assert.match(body.messages[0].content, /JSON-only planner/);
@@ -474,6 +474,38 @@ test("AI gateway planner adapts compact ids output", async () => {
     { tabId: 11, windowId: 1 }
   ]);
   assert.deepEqual(plan.reviewTabs, []);
+});
+
+test("AI gateway planner deduplicates compact review refs", async () => {
+  const fetchImpl = async () => ({
+    ok: true,
+    async json() {
+      return {
+        choices: [
+          {
+            message: {
+              content: JSON.stringify({
+                schema: "tab_tidy_plan_compact_v1",
+                groups: [],
+                review: [{ id: 10, reason: "Unclear." }, 10, 11]
+              })
+            }
+          }
+        ]
+      };
+    }
+  });
+
+  const plan = await createGatewayPlan(
+    inventory,
+    { ...DEFAULT_SETTINGS, plannerProvider: PLANNER_PROVIDERS.GATEWAY, gatewayApiKey: "gateway-test-key" },
+    fetchImpl
+  );
+
+  assert.deepEqual(plan.reviewTabs, [
+    { tabId: 10, windowId: 1, reason: "Unclear." },
+    { tabId: 11, windowId: 1, reason: "AI 网关把这个标签页留给复核。" }
+  ]);
 });
 
 test("AI gateway planner can call a custom free gateway without an API key", async () => {

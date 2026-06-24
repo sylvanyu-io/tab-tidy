@@ -19,3 +19,13 @@ test("title_only suppresses URL details", () => {
   assert.equal(result.hostname, "");
   assert.equal(result.sanitizedUrl, "");
 });
+
+test("sanitized_url suppresses non-web URL details", () => {
+  for (const rawUrl of ["chrome://extensions", "file:///Users/alice/secret.txt", "chrome-extension://abc/options.html"]) {
+    const result = sanitizeTabUrl(rawUrl, URL_PRIVACY_MODES.SANITIZED_URL);
+    assert.notEqual(result.urlKind, "web");
+    assert.equal(result.hostname, "");
+    assert.equal(result.sanitizedUrl, "");
+    assert.equal(result.fullUrl, "");
+  }
+});

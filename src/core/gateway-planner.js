@@ -791,13 +791,18 @@ function normalizeGatewayPlan(plan, inventory, settings) {
     });
   }
 
+  const reviewSeen = new Set();
   const reviewTabs = sortRefsByOriginalOrder(
     normalizeTabRefs(plan.reviewTabs || plan.review || plan.ungrouped || [], tabById)
-    .filter((ref) => !seen.has(ref.tabId))
-    .map((ref) => ({
-      ...ref,
-      reason: ref.reason || localizedText(settings.languageMode, "AI 网关把这个标签页留给复核。", "AI gateway left this tab for review.")
-    })),
+      .filter((ref) => {
+        if (seen.has(ref.tabId) || reviewSeen.has(ref.tabId)) return false;
+        reviewSeen.add(ref.tabId);
+        return true;
+      })
+      .map((ref) => ({
+        ...ref,
+        reason: ref.reason || localizedText(settings.languageMode, "AI 网关把这个标签页留给复核。", "AI gateway left this tab for review.")
+      })),
     inventory
   );
   for (const tab of plannerTabs) {

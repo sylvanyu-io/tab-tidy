@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { getSettings, saveSettings } from "../src/core/controller.js";
+import { STORAGE_KEYS } from "../src/core/storage.js";
 import {
   DEFAULT_SETTINGS,
   GATEWAY_CUSTOM_MODEL_VALUE,
@@ -62,7 +63,7 @@ test("blank numeric settings fall back instead of becoming zero", () => {
 test("AI gateway settings normalize safely", () => {
   assert.equal(
     normalizeSettings({ ...DEFAULT_SETTINGS, gatewayBaseUrl: "http://127.0.0.1:8317/v1/" }).gatewayBaseUrl,
-    ""
+    "http://127.0.0.1:8317/v1"
   );
   assert.equal(
     normalizeSettings({ ...DEFAULT_SETTINGS, gatewayBaseUrl: "https://cliproxy.sylvanyu.io/v1/" }).gatewayBaseUrl,
@@ -70,7 +71,7 @@ test("AI gateway settings normalize safely", () => {
   );
   assert.equal(
     normalizeSettings({ ...DEFAULT_SETTINGS, gatewayBaseUrl: "https://api.openai.com/v1" }).gatewayBaseUrl,
-    ""
+    "https://api.openai.com/v1"
   );
   assert.equal(
     normalizeSettings({ ...DEFAULT_SETTINGS, gatewayBaseUrl: "javascript:alert(1)" }).gatewayBaseUrl,
@@ -142,4 +143,21 @@ test("gateway key is not persisted unless explicitly remembered", async () => {
   });
   const persisted = await getSettings(chrome);
   assert.equal(persisted.gatewayApiKey, "gateway-test-key");
+});
+
+test("turning off continuous summaries clears cached page summaries", async () => {
+  const chrome = createFakeChrome();
+  chrome.__state.storage[STORAGE_KEYS.pageSummaryCache] = {
+    version: 1,
+    entries: {
+      cached: { sample: { visibleText: "private cached text" } }
+    }
+  };
+
+  await saveSettings(chrome, {
+    ...DEFAULT_SETTINGS,
+    continuousPageSummaries: false
+  });
+
+  assert.equal(chrome.__state.storage[STORAGE_KEYS.pageSummaryCache], undefined);
 });

@@ -310,8 +310,8 @@ async function moveTabsToPlanOrder(chromeApi, plan, targetWindowId, journal) {
 
   const orderedSet = new Set(orderedLiveTabIds);
   const insertionIndex = targetTabs.filter((tab) => !orderedSet.has(tab.id)).length;
-  for (const tabId of [...orderedLiveTabIds].reverse()) {
-    await chromeApi.tabs.move(tabId, { windowId: targetWindowId, index: insertionIndex });
+  for (const [offset, tabId] of orderedLiveTabIds.entries()) {
+    await chromeApi.tabs.move(tabId, { windowId: targetWindowId, index: insertionIndex + offset });
   }
   journal.push({ type: "order_tabs", tabIds: orderedLiveTabIds, toWindowId: targetWindowId });
 }
