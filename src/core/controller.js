@@ -37,7 +37,7 @@ export async function handleRuntimeMessage(chromeApi, message) {
     case "tabs:cancelActiveJob":
       return cancelActiveJob(chromeApi);
     case "tabs:applyLastPlan":
-      return applyLastPlan(chromeApi);
+      return applyLastPlan(chromeApi, { confirmChangedTabs: Boolean(message.confirmChangedTabs) });
     case "tabs:undoLastApply":
       return undoLastApply(chromeApi);
     default:
@@ -206,7 +206,7 @@ export async function cancelActiveJob(chromeApi) {
   return { canceled: Boolean(controller), job: nextJob };
 }
 
-export async function applyLastPlan(chromeApi) {
+export async function applyLastPlan(chromeApi, options = {}) {
   const job = await getLocal(chromeApi, STORAGE_KEYS.lastJob);
   if (!job) throw new Error("No analyzed plan is available.");
   if (!job.validation?.ok) {
@@ -219,12 +219,20 @@ export async function applyLastPlan(chromeApi) {
   let rebaseSummary = null;
   let latestValidation = validatePlan(planForApply, latestInventory, job.settings);
   if (!latestValidation.ok) {
-    const rebased = rebasePlanForLatestInventory(job.plan, job.inventory, latestInventory, job.settings);
+    const rebased = rebasePlanForLatestInventory(job.plan, job.inventory, latestInventory, job.settings, {
+      includeUnpreviewedTabsInReview: Boolean(options.confirmChangedTabs)
+    });
     if (!rebased.validation.ok) {
       throw new Error(`标签页变化较多，请重新生成方案。${rebased.validation.errors.join(" ")}`);
     }
     if (shouldRejectRebasedPlan(rebased.summary, job.inventory, latestInventory)) {
       throw new Error(`标签页变化较多，请重新生成方案。变化标签页 ${rebased.summary.changedTabsCount} 个。`);
+    }
+    if (rebased.summary.changedTabsCount && !options.confirmChangedTabs) {
+      return {
+        requiresChangedTabsConfirmation: true,
+        rebasedPlan: rebased.summary
+      };
     }
     planForApply = rebased.plan;
     inventoryForApply = rebased.inventory;
@@ -246,18 +254,21 @@ export async function applyLastPlan(chromeApi) {
   return rebaseSummary ? { ...result, rebasedPlan: rebaseSummary } : result;
 }
 
-function rebasePlanForLatestInventory(plan, originalInventory, latestInventory, rawSettings = {}) {
+function rebasePlanForLatestInventory(plan, originalInventory, latestInventory, rawSettings = {}, options = {}) {
   const settings = normalizeSettings(rawSettings);
   const originalEligibleIds = new Set((originalInventory?.tabs || []).map((tab) => tab.tabId));
   const originalPlannerIds = new Set((originalInventory?.plannerTabs || []).map((tab) => tab.tabId));
-  const inventoryForApply = filterInventoryForApply(latestInventory, originalEligibleIds, originalPlannerIds);
+  const includeUnpreviewedTabsInReview = Boolean(options.includeUnpreviewedTabsInReview);
+  const inventoryForApply = filterInventoryForApply(latestInventory, originalEligibleIds, originalPlannerIds, {
+    includeUnpreviewedTabsInReview
+  });
   const latestTabsById = new Map((inventoryForApply.plannerTabs || []).map((tab) => [tab.tabId, tab]));
+  const unpreviewedPlannerTabs = (latestInventory.plannerTabs || []).filter((tab) => !originalPlannerIds.has(tab.tabId));
   const seen = new Set();
   const summary = {
     removedTabIds: [],
-    skippedNewTabIds: (latestInventory.plannerTabs || [])
-      .filter((tab) => !originalPlannerIds.has(tab.tabId))
-      .map((tab) => tab.tabId),
+    addedReviewTabIds: includeUnpreviewedTabsInReview ? unpreviewedPlannerTabs.map((tab) => tab.tabId) : [],
+    skippedNewTabIds: includeUnpreviewedTabsInReview ? [] : unpreviewedPlannerTabs.map((tab) => tab.tabId),
     duplicateTabIds: [],
     droppedGroupKeys: [],
     changedTabsCount: 0
@@ -298,6 +309,18 @@ function rebasePlanForLatestInventory(plan, originalInventory, latestInventory, 
     .map((ref) => rebaseRef(ref, "review"))
     .filter(Boolean);
 
+  if (includeUnpreviewedTabsInReview) {
+    for (const tab of unpreviewedPlannerTabs) {
+      if (seen.has(tab.tabId)) continue;
+      seen.add(tab.tabId);
+      reviewTabs.push({
+        tabId: tab.tabId,
+        windowId: tab.windowId,
+        reason: "Tab appeared after preview; user confirmed placing it in review."
+      });
+    }
+  }
+
   const rebasedPlan = {
     ...plan,
     mode: settings.organizeMode,
@@ -312,9 +335,11 @@ function rebasePlanForLatestInventory(plan, originalInventory, latestInventory, 
   };
 
   summary.removedTabIds = uniqueNumbers(summary.removedTabIds);
+  summary.addedReviewTabIds = uniqueNumbers(summary.addedReviewTabIds);
   summary.skippedNewTabIds = uniqueNumbers(summary.skippedNewTabIds);
   summary.duplicateTabIds = uniqueNumbers(summary.duplicateTabIds);
-  summary.changedTabsCount = summary.removedTabIds.length + summary.skippedNewTabIds.length + summary.duplicateTabIds.length;
+  summary.changedTabsCount =
+    summary.removedTabIds.length + summary.addedReviewTabIds.length + summary.skippedNewTabIds.length + summary.duplicateTabIds.length;
 
   return {
     plan: rebasedPlan,
@@ -324,17 +349,22 @@ function rebasePlanForLatestInventory(plan, originalInventory, latestInventory, 
   };
 }
 
-function filterInventoryForApply(inventory, originalEligibleIds, originalPlannerIds) {
-  const filterOriginalEligible = (tab) => originalEligibleIds.has(tab.tabId);
-  const stablePlannerTabs = (inventory.plannerTabs || []).filter((tab) => originalPlannerIds.has(tab.tabId));
+function filterInventoryForApply(inventory, originalEligibleIds, originalPlannerIds, options = {}) {
+  const includeUnpreviewedTabsInReview = Boolean(options.includeUnpreviewedTabsInReview);
+  const latestPlannerIds = new Set((inventory.plannerTabs || []).map((tab) => tab.tabId));
+  const shouldIncludeTab = (tab) =>
+    originalEligibleIds.has(tab.tabId) || (includeUnpreviewedTabsInReview && latestPlannerIds.has(tab.tabId));
+  const stablePlannerTabs = includeUnpreviewedTabsInReview
+    ? inventory.plannerTabs || []
+    : (inventory.plannerTabs || []).filter((tab) => originalPlannerIds.has(tab.tabId));
   return {
     ...inventory,
-    tabs: (inventory.tabs || []).filter(filterOriginalEligible),
+    tabs: (inventory.tabs || []).filter(shouldIncludeTab),
     plannerTabs: stablePlannerTabs,
     lockedGroups: (inventory.lockedGroups || [])
       .map((group) => ({
         ...group,
-        tabIds: (group.tabIds || []).filter((tabId) => originalEligibleIds.has(tabId))
+        tabIds: (group.tabIds || []).filter((tabId) => shouldIncludeTab({ tabId }))
       }))
       .filter((group) => group.tabIds.length),
     excludedTabs: inventory.excludedTabs || []

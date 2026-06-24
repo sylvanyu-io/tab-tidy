@@ -338,7 +338,16 @@ async function applyLastPlan() {
 
   setBusy(true, "正在整理标签页");
   try {
-    const result = await sendMessage({ type: "tabs:applyLastPlan" });
+    let result = await sendMessage({ type: "tabs:applyLastPlan" });
+    if (result?.requiresChangedTabsConfirmation) {
+      const confirmed = confirm(changedTabsConfirmationText(result.rebasedPlan));
+      if (!confirmed) {
+        setStatus("已取消整理");
+        return;
+      }
+      setStatus("正在整理变化后的标签页");
+      result = await sendMessage({ type: "tabs:applyLastPlan", confirmChangedTabs: true });
+    }
     canUndo = true;
     setStatus(applyResultStatus(result));
     renderDetails({ applyResult: result });
@@ -349,11 +358,33 @@ async function applyLastPlan() {
   }
 }
 
+function changedTabsConfirmationText(summary = {}) {
+  const newCount = (summary.skippedNewTabIds || summary.addedReviewTabIds || []).length;
+  const removedCount = (summary.removedTabIds || []).length;
+  const duplicateCount = (summary.duplicateTabIds || []).length;
+  const reviewTitle = reviewGroupTitle(fields.languageMode.value);
+  const lines = ["标签页在预览后发生了变化。"];
+
+  if (newCount) {
+    if (fields.reviewGroupMode.value === "create_review_group") {
+      lines.push(`${newCount} 个新增标签页会放进「${reviewTitle}」。`);
+    } else {
+      lines.push(`${newCount} 个新增标签页会保持未分组。`);
+    }
+  }
+  if (removedCount) lines.push(`${removedCount} 个已不存在的标签页会跳过。`);
+  if (duplicateCount) lines.push(`${duplicateCount} 个重复引用会跳过。`);
+  lines.push("确认继续整理吗？");
+  return lines.join("\n");
+}
+
 function applyResultStatus(result) {
   const groupCount = result.createdGroupIds?.length || 0;
   const changedTabs = result.rebasedPlan?.changedTabsCount || 0;
   if (changedTabs) {
-    return `已创建 ${groupCount} 个分组；${changedTabs} 个变化标签页已跳过`;
+    const reviewCount = result.rebasedPlan?.addedReviewTabIds?.length || 0;
+    const reviewText = reviewCount ? `，${reviewCount} 个放进「${reviewGroupTitle(fields.languageMode.value)}」` : "";
+    return `已创建 ${groupCount} 个分组；已处理 ${changedTabs} 个变化标签页${reviewText}`;
   }
   return `已创建 ${groupCount} 个分组`;
 }
