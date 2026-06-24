@@ -6,6 +6,7 @@ import {
   GATEWAY_CUSTOM_MODEL_VALUE,
   LANGUAGE_MODES,
   PAGE_SAMPLING_CONSENT_MODES,
+  PROMPT_PRESETS,
   THINKING_INTENSITIES,
   UNDO_TARGET_WINDOW_MODES
 } from "../src/shared/settings.js";
@@ -36,6 +37,14 @@ test("invalid selected target window ids normalize to null", () => {
 test("invalid undo target window mode falls back to conservative default", () => {
   const settings = normalizeSettings({ ...DEFAULT_SETTINGS, undoTargetWindowMode: "close_anything" });
   assert.equal(settings.undoTargetWindowMode, UNDO_TARGET_WINDOW_MODES.LEAVE_EMPTY);
+});
+
+test("prompt presets accept media type and reject removed preset values", () => {
+  assert.equal(
+    normalizeSettings({ ...DEFAULT_SETTINGS, promptPreset: PROMPT_PRESETS.MEDIA_TYPE }).promptPreset,
+    PROMPT_PRESETS.MEDIA_TYPE
+  );
+  assert.equal(normalizeSettings({ ...DEFAULT_SETTINGS, promptPreset: "platform_source" }).promptPreset, DEFAULT_SETTINGS.promptPreset);
 });
 
 test("blank numeric settings fall back instead of becoming zero", () => {
