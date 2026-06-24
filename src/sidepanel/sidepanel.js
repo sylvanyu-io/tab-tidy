@@ -432,7 +432,7 @@ function changedTabsConfirmationText(summary = {}) {
       lines.push(`${newCount} 个新增标签页会保持未分组。`);
     }
   }
-  if (removedCount) lines.push(`${removedCount} 个已不存在的标签页会跳过。`);
+  if (removedCount) lines.push(`${removedCount} 个已关闭的标签页会跳过。`);
   if (duplicateCount) lines.push(`${duplicateCount} 个重复引用会跳过。`);
   lines.push("确认继续整理吗？");
   return lines.join("\n");
@@ -467,7 +467,7 @@ function renderPreview(job) {
   nodes.previewSection.hidden = false;
   const preview = job.preview;
   const languageMode = preview.languageMode || job.settings?.languageMode || fields.languageMode.value;
-  const groups = preview.groups || [];
+  const groups = orderPreviewGroups(preview.groups || [], languageMode);
   const reviewTabsCount = preview.reviewTabsCount || 0;
   const reviewGroupWillBeCreated = Boolean(preview.reviewGroupWillBeCreated && reviewTabsCount);
   const visibleGroupCount = groups.length + (reviewGroupWillBeCreated ? 1 : 0);
@@ -496,6 +496,34 @@ function renderPreview(job) {
     ...groups.map((group, index) => groupRow(group, swatchForIndex(index), languageMode)),
     ...(reviewGroupWillBeCreated ? [reviewGroupRow(reviewTabsCount, languageMode, preview)] : [])
   );
+}
+
+function orderPreviewGroups(groups, languageMode) {
+  const reviewTitle = normalizeReviewLabel(reviewGroupTitle(languageMode));
+  const fallbackReviewTitle = normalizeReviewLabel(reviewGroupTitle("auto"));
+  const englishReviewTitle = normalizeReviewLabel(reviewGroupTitle("en-US"));
+  const reviewLabels = new Set([reviewTitle, fallbackReviewTitle, englishReviewTitle, "review", "needs review", "ungrouped"]);
+  const normalGroups = [];
+  const reviewLikeGroups = [];
+
+  for (const group of groups) {
+    const title = normalizeReviewLabel(group?.title);
+    const key = normalizeReviewLabel(group?.groupKey);
+    if (reviewLabels.has(title) || reviewLabels.has(key)) {
+      reviewLikeGroups.push(group);
+    } else {
+      normalGroups.push(group);
+    }
+  }
+
+  return [...normalGroups, ...reviewLikeGroups];
+}
+
+function normalizeReviewLabel(value) {
+  return String(value || "")
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, " ");
 }
 
 function previewSummary(preview, groupCount, reviewTabsCount, reviewGroupWillBeCreated, languageMode) {

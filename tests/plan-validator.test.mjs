@@ -178,6 +178,36 @@ test("current target window in consolidate mode must be the invocation window", 
   assert.match(result.errors.join("\n"), /targetWindow\.windowId must be 2/);
 });
 
+test("review-like groups are ordered after topic groups", () => {
+  const inventory = {
+    scope: { kind: "current_window", currentWindowId: 1, windowIds: [1] },
+    plannerTabs: [
+      { tabId: 10, windowId: 1, sequenceIndex: 0, pinned: false, incognito: false },
+      { tabId: 11, windowId: 1, sequenceIndex: 1, pinned: false, incognito: false }
+    ],
+    lockedGroups: [],
+    excludedTabs: []
+  };
+  const plan = {
+    schemaVersion: 1,
+    mode: "current_window",
+    targetWindow: { kind: "current_window", windowId: 1, title: "Current Window" },
+    groups: [
+      { groupKey: "needs-review", title: "待分类", color: "grey", confidence: 0.9, tabRefs: [{ tabId: 10, windowId: 1 }] },
+      { groupKey: "work", title: "当前项目", color: "blue", confidence: 0.9, tabRefs: [{ tabId: 11, windowId: 1 }] }
+    ],
+    reviewTabs: [],
+    excludedTabs: []
+  };
+
+  const normalized = normalizePlanOrder(plan, inventory);
+
+  assert.deepEqual(
+    normalized.groups.map((group) => group.title),
+    ["当前项目", "待分类"]
+  );
+});
+
 test("invalid plan collections are rejected without throwing", () => {
   const inventory = {
     scope: { kind: "current_window", currentWindowId: 1, windowIds: [1] },

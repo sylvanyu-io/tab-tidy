@@ -23,12 +23,29 @@ function sortRefsByOriginalOrder(refs, inventory) {
 
 function orderGroupsByOriginalPosition(groups, inventory) {
   const tabOrder = buildTabOrder(inventory);
-  return asArray(groups).sort((left, right) => firstGroupOrder(left, tabOrder) - firstGroupOrder(right, tabOrder));
+  return asArray(groups).sort((left, right) => {
+    const leftReviewLike = isReviewLikeGroup(left);
+    const rightReviewLike = isReviewLikeGroup(right);
+    if (leftReviewLike !== rightReviewLike) return leftReviewLike ? 1 : -1;
+    return firstGroupOrder(left, tabOrder) - firstGroupOrder(right, tabOrder);
+  });
 }
 
 function firstGroupOrder(group, tabOrder) {
   const orders = asArray(group?.tabRefs).map((ref) => tabOrder(ref.tabId));
   return orders.length ? Math.min(...orders) : Number.MAX_SAFE_INTEGER;
+}
+
+function isReviewLikeGroup(group) {
+  const labels = new Set(["待分类", "review", "needs review", "ungrouped"]);
+  return labels.has(normalizeLabel(group?.title)) || labels.has(normalizeLabel(group?.groupKey));
+}
+
+function normalizeLabel(value) {
+  return String(value || "")
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, " ");
 }
 
 function buildTabOrder(inventory) {
