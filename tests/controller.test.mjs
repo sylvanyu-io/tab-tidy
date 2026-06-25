@@ -77,6 +77,39 @@ test("analyze/apply/undo groups only the current window by default", async () =>
   assert.equal((await chrome.tabs.get(11)).groupId, -1);
 });
 
+test("window-scoped jobs and undo state do not overwrite another window", async () => {
+  const chrome = createFakeChrome({
+    windows: [
+      {
+        id: 1,
+        focused: true,
+        tabs: [
+          { id: 10, title: "GitHub pull request", url: "https://github.com/acme/repo/pull/1", active: true },
+          { id: 11, title: "OpenAI API docs", url: "https://platform.openai.com/docs" }
+        ]
+      },
+      {
+        id: 2,
+        tabs: [
+          { id: 20, title: "Chrome extension docs", url: "https://developer.chrome.com/docs/extensions", active: true },
+          { id: 21, title: "Vite docs", url: "https://vite.dev/guide/" }
+        ]
+      }
+    ]
+  });
+
+  const firstJob = await analyzeTabs(chrome, FAKE_PLANNER_SETTINGS, { windowId: 1 });
+  const secondJob = await analyzeTabs(chrome, FAKE_PLANNER_SETTINGS, { windowId: 2 });
+
+  assert.equal((await getLastJob(chrome, 1)).operationId, firstJob.operationId);
+  assert.equal((await getLastJob(chrome, 2)).operationId, secondJob.operationId);
+  assert.equal((await canUndoLastApply(chrome)).canUndo, false);
+
+  await applyLastPlan(chrome, { windowId: 1 });
+  assert.equal((await canUndoLastApply(chrome, 1)).canUndo, true);
+  assert.equal((await canUndoLastApply(chrome, 2)).canUndo, false);
+});
+
 test("current-window analysis ignores invalid invocation window ids", async () => {
   const chrome = createFakeChrome({
     windows: [
@@ -293,7 +326,7 @@ test("current-window apply refuses to drift to another window after preview", as
   await chrome.windows.remove(1);
   chrome.__state.windows.get(2).focused = true;
 
-  await assert.rejects(() => applyLastPlan(chrome), /预览中的当前窗口已关闭，请重新生成方案。/);
+  await assert.rejects(() => applyLastPlan(chrome, { windowId: 1 }), /预览中的当前窗口已关闭，请重新生成方案。/);
   assert.equal((await chrome.tabs.get(20)).groupId, -1);
 });
 
@@ -1248,9 +1281,10 @@ test("canceling during preview cannot be overwritten by completion", async () =>
 
   const originalSet = chrome.storage.local.set;
   let issuedCancel = false;
+  const activeJobKey = `${STORAGE_KEYS.activeJob}:1`;
   chrome.storage.local.set = async (items) => {
     await originalSet(items);
-    const activeJob = items[STORAGE_KEYS.activeJob];
+    const activeJob = items[activeJobKey] || items[STORAGE_KEYS.activeJob];
     if (activeJob?.phase === "preview" && !issuedCancel) {
       issuedCancel = true;
       await cancelActiveJob(chrome);
@@ -1288,7 +1322,7 @@ test("clearAnalysisState removes terminal previews but preserves running jobs", 
   assert.equal(await getActiveJob(chrome), null);
   assert.equal(await getLastJob(chrome), null);
 
-  chrome.__state.storage[STORAGE_KEYS.activeJob] = {
+  chrome.__state.storage[`${STORAGE_KEYS.activeJob}:1`] = {
     operationId: "running-test",
     status: "running",
     phase: "planning",
@@ -1296,7 +1330,7 @@ test("clearAnalysisState removes terminal previews but preserves running jobs", 
     message: "正在整理"
   };
   await assert.rejects(() => clearAnalysisState(chrome), /正在整理中/);
-  assert.equal(chrome.__state.storage[STORAGE_KEYS.activeJob].status, "running");
+  assert.equal(chrome.__state.storage[`${STORAGE_KEYS.activeJob}:1`].status, "running");
 });
 
 async function waitForActiveJob(chrome, predicate) {

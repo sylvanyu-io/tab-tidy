@@ -405,6 +405,7 @@ let pageSamplingOriginRefreshTimer = null;
 let progressPollTimer = null;
 let mockActiveJob = null;
 let mockLastJob = null;
+let panelWindowId = null;
 const generatedCopyByOperation = new Map();
 const generatedCopyRequests = new Set();
 
@@ -412,6 +413,7 @@ init().catch((error) => setStatus(error.message, true));
 
 async function init() {
   applyUiLanguage();
+  panelWindowId = await resolveInvocationWindowId();
   bindEvents();
   bindSettingSwitches();
   bindChoiceGroups();
@@ -1877,15 +1879,23 @@ function hostPermissionPattern(rawUrl) {
 }
 
 async function sendMessage(message) {
+  const payload = shouldAttachWindowId(message) && !Number.isInteger(message?.windowId) && Number.isInteger(panelWindowId)
+    ? { ...message, windowId: panelWindowId }
+    : message;
   if (!globalThis.chrome?.runtime?.sendMessage) {
-    return mockMessage(message);
+    return mockMessage(payload);
   }
 
-  const response = await chrome.runtime.sendMessage(message);
+  const response = await chrome.runtime.sendMessage(payload);
   if (!response?.ok) {
     throw new Error(response?.error || "Extension request failed.");
   }
   return response.result;
+}
+
+function shouldAttachWindowId(message) {
+  if (!message?.type) return false;
+  return message.type.startsWith("tabs:") || message.type === "progressCopy:generate";
 }
 
 async function resolveInvocationWindowId() {

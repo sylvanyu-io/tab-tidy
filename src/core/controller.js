@@ -33,6 +33,57 @@ const PROGRESS_COPY_TIMEOUT_MS = 12_000;
 const PAGE_SAMPLE_CONCURRENCY = 6;
 const PAGE_SAMPLE_TIMEOUT_MS = 1800;
 
+function scopedStorageKey(baseKey, windowId) {
+  return `${baseKey}:${normalizeWindowScope(windowId)}`;
+}
+
+function normalizeWindowScope(windowId) {
+  return Number.isInteger(windowId) && windowId > 0 ? String(windowId) : "global";
+}
+
+async function resolveStateWindowId(chromeApi, requestedWindowId = null) {
+  if (Number.isInteger(requestedWindowId) && requestedWindowId > 0) {
+    return requestedWindowId;
+  }
+
+  if (chromeApi.tabs?.query) {
+    const activeTabs = await chromeApi.tabs.query({ active: true, lastFocusedWindow: true }).catch(() => []);
+    const [activeTab] = activeTabs || [];
+    if (Number.isInteger(activeTab?.windowId)) {
+      return activeTab.windowId;
+    }
+  }
+
+  if (chromeApi.windows?.getCurrent) {
+    const currentWindow = await chromeApi.windows.getCurrent().catch(() => null);
+    if (Number.isInteger(currentWindow?.id)) {
+      return currentWindow.id;
+    }
+  }
+
+  return null;
+}
+
+async function getScopedLocal(chromeApi, baseKey, windowId, fallback = null) {
+  const resolvedWindowId = await resolveStateWindowId(chromeApi, windowId);
+  if (!Number.isInteger(resolvedWindowId)) return fallback;
+  return getLocal(chromeApi, scopedStorageKey(baseKey, resolvedWindowId), fallback);
+}
+
+async function setScopedLocal(chromeApi, baseKey, windowId, value) {
+  const resolvedWindowId = await resolveStateWindowId(chromeApi, windowId);
+  if (!Number.isInteger(resolvedWindowId)) {
+    throw new Error("Unable to resolve the current window for this operation.");
+  }
+  return setLocal(chromeApi, scopedStorageKey(baseKey, resolvedWindowId), value);
+}
+
+async function removeScopedLocal(chromeApi, baseKey, windowId) {
+  const resolvedWindowId = await resolveStateWindowId(chromeApi, windowId);
+  if (!Number.isInteger(resolvedWindowId)) return;
+  await removeLocal(chromeApi, scopedStorageKey(baseKey, resolvedWindowId));
+}
+
 export async function handleRuntimeMessage(chromeApi, message) {
   switch (message?.type) {
     case "settings:get":
@@ -44,13 +95,13 @@ export async function handleRuntimeMessage(chromeApi, message) {
     case "tabs:analyze":
       return analyzeTabs(chromeApi, message.settings, { windowId: message.windowId }, message.persistedSettings);
     case "tabs:getActiveJob":
-      return getActiveJob(chromeApi);
+      return getActiveJob(chromeApi, message.windowId);
     case "tabs:getLastJob":
-      return getLastJob(chromeApi);
+      return getLastJob(chromeApi, message.windowId);
     case "tabs:clearAnalysisState":
-      return clearAnalysisState(chromeApi);
+      return clearAnalysisState(chromeApi, message.windowId);
     case "tabs:cancelActiveJob":
-      return cancelActiveJob(chromeApi);
+      return cancelActiveJob(chromeApi, message.windowId);
     case "progressCopy:generate":
       return generateProgressCopy(chromeApi, message);
     case "activity:getOverview":
@@ -59,14 +110,15 @@ export async function handleRuntimeMessage(chromeApi, message) {
       return getActivityOverview(chromeApi, { rangeMs: message.rangeMs, includeIncognitoTabs: settings.includeIncognitoTabs });
     case "tabs:applyLastPlan":
       return applyLastPlan(chromeApi, {
+        windowId: message.windowId,
         confirmChangedTabs: Boolean(message.confirmChangedTabs),
         confirmationToken: message.confirmationToken || "",
         confirmMultiWindow: Boolean(message.confirmMultiWindow)
       });
     case "tabs:canUndo":
-      return canUndoLastApply(chromeApi);
+      return canUndoLastApply(chromeApi, message.windowId);
     case "tabs:undoLastApply":
-      return undoLastApply(chromeApi);
+      return undoLastApply(chromeApi, message.windowId);
     default:
       throw new Error(`Unknown message type: ${message?.type || "<missing>"}`);
   }
@@ -83,21 +135,22 @@ export async function saveSettings(chromeApi, nextSettings) {
 }
 
 export async function analyzeTabs(chromeApi, rawSettings, invocation = {}, persistedSettings = null) {
-  const { operationId, abortController } = await createActiveAnalysis(chromeApi, rawSettings, invocation);
-  return runActiveAnalysis(chromeApi, rawSettings, invocation, operationId, abortController, persistedSettings);
+  const { operationId, abortController, windowId } = await createActiveAnalysis(chromeApi, rawSettings, invocation);
+  return runActiveAnalysis(chromeApi, rawSettings, { ...invocation, windowId }, operationId, abortController, persistedSettings, windowId);
 }
 
 export async function startAnalyzeTabs(chromeApi, rawSettings, invocation = {}, persistedSettings = null) {
-  const { operationId, abortController } = await createActiveAnalysis(chromeApi, rawSettings, invocation);
-  runActiveAnalysis(chromeApi, rawSettings, invocation, operationId, abortController, persistedSettings).catch(() => {});
+  const { operationId, abortController, windowId } = await createActiveAnalysis(chromeApi, rawSettings, invocation);
+  runActiveAnalysis(chromeApi, rawSettings, { ...invocation, windowId }, operationId, abortController, persistedSettings, windowId).catch(() => {});
   return { operationId };
 }
 
 async function createActiveAnalysis(chromeApi, rawSettings, invocation = {}) {
-  await assertNoRunningAnalysis(chromeApi);
+  const windowId = await resolveStateWindowId(chromeApi, invocation.windowId);
+  await assertNoRunningAnalysis(chromeApi, windowId);
   const operationId = createOperationId();
   const abortController = new AbortController();
-  activeAnalyses.set(operationId, abortController);
+  activeAnalyses.set(normalizeWindowScope(windowId), { operationId, abortController });
   await writeActiveJob(chromeApi, {
     operationId,
     status: "running",
@@ -107,14 +160,15 @@ async function createActiveAnalysis(chromeApi, rawSettings, invocation = {}) {
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
     settings: redactSettingsForJob(normalizeSettings(rawSettings)),
-    invocation
-  });
+    invocation: { ...invocation, windowId }
+  }, windowId);
 
-  return { operationId, abortController };
+  return { operationId, abortController, windowId };
 }
 
-async function runActiveAnalysis(chromeApi, rawSettings, invocation, operationId, abortController, persistedSettings = null) {
-  const reportProgress = (patch) => updateActiveJob(chromeApi, operationId, patch);
+async function runActiveAnalysis(chromeApi, rawSettings, invocation, operationId, abortController, persistedSettings = null, windowId = null) {
+  const resolvedWindowId = await resolveStateWindowId(chromeApi, windowId ?? invocation.windowId);
+  const reportProgress = (patch) => updateActiveJob(chromeApi, operationId, patch, resolvedWindowId);
 
   try {
     await reportProgress({ phase: "settings", progress: 4, message: "正在保存偏好" });
@@ -176,7 +230,7 @@ async function runActiveAnalysis(chromeApi, rawSettings, invocation, operationId
     };
 
     const storedJob = sanitizeJobForStorage(job);
-    await setLocal(chromeApi, STORAGE_KEYS.lastJob, storedJob);
+    await setScopedLocal(chromeApi, STORAGE_KEYS.lastJob, resolvedWindowId, storedJob);
     await reportProgress({
       status: "complete",
       phase: "complete",
@@ -197,28 +251,30 @@ async function runActiveAnalysis(chromeApi, rawSettings, invocation, operationId
     });
     throw new Error(message);
   } finally {
-    activeAnalyses.delete(operationId);
+    activeAnalyses.delete(normalizeWindowScope(resolvedWindowId));
   }
 }
 
-export async function getLastJob(chromeApi) {
-  return getLocal(chromeApi, STORAGE_KEYS.lastJob);
+export async function getLastJob(chromeApi, windowId = null) {
+  return getScopedLocal(chromeApi, STORAGE_KEYS.lastJob, windowId);
 }
 
-export async function clearAnalysisState(chromeApi) {
-  const job = await getLocal(chromeApi, STORAGE_KEYS.activeJob);
+export async function clearAnalysisState(chromeApi, windowId = null) {
+  const job = await getScopedLocal(chromeApi, STORAGE_KEYS.activeJob, windowId);
   if (job && !ACTIVE_JOB_TERMINAL_STATUSES.has(job.status)) {
     throw new Error("正在整理中，不能清空当前方案。");
   }
-  await removeLocal(chromeApi, STORAGE_KEYS.activeJob);
-  await removeLocal(chromeApi, STORAGE_KEYS.lastJob);
+  await removeScopedLocal(chromeApi, STORAGE_KEYS.activeJob, windowId);
+  await removeScopedLocal(chromeApi, STORAGE_KEYS.lastJob, windowId);
   return { cleared: true };
 }
 
-export async function getActiveJob(chromeApi) {
-  const job = await getLocal(chromeApi, STORAGE_KEYS.activeJob);
+export async function getActiveJob(chromeApi, windowId = null) {
+  const resolvedWindowId = await resolveStateWindowId(chromeApi, windowId);
+  const job = await getScopedLocal(chromeApi, STORAGE_KEYS.activeJob, resolvedWindowId);
   if (!job) return null;
-  if ((job.status === "running" || job.status === "canceling") && !activeAnalyses.has(job.operationId)) {
+  const activeAnalysis = activeAnalyses.get(normalizeWindowScope(resolvedWindowId));
+  if ((job.status === "running" || job.status === "canceling") && activeAnalysis?.operationId !== job.operationId) {
     return writeActiveJob(chromeApi, {
       ...job,
       status: job.status === "canceling" ? "canceled" : "error",
@@ -227,18 +283,19 @@ export async function getActiveJob(chromeApi) {
       error: job.status === "canceling" ? "" : "The background worker no longer has this active analysis.",
       finishedAt: new Date().toISOString(),
       updatedAt: new Date().toISOString()
-    });
+    }, resolvedWindowId);
   }
   return job;
 }
 
-export async function cancelActiveJob(chromeApi) {
-  const job = await getLocal(chromeApi, STORAGE_KEYS.activeJob);
+export async function cancelActiveJob(chromeApi, windowId = null) {
+  const resolvedWindowId = await resolveStateWindowId(chromeApi, windowId);
+  const job = await getScopedLocal(chromeApi, STORAGE_KEYS.activeJob, resolvedWindowId);
   if (!job || ACTIVE_JOB_TERMINAL_STATUSES.has(job.status)) {
     return { canceled: false, job: job || null };
   }
 
-  const controller = activeAnalyses.get(job.operationId);
+  const controller = activeAnalyses.get(normalizeWindowScope(resolvedWindowId))?.abortController;
   const nextJob = await writeActiveJob(chromeApi, {
     ...job,
     status: "canceled",
@@ -247,7 +304,7 @@ export async function cancelActiveJob(chromeApi) {
     error: "",
     finishedAt: new Date().toISOString(),
     updatedAt: new Date().toISOString()
-  });
+  }, resolvedWindowId);
   controller?.abort();
   return { canceled: Boolean(controller), job: nextJob };
 }
@@ -257,7 +314,7 @@ export async function generateProgressCopy(chromeApi, request = {}) {
     throw new Error("Fetch is not available for progress copy generation.");
   }
 
-  const activeJob = await getActiveJob(chromeApi);
+  const activeJob = await getActiveJob(chromeApi, request.windowId);
   const installId = await getOrCreateInstallId(chromeApi);
   const languageMode = normalizeProgressLanguage(request.languageMode || activeJob?.settings?.languageMode);
   const body = {
@@ -317,7 +374,8 @@ export async function applyLastPlan(chromeApi, options = {}) {
 }
 
 async function applyLastPlanLocked(chromeApi, options = {}) {
-  const job = await getLocal(chromeApi, STORAGE_KEYS.lastJob);
+  const resolvedWindowId = await resolveStateWindowId(chromeApi, options.windowId);
+  const job = await getScopedLocal(chromeApi, STORAGE_KEYS.lastJob, resolvedWindowId);
   if (!job) throw new Error("No analyzed plan is available.");
   if (!job.validation?.ok) {
     throw new Error(`Cannot apply an invalid plan: ${(job.validation?.errors || []).join(" ")}`);
@@ -356,7 +414,7 @@ async function applyLastPlanLocked(chromeApi, options = {}) {
   }
 
   const rollbackSnapshot = await createRollbackSnapshot(chromeApi, inventoryForApply, job.settings);
-  await setLocal(chromeApi, STORAGE_KEYS.lastRollback, rollbackSnapshot);
+  await setScopedLocal(chromeApi, STORAGE_KEYS.lastRollback, resolvedWindowId, rollbackSnapshot);
 
   const { rollback, result } = await applyValidatedPlan(
     chromeApi,
@@ -364,10 +422,10 @@ async function applyLastPlanLocked(chromeApi, options = {}) {
     inventoryForApply,
     job.settings,
     rollbackSnapshot,
-    (nextRollback) => setLocal(chromeApi, STORAGE_KEYS.lastRollback, nextRollback)
+    (nextRollback) => setScopedLocal(chromeApi, STORAGE_KEYS.lastRollback, resolvedWindowId, nextRollback)
   );
-  await setLocal(chromeApi, STORAGE_KEYS.lastRollback, rollback);
-  await removeLocal(chromeApi, STORAGE_KEYS.lastJob);
+  await setScopedLocal(chromeApi, STORAGE_KEYS.lastRollback, resolvedWindowId, rollback);
+  await removeScopedLocal(chromeApi, STORAGE_KEYS.lastJob, resolvedWindowId);
   return rebaseSummary ? { ...result, rebasedPlan: rebaseSummary } : result;
 }
 
@@ -678,20 +736,22 @@ function invocationForApply(job = {}) {
   return { ...(job.invocation || {}), windowId, strictWindowId: true };
 }
 
-export async function undoLastApply(chromeApi) {
-  return enqueueBrowserMutation(() => undoLastApplyLocked(chromeApi));
+export async function undoLastApply(chromeApi, windowId = null) {
+  return enqueueBrowserMutation(() => undoLastApplyLocked(chromeApi, windowId));
 }
 
-async function undoLastApplyLocked(chromeApi) {
-  const rollback = await getLocal(chromeApi, STORAGE_KEYS.lastRollback);
+async function undoLastApplyLocked(chromeApi, windowId = null) {
+  const resolvedWindowId = await resolveStateWindowId(chromeApi, windowId);
+  const rollback = await getScopedLocal(chromeApi, STORAGE_KEYS.lastRollback, resolvedWindowId);
   if (!rollback) throw new Error("No rollback snapshot is available.");
   const result = await undoFromRollback(chromeApi, rollback);
-  await removeLocal(chromeApi, STORAGE_KEYS.lastRollback);
+  await removeScopedLocal(chromeApi, STORAGE_KEYS.lastRollback, resolvedWindowId);
   return result;
 }
 
-export async function canUndoLastApply(chromeApi) {
-  const rollback = await getLocal(chromeApi, STORAGE_KEYS.lastRollback);
+export async function canUndoLastApply(chromeApi, windowId = null) {
+  const resolvedWindowId = await resolveStateWindowId(chromeApi, windowId);
+  const rollback = await getScopedLocal(chromeApi, STORAGE_KEYS.lastRollback, resolvedWindowId);
   return { canUndo: Boolean(rollback) };
 }
 
@@ -963,8 +1023,8 @@ function safeOriginPattern(rawUrl) {
   }
 }
 
-async function assertNoRunningAnalysis(chromeApi) {
-  const job = await getActiveJob(chromeApi);
+async function assertNoRunningAnalysis(chromeApi, windowId = null) {
+  const job = await getActiveJob(chromeApi, windowId);
   if (job && !ACTIVE_JOB_TERMINAL_STATUSES.has(job.status)) {
     throw new Error("已有整理任务正在运行，请先取消或等待它完成。");
   }
@@ -994,8 +1054,8 @@ function isValidInstallId(value) {
   return /^install_[a-zA-Z0-9_-]{8,80}$/.test(String(value || ""));
 }
 
-async function updateActiveJob(chromeApi, operationId, patch) {
-  const current = await getLocal(chromeApi, STORAGE_KEYS.activeJob, {});
+async function updateActiveJob(chromeApi, operationId, patch, windowId = null) {
+  const current = await getScopedLocal(chromeApi, STORAGE_KEYS.activeJob, windowId, {});
   if (current?.operationId && current.operationId !== operationId) return current;
   if (ACTIVE_JOB_TERMINAL_STATUSES.has(current?.status)) return current;
 
@@ -1028,11 +1088,11 @@ async function updateActiveJob(chromeApi, operationId, patch) {
     status: current?.status || "running",
     ...nextPatch,
     updatedAt: new Date().toISOString()
-  });
+  }, windowId);
 }
 
-async function writeActiveJob(chromeApi, job) {
-  return setLocal(chromeApi, STORAGE_KEYS.activeJob, sanitizeActiveJob(job));
+async function writeActiveJob(chromeApi, job, windowId = null) {
+  return setScopedLocal(chromeApi, STORAGE_KEYS.activeJob, windowId, sanitizeActiveJob(job));
 }
 
 function sanitizeActiveJob(job) {
