@@ -29,6 +29,10 @@ test("page summary cache matches sanitized URL fingerprints without storing full
   const cache = chrome.__state.storage[STORAGE_KEYS.pageSummaryCache];
   assert.equal(JSON.stringify(cache).includes("token=secret"), false);
   assert.equal(JSON.stringify(cache).includes("ABCDEF1234567890"), false);
+  const entry = Object.values(cache.entries)[0];
+  assert.equal(entry.seenCount, 1);
+  assert.match(entry.firstSeenAt, /^\d{4}-\d{2}-\d{2}T/);
+  assert.match(entry.lastSeenAt, /^\d{4}-\d{2}-\d{2}T/);
 
   const cached = await cachedPageSampleForTab(chrome, {
     tabId: 10,

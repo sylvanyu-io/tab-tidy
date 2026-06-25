@@ -76,12 +76,17 @@ export async function rememberPageSummary(chromeApi, tab, sampleResult) {
 
   const now = Date.now();
   const cache = pruneCache(normalizeCache(await getLocal(chromeApi, STORAGE_KEYS.pageSummaryCache, null)), now);
+  const existing = cache.entries[key];
+  const nowIso = new Date(now).toISOString();
   cache.entries[key] = {
     key,
     origin: hostPermissionPattern(rawUrl),
     title: String(tab.title || sampleResult.sample.title || "").slice(0, 180),
-    sampledAt: new Date(now).toISOString(),
-    lastUsedAt: new Date(now).toISOString(),
+    firstSeenAt: existing?.firstSeenAt || existing?.sampledAt || nowIso,
+    lastSeenAt: nowIso,
+    seenCount: Math.min(9999, Number(existing?.seenCount || 0) + 1),
+    sampledAt: nowIso,
+    lastUsedAt: nowIso,
     sample: normalizeCachedSample(sampleResult.sample)
   };
 

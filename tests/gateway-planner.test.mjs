@@ -66,7 +66,7 @@ test("AI gateway planner posts a chat-completions JSON request", async () => {
     assert.equal(options.method, "POST");
     assert.equal(options.headers.authorization, "Bearer gateway-test-key");
     const body = JSON.parse(options.body);
-    assert.equal(body.model, "claude-sonnet-4-6");
+    assert.equal(body.model, "gpt-5.5");
     assert.equal(body.response_format.type, "json_object");
     assert.equal(body.reasoning_effort, "high");
     assert.match(body.messages[0].content, /JSON-only planner/);

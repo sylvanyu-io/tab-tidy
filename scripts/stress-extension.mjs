@@ -224,7 +224,7 @@ try {
 function buildPages(count, id) {
   const topics = [
     ["ai", "AI Research", "OpenAI model prompt agent paper benchmark embeddings"],
-    ["chrome", "Chrome Extension Docs", "Chrome tabs tabGroups action popup scripting permissions API"],
+    ["chrome", "Chrome Extension Docs", "Chrome tabs tabGroups sidePanel scripting permissions API"],
     ["project", "Project Work", "GitHub pull request issue CI deploy localhost workflow"],
     ["reading", "Reading Notes", "article blog newsletter wikipedia essay reference"],
     ["media", "Media Queue", "YouTube podcast video playlist music transcript"],
@@ -268,8 +268,9 @@ function renderPage(page) {
 async function openExtensionControl(context) {
   const worker = context.serviceWorkers()[0] || (await context.waitForEvent("serviceworker", { timeout: 10000 }));
   const pagePromise = context.waitForEvent("page");
-  // Harness entrypoint: production also opens this document in a persistent
-  // popup window from the toolbar icon.
+  // Harness entrypoint: production opens this document in Chrome's native
+  // side panel. The stress runner opens it as an extension page so Playwright
+  // can drive the controls directly.
   await worker.evaluate(async () =>
     chrome.windows.create({
       url: chrome.runtime.getURL("src/sidepanel/index.html"),

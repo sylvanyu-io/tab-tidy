@@ -5,13 +5,13 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 
-test("extension uses a native action popup", async () => {
+test("extension uses a native side panel", async () => {
   const manifest = JSON.parse(await readFile("manifest.json", "utf8"));
 
-  assert.equal(manifest.action.default_popup, "src/sidepanel/index.html");
+  assert.equal(manifest.action.default_popup, undefined);
+  assert.equal(manifest.side_panel.default_path, "src/sidepanel/index.html");
   assert.equal(manifest.background.service_worker, "src/background/service-worker.js");
-  assert.equal(manifest.side_panel, undefined);
-  assert.equal((manifest.permissions || []).includes("sidePanel"), false);
+  assert.equal((manifest.permissions || []).includes("sidePanel"), true);
   assert.deepEqual(manifest.host_permissions, ["https://cliproxy.sylvanyu.io/*"]);
   assert.deepEqual(manifest.optional_host_permissions, ["https://*/*", "http://*/*"]);
 });
@@ -27,9 +27,12 @@ test("store extension build strips content-reading permissions", async () => {
 
     const manifest = JSON.parse(await readFile(join(tempDist, "extension-store/manifest.json"), "utf8"));
     assert.equal((manifest.permissions || []).includes("activeTab"), false);
+    assert.equal((manifest.permissions || []).includes("sidePanel"), true);
     assert.equal((manifest.optional_permissions || []).includes("scripting"), false);
-    assert.deepEqual(manifest.optional_host_permissions, ["https://*/*", "http://*/*"]);
+    assert.equal(manifest.optional_host_permissions, undefined);
     assert.deepEqual(manifest.host_permissions, ["https://cliproxy.sylvanyu.io/*"]);
+    assert.equal(manifest.action.default_popup, undefined);
+    assert.equal(manifest.side_panel.default_path, "src/sidepanel/index.html");
   } finally {
     await rm(tempDist, { recursive: true, force: true });
   }

@@ -75,8 +75,8 @@
 }
 
 html {
-  width: 390px;
-  height: 560px;
+  width: 100vw;
+  height: 100vh;
   min-height: 560px;
   overflow: hidden;
 }
@@ -87,9 +87,9 @@ html {
 
 body {
   margin: 0;
-  width: 390px;
+  width: 100vw;
   min-width: 320px;
-  height: 560px;
+  height: 100vh;
   min-height: 560px;
   overflow: hidden;
   overscroll-behavior: contain;
@@ -133,7 +133,7 @@ h2,
   grid-template-rows: auto minmax(0, 1fr) auto;
   gap: 0;
   width: 100%;
-  max-width: 390px;
+  max-width: none;
   height: 100%;
   margin: 0 auto;
   padding: 8px 12px 12px;

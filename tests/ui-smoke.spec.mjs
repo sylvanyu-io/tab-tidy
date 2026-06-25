@@ -41,7 +41,7 @@ test.beforeEach(async ({ page }, testInfo) => {
   }
 });
 
-test("popup renders settings and mock preview", async ({ page }) => {
+test("control surface renders settings and mock preview", async ({ page }) => {
   await page.goto(`${baseUrl}/src/sidepanel/index.html`);
 
   await expect(page.getByRole("heading", { name: "Tab Tidy" })).toBeVisible();
@@ -60,8 +60,8 @@ test("popup renders settings and mock preview", async ({ page }) => {
       })
     )
     .toBe(true);
-  await expect.poll(() => page.evaluate(() => document.documentElement.getBoundingClientRect().height)).toBe(560);
-  await expect.poll(() => page.evaluate(() => document.body.getBoundingClientRect().height)).toBe(560);
+  await expect.poll(() => page.evaluate(() => document.documentElement.getBoundingClientRect().height)).toBe(680);
+  await expect.poll(() => page.evaluate(() => document.body.getBoundingClientRect().height)).toBe(680);
   await expect(page.locator("#analyzeBtn")).toHaveCSS("background-color", "rgb(31, 85, 255)");
   await expect(page.locator("#analyzeBtn")).toHaveCSS("border-radius", "10px");
   await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
@@ -114,7 +114,7 @@ test("popup renders settings and mock preview", async ({ page }) => {
   await expect(page.locator("#gatewayBaseUrl")).toHaveValue("");
   await expect(page.locator("#gatewayBaseUrl")).toHaveAttribute("placeholder", "不填则使用默认服务");
   await expect(page.locator("#gatewayApiKey")).toHaveAttribute("placeholder", "默认服务无需填写");
-  await expect(page.locator("#gatewayModel")).toHaveValue("claude-sonnet-4-6");
+  await expect(page.locator("#gatewayModel")).toHaveValue("gpt-5.5");
   await expect(page.locator("#gatewayCustomModelField")).toBeHidden();
   await page.locator("#gatewayModel").selectOption("custom");
   await expect(page.locator("#gatewayCustomModelField")).toBeVisible();
@@ -331,7 +331,7 @@ test("default result language follows the English UI when generating", async ({ 
   await expect.poll(() => page.evaluate(() => window.__startedSettings?.languageMode)).toBe("en-US");
 });
 
-test("popup restores a completed background preview after reopening", async ({ page }) => {
+test("side panel restores a completed background preview after reopening", async ({ page }) => {
   await page.addInitScript(() => {
     const settings = {
       organizeMode: "current_window",
@@ -432,7 +432,7 @@ test("popup restores a completed background preview after reopening", async ({ p
   await expect(page.getByRole("button", { name: "生成方案" })).toBeVisible();
 });
 
-test("popup restores a background planning error after reopening", async ({ page }) => {
+test("side panel restores a background planning error after reopening", async ({ page }) => {
   await page.addInitScript(() => {
     const settings = {
       organizeMode: "current_window",
@@ -563,7 +563,7 @@ test("preview keeps review-like groups at the bottom", async ({ page }) => {
   await expect.poll(() => page.locator(".preview .group-title").allTextContents()).toEqual(["当前项目", "待分类"]);
 });
 
-test("popup shows optimistic progress while waiting for AI", async ({ page }) => {
+test("side panel shows optimistic progress while waiting for AI", async ({ page }) => {
   await page.addInitScript(() => {
     const settings = {
       organizeMode: "current_window",
@@ -1322,7 +1322,7 @@ test("page summary range can be changed while the main toggle is off", async ({ 
   );
 });
 
-test("continuous summaries request visible-site optional access once", async ({ page }) => {
+test("continuous summaries request broad optional access once", async ({ page }) => {
   await page.addInitScript(() => {
     let settings = {
       organizeMode: "current_window",
@@ -1399,7 +1399,7 @@ test("continuous summaries request visible-site optional access once", async ({ 
   await page.locator("#continuousPageSummaries").check();
   await expect.poll(() => page.evaluate(() => window.__permissionRequests.at(-1))).toEqual({
     permissions: ["scripting"],
-    origins: ["https://docs.example/*", "https://shop.example/*"]
+    origins: ["https://*/*", "http://*/*"]
   });
   await expect.poll(() => page.evaluate(() => window.__savedSettings.at(-1)?.continuousPageSummaries)).toBe(true);
   await expect.poll(() => page.evaluate(() => window.__savedSettings.at(-1)?.pageSamplingConsentMode)).toBe(

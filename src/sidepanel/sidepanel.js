@@ -59,17 +59,17 @@ const UI_COPY = Object.freeze({
     "sampling.subtitle": "默认只读拿不准的可访问页面",
     "sampling.tooltip": "只读取标题、描述、标题层级和一小段可见文字；不会读取密码、表单内容、Cookie、本地存储或完整 HTML。休眠标签页不会被唤醒。",
     "sampling.aria": "页面摘要说明",
-    "continuous.title": "持续积累页面摘要",
-    "continuous.subtitle": "后台缓存已授权页面，之后整理更准",
-    "continuous.tooltip": "开启后会请求一次性网页读取权限；之后只在已授权、未休眠、非无痕页面上保存短摘要，方便下次更快、更准地分类。不会主动唤醒标签页。",
+    "continuous.title": "长期积累页面摘要",
+    "continuous.subtitle": "授权后自动缓存打开过的页面",
+    "continuous.tooltip": "开启后浏览器会请求网页读取权限；之后会在后台给打开过的、未休眠、非无痕页面保存短摘要，用于之后整理和时间段回顾。不会主动唤醒标签页。",
     "continuous.aria": "持续摘要说明",
     "customPrompt.label": "自定义要求",
     "customPrompt.placeholder": "例如：找工作、AI 论文、当前项目分开；拿不准的先放到待分类。",
     "advanced.summary": "更多选项",
     "switch.dissolve.title": "重新整理已有分组",
     "switch.dissolve.subtitle": "已有分组也会纳入这次整理",
-    "switch.review.title": "不确定页单独复核",
-    "switch.review.subtitle": "更保守，避免硬塞进相近主题",
+    "switch.review.title": "使用待分类分组",
+    "switch.review.subtitle": "拿不准的页面先集中放好",
     "switch.pinned.title": "包含固定标签页",
     "switch.pinned.subtitle": "会参与移动和分组",
     "switch.incognito.title": "包含无痕标签页",
@@ -97,7 +97,7 @@ const UI_COPY = Object.freeze({
     "option.currentWindow": "当前窗口",
     "option.preserveGroups": "保留",
     "option.dissolveGroups": "重新整理",
-    "option.reviewCreate": "单独复核",
+    "option.reviewCreate": "使用待分类分组",
     "option.reviewUngrouped": "放入最接近主题",
     "option.leaveEmpty": "保留空窗口",
     "option.closeEmpty": "关闭本次创建的空窗口",
@@ -198,17 +198,17 @@ const UI_COPY = Object.freeze({
     "sampling.subtitle": "Default: only unclear accessible pages",
     "sampling.tooltip": "Reads only title, description, headings, and a short visible-text excerpt. It will not read passwords, form values, cookies, local storage, or full HTML. Sleeping tabs are not awakened.",
     "sampling.aria": "Page summary details",
-    "continuous.title": "Accumulate page summaries",
-    "continuous.subtitle": "Cache authorized pages for better future organization",
-    "continuous.tooltip": "Requests one-time page-reading access. After that, it stores short summaries only for authorized, awake, non-incognito pages so future organization is faster and more accurate. It will not wake sleeping tabs.",
+    "continuous.title": "Build page memory",
+    "continuous.subtitle": "Cache pages you open after permission",
+    "continuous.tooltip": "Chrome will ask for page-reading access. After that, Tab Tidy saves short summaries for opened, awake, non-incognito pages in the background, then uses them for future organization and activity recaps. It will not wake sleeping tabs.",
     "continuous.aria": "Accumulated summary details",
     "customPrompt.label": "Custom instructions",
     "customPrompt.placeholder": "Example: keep job search, AI papers, and current projects separate; put uncertain pages in review.",
     "advanced.summary": "More options",
     "switch.dissolve.title": "Regroup existing groups",
     "switch.dissolve.subtitle": "Existing groups are included in this run",
-    "switch.review.title": "Review uncertain tabs separately",
-    "switch.review.subtitle": "More conservative; avoids forcing weak matches",
+    "switch.review.title": "Use Needs Review group",
+    "switch.review.subtitle": "Set unclear pages aside instead of forcing them",
     "switch.pinned.title": "Include pinned tabs",
     "switch.pinned.subtitle": "They may be moved and grouped",
     "switch.incognito.title": "Include incognito tabs",
@@ -236,7 +236,7 @@ const UI_COPY = Object.freeze({
     "option.currentWindow": "Current window",
     "option.preserveGroups": "Preserve",
     "option.dissolveGroups": "Regroup",
-    "option.reviewCreate": "Put in review",
+    "option.reviewCreate": "Use Needs Review group",
     "option.reviewUngrouped": "Use closest topic",
     "option.leaveEmpty": "Keep empty window",
     "option.closeEmpty": "Close the empty window created this time",
@@ -1541,20 +1541,19 @@ async function ensureContinuousSummaryPermissions() {
   }
   if (!globalThis.chrome?.permissions?.contains || !globalThis.chrome?.permissions?.request) return;
 
-  const settings = {
-    ...readSettings({ effectiveForAnalysis: true }),
-    pageContextMode: "all_granted_origins",
-    hostPermissionRequestMode: "ask_for_all_visible_origins"
-  };
-  const windowId = await resolveInvocationWindowId();
-  const origins = await collectPageSamplingOrigins(settings, windowId);
   await requireOptionalPermission(
     {
       permissions: ["scripting"],
-      origins
+      origins: continuousSummaryOrigins()
     },
     t("status.permissionContinuousSummary")
   );
+}
+
+function continuousSummaryOrigins() {
+  const optionalOrigins = globalThis.chrome?.runtime?.getManifest?.().optional_host_permissions || [];
+  const broadOrigins = optionalOrigins.filter((origin) => origin === "https://*/*" || origin === "http://*/*");
+  return broadOrigins.length ? broadOrigins : ["https://*/*", "http://*/*"];
 }
 
 async function ensurePageSamplingPermissions(settings, options = {}) {
@@ -1814,7 +1813,7 @@ async function mockMessage(message) {
       plannerProvider: "gateway",
       rememberProviderKeys: false,
       gatewayBaseUrl: "",
-      gatewayModel: "claude-sonnet-4-6",
+      gatewayModel: "gpt-5.5",
       gatewayCustomModel: "",
       gatewayThinkingIntensity: "high",
       gatewayApiKey: "",

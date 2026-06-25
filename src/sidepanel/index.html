@@ -80,17 +80,17 @@
 
             <label
               class="switch-row emphasis-toggle content-access-feature continuous-summary-toggle"
-              data-tooltip="开启后会请求一次性网页读取权限；之后只在已授权、未休眠、非无痕页面上保存短摘要，方便下次更快、更准地分类。不会主动唤醒标签页。"
+              data-tooltip="开启后浏览器会请求网页读取权限；之后会在后台给打开过的、未休眠、非无痕页面保存短摘要，用于之后整理和时间段回顾。不会主动唤醒标签页。"
             >
               <span>
                 <strong>
-                  持续积累页面摘要
+                  长期积累页面摘要
                   <i
                     id="continuousSummaryRisk"
                     class="help-tip content-access-feature"
                     tabindex="0"
                     aria-label="持续摘要说明"
-                    data-tooltip="开启后会请求一次性网页读取权限；之后只在已授权、未休眠、非无痕页面上保存短摘要，方便下次更快、更准地分类。不会主动唤醒标签页。"
+                    data-tooltip="开启后浏览器会请求网页读取权限；之后会在后台给打开过的、未休眠、非无痕页面保存短摘要，用于之后整理和时间段回顾。不会主动唤醒标签页。"
                   >
                     <svg viewBox="0 0 16 16" aria-hidden="true" focusable="false">
                       <circle cx="8" cy="8" r="6.2" />
@@ -99,7 +99,7 @@
                     </svg>
                   </i>
                 </strong>
-                <small>后台缓存已授权页面，之后整理更准</small>
+                <small>授权后自动缓存打开过的页面</small>
               </span>
               <input id="continuousPageSummaries" type="checkbox" />
             </label>
@@ -153,13 +153,13 @@
             <div class="setting-toggle-field">
               <label class="switch-row compact-switch">
                 <span>
-                  <strong>不确定页单独复核</strong>
-                  <small>更保守，避免硬塞进相近主题</small>
+                  <strong>使用待分类分组</strong>
+                  <small>拿不准的页面先集中放好</small>
                 </span>
                 <input id="createReviewGroupToggle" type="checkbox" />
               </label>
               <select id="reviewGroupMode" class="setting-source" aria-hidden="true" tabindex="-1" hidden>
-                <option value="create_review_group">单独复核</option>
+                <option value="create_review_group">使用待分类分组</option>
                 <option value="leave_review_ungrouped">放入最接近主题</option>
               </select>
             </div>
@@ -227,9 +227,9 @@
             <div class="field setting-select-row">
               <label for="gatewayModel">AI 模型</label>
               <select id="gatewayModel">
-                <option value="claude-sonnet-4-6">claude-sonnet-4-6</option>
                 <option value="gpt-5.5">gpt-5.5</option>
                 <option value="claude-opus-4-8">claude-opus-4-8</option>
+                <option value="claude-sonnet-4-6">claude-sonnet-4-6</option>
                 <option value="custom">自定义模型名</option>
               </select>
             </div>

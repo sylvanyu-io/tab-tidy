@@ -69,7 +69,7 @@ export const BUILTIN_GATEWAY_BASE_URL = "https://cliproxy.sylvanyu.io/v1";
 export const DEFAULT_GATEWAY_BASE_URL = "";
 const LEGACY_DEFAULT_GATEWAY_BASE_URLS = new Set([BUILTIN_GATEWAY_BASE_URL]);
 
-export const GATEWAY_MODELS = Object.freeze(["claude-sonnet-4-6", "gpt-5.5", "claude-opus-4-8"]);
+export const GATEWAY_MODELS = Object.freeze(["gpt-5.5", "claude-opus-4-8", "claude-sonnet-4-6"]);
 export const GATEWAY_CUSTOM_MODEL_VALUE = "custom";
 const MAX_CUSTOM_GATEWAY_MODEL_LENGTH = 160;
 
@@ -114,7 +114,7 @@ export const DEFAULT_SETTINGS = Object.freeze({
   plannerProvider: PLANNER_PROVIDERS.GATEWAY,
   rememberProviderKeys: false,
   gatewayBaseUrl: DEFAULT_GATEWAY_BASE_URL,
-  gatewayModel: "claude-sonnet-4-6",
+  gatewayModel: "gpt-5.5",
   gatewayCustomModel: "",
   gatewayThinkingIntensity: THINKING_INTENSITIES.HIGH,
   gatewayApiKey: ""
