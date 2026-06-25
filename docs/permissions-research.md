@@ -63,6 +63,7 @@ Notes:
 - Do not ask for all site access during install.
 - The toolbar action opens the native side panel. Page-content permission prompts are requested from the explicit page-summary switch, not during long-running organization jobs.
 - Background page sampling must never call `chrome.permissions.request()`; it samples already authorized pages and falls back to metadata-only for the rest.
+- Long-term memory is best-effort. MV3 service workers are suspended by Chrome, so the extension records activity when it is woken by startup, tab/window events, alarms, or explicit side-panel actions. It must not promise complete browsing history.
 
 ## Page Sampling Modes
 
@@ -107,6 +108,15 @@ The UI should offer session-only acknowledgement and persistent acknowledgement.
 - If permission is missing, return a structured `permission_required` result instead of failing the job.
 - The model can ask for page samples, but the runtime decides whether sampling is allowed.
 - Metadata-only planning must continue to work even when all page sampling is denied.
+
+## Local Activity Memory
+
+When long-term page memory is enabled, the extension stores two local caches in `chrome.storage.local`:
+
+- `semanticTabAgent.pageSummaryCache`: reusable short page summaries for permitted pages.
+- `semanticTabAgent.pageActivityCache`: first-seen and last-seen page metadata for activity recap and old-tab candidates.
+
+The activity cache stores sanitized URLs, titles, hostnames, timestamps, and compact summary metadata. It does not store full query strings, URL hashes, form values, cookies, local storage, full HTML, or full visible text. Turning off long-term memory stops future capture but keeps existing local records for recap until a separate clear-history control exists.
 
 ## Harness Coverage
 

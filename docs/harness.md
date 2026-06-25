@@ -128,6 +128,8 @@ Required scenarios:
 - metadata-only mode needs no page host permission;
 - page sampling is blocked until the risk warning is acknowledged;
 - the main page-summary opt-in requests `scripting` and visible-site origins before analysis starts, while long-term summary memory can request broad optional host access after explicit activation;
+- long-term activity memory records first-seen and last-seen metadata without closing tabs;
+- time recap and old-tab candidates read local cache only and must not mutate browser state;
 - the consumer UI does not expose `active_tab_only`; it should sample as many eligible authorized pages as possible;
 - session-only acknowledgement expires after the job/session boundary;
 - persistent acknowledgement can be revoked in settings;

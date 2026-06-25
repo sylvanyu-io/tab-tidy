@@ -13,6 +13,7 @@ Implemented:
 - Metadata-only inventory and URL sanitization.
 - Existing native group preserve/dissolve switch.
 - Page sampling off by default with explicit consent and permission gates.
+- Long-term page memory is opt-in, local, best-effort, and does not claim complete browser history.
 - AI gateway planner, with an offline fake planner kept for automated harnesses.
 - Local schema validation before every browser mutation.
 - Low-confidence groups below the apply threshold are rejected; the planner must
