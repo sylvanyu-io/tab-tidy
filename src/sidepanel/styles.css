@@ -147,6 +147,7 @@ h2,
 }
 
 .app-shell[data-flow-state="preview"] .launch-panel,
+.app-shell[data-flow-state="preview"] .activity-panel,
 .app-shell[data-flow-state="preview"] .advanced-settings {
   display: none;
 }
@@ -326,6 +327,7 @@ h2 {
 
 .launch-panel,
 .preview,
+.activity-panel,
 .advanced-settings {
   display: grid;
   gap: 10px;
@@ -342,6 +344,102 @@ h2 {
 
 .advanced-settings {
   padding: 0 2px 4px;
+}
+
+.activity-panel {
+  padding: 0 2px;
+}
+
+.activity-panel[open] {
+  padding-bottom: 4px;
+}
+
+.activity-inner {
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+  background: color-mix(in srgb, var(--surface) 82%, transparent);
+  border: 1px solid color-mix(in srgb, var(--line) 34%, transparent);
+  border-radius: var(--radius-md);
+  box-shadow: var(--control-shadow);
+}
+
+.activity-copy {
+  display: grid;
+  gap: 2px;
+}
+
+.activity-copy strong {
+  font-size: 13px;
+}
+
+.activity-copy small,
+.activity-section small {
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.35;
+}
+
+.activity-range {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.activity-range button {
+  min-height: 32px;
+  color: var(--text);
+  background: color-mix(in srgb, var(--surface-soft) 60%, var(--surface));
+  border: 1px solid color-mix(in srgb, var(--line) 38%, transparent);
+  border-radius: 999px;
+  box-shadow: inset 0 -1px 0 rgba(42, 38, 31, 0.08);
+  font-weight: 820;
+  cursor: pointer;
+}
+
+.activity-range button:hover {
+  color: var(--primary);
+  border-color: color-mix(in srgb, var(--primary) 46%, var(--line));
+}
+
+.activity-result {
+  min-height: 42px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.activity-result-content {
+  display: grid;
+  gap: 10px;
+}
+
+.activity-result-content > strong {
+  color: var(--primary);
+  line-height: 1.35;
+}
+
+.activity-section {
+  display: grid;
+  gap: 3px;
+}
+
+.activity-section strong {
+  color: var(--text);
+  font-size: 12px;
+}
+
+.activity-section span,
+.activity-section li {
+  color: var(--muted);
+  line-height: 1.4;
+}
+
+.activity-section ul {
+  display: grid;
+  gap: 3px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
 }
 
 .section-heading,

@@ -126,6 +126,22 @@
           </div>
         </section>
 
+        <details class="activity-panel">
+          <summary>时间回顾</summary>
+          <div class="activity-inner">
+            <div class="activity-copy">
+              <strong>看看最近在忙什么</strong>
+              <small>根据本机缓存的页面记录生成；不会关闭标签页。</small>
+            </div>
+            <div class="activity-range" role="group" aria-label="回顾时间范围">
+              <button type="button" data-activity-range="86400000">1 天</button>
+              <button type="button" data-activity-range="604800000">7 天</button>
+              <button type="button" data-activity-range="2592000000">30 天</button>
+            </div>
+            <div id="activityResult" class="activity-result empty">还没有回顾。</div>
+          </div>
+        </details>
+
         <details class="advanced-settings">
           <summary>更多选项</summary>
           <select id="targetWindowMode" class="setting-source" aria-hidden="true" tabindex="-1" hidden>

@@ -63,6 +63,23 @@ const UI_COPY = Object.freeze({
     "continuous.subtitle": "授权后自动缓存打开过的页面",
     "continuous.tooltip": "开启后浏览器会请求网页读取权限；之后会在后台给打开过的、未休眠、非无痕页面保存短摘要，用于之后整理和时间段回顾。不会主动唤醒标签页。",
     "continuous.aria": "持续摘要说明",
+    "activity.summary": "时间回顾",
+    "activity.title": "看看最近在忙什么",
+    "activity.subtitle": "根据本机缓存的页面记录生成；不会关闭标签页。",
+    "activity.rangeAria": "回顾时间范围",
+    "activity.day": "1 天",
+    "activity.week": "7 天",
+    "activity.month": "30 天",
+    "activity.empty": "还没有回顾。",
+    "activity.loading": "正在整理时间回顾",
+    "activity.none": "这段时间还没有足够记录。开启长期积累后会越来越准。",
+    "activity.coverage": "已记录 {entries} 个页面，其中 {sampled} 个有页面摘要。",
+    "activity.focus": "高频线索",
+    "activity.sites": "常见站点",
+    "activity.recent": "最近页面",
+    "activity.stale": "旧标签页候选",
+    "activity.staleHint": "只提示，不会自动关闭。首次见到或最近见到时间来自插件本机记录。",
+    "activity.noStale": "暂时没有明显旧标签页候选。",
     "customPrompt.label": "自定义要求",
     "customPrompt.placeholder": "例如：找工作、AI 论文、当前项目分开；拿不准的先放到待分类。",
     "advanced.summary": "更多选项",
@@ -202,6 +219,23 @@ const UI_COPY = Object.freeze({
     "continuous.subtitle": "Cache pages you open after permission",
     "continuous.tooltip": "Chrome will ask for page-reading access. After that, Tab Tidy saves short summaries for opened, awake, non-incognito pages in the background, then uses them for future organization and activity recaps. It will not wake sleeping tabs.",
     "continuous.aria": "Accumulated summary details",
+    "activity.summary": "Activity recap",
+    "activity.title": "See what you have been doing",
+    "activity.subtitle": "Generated from local page memory. It never closes tabs.",
+    "activity.rangeAria": "Recap time range",
+    "activity.day": "1 day",
+    "activity.week": "7 days",
+    "activity.month": "30 days",
+    "activity.empty": "No recap yet.",
+    "activity.loading": "Preparing activity recap",
+    "activity.none": "Not enough records in this range yet. Page memory gets better over time.",
+    "activity.coverage": "Tracked {entries} pages, including {sampled} with page summaries.",
+    "activity.focus": "Frequent clues",
+    "activity.sites": "Common sites",
+    "activity.recent": "Recent pages",
+    "activity.stale": "Older tab candidates",
+    "activity.staleHint": "Suggestions only. Tab Tidy will not close anything automatically. Dates come from local extension memory.",
+    "activity.noStale": "No obvious older tab candidates yet.",
     "customPrompt.label": "Custom instructions",
     "customPrompt.placeholder": "Example: keep job search, AI papers, and current projects separate; put uncertain pages in review.",
     "advanced.summary": "More options",
@@ -355,7 +389,9 @@ const nodes = {
   previewRoot: document.querySelector("#previewRoot"),
   detailsRoot: document.querySelector("#detailsRoot"),
   detailsText: document.querySelector("#detailsText"),
-  gatewayCustomModelField: document.querySelector("#gatewayCustomModelField")
+  gatewayCustomModelField: document.querySelector("#gatewayCustomModelField"),
+  activityPanel: document.querySelector(".activity-panel"),
+  activityResult: document.querySelector("#activityResult")
 };
 
 let uiLanguage = readStoredUiLanguage() || browserUiLanguage();
@@ -444,6 +480,9 @@ function bindEvents() {
   nodes.applyBtn.addEventListener("click", applyLastPlan);
   nodes.undoBtn.addEventListener("click", undoLastApply);
   nodes.uiLanguageToggle?.addEventListener("click", toggleUiLanguage);
+  document.querySelectorAll("[data-activity-range]").forEach((button) => {
+    button.addEventListener("click", () => loadActivityOverview(Number(button.dataset.activityRange)));
+  });
 }
 
 function t(key, params = {}) {
@@ -490,6 +529,14 @@ function applyUiLanguage() {
   setTooltip("#continuousPageSummaries", "continuous.tooltip");
   setAttribute("#samplingRisk", "aria-label", t("sampling.aria"));
   setAttribute("#continuousSummaryRisk", "aria-label", t("continuous.aria"));
+  setText(".activity-panel > summary", t("activity.summary"));
+  setText(".activity-copy strong", t("activity.title"));
+  setText(".activity-copy small", t("activity.subtitle"));
+  setAttribute(".activity-range", "aria-label", t("activity.rangeAria"));
+  setText('[data-activity-range="86400000"]', t("activity.day"));
+  setText('[data-activity-range="604800000"]', t("activity.week"));
+  setText('[data-activity-range="2592000000"]', t("activity.month"));
+  if (nodes.activityResult?.classList.contains("empty")) nodes.activityResult.textContent = t("activity.empty");
 
   setText('label[for="customPrompt"]', t("customPrompt.label"));
   setAttribute("#customPrompt", "placeholder", t("customPrompt.placeholder"));
@@ -1129,6 +1176,88 @@ function renderError(error) {
   syncActionState();
 }
 
+async function loadActivityOverview(rangeMs) {
+  if (!nodes.activityResult) return;
+  nodes.activityResult.className = "activity-result";
+  nodes.activityResult.textContent = t("activity.loading");
+  try {
+    const overview = await sendMessage({ type: "activity:getOverview", rangeMs });
+    renderActivityOverview(overview);
+  } catch (error) {
+    nodes.activityResult.className = "activity-result error-panel";
+    nodes.activityResult.textContent = error.message;
+  }
+}
+
+function renderActivityOverview(overview = {}) {
+  const recap = overview.recap || {};
+  if (!recap.entries) {
+    nodes.activityResult.className = "activity-result empty";
+    nodes.activityResult.textContent = t("activity.none");
+    return;
+  }
+
+  const wrapper = document.createElement("div");
+  wrapper.className = "activity-result-content";
+  wrapper.append(
+    activityLine(t("activity.coverage", { entries: recap.entries, sampled: recap.sampledEntries || 0 }), "strong"),
+    activitySection(t("activity.focus"), (recap.topTerms || []).map((item) => item.value).join(" · ")),
+    activitySection(t("activity.sites"), (recap.topHosts || []).map((item) => item.value).join(" · ")),
+    activityList(t("activity.recent"), (recap.recentPages || []).slice(0, 5).map((page) => `${page.title}${page.hostname ? ` · ${page.hostname}` : ""}`)),
+    activityStaleSection(overview.staleTabs || [])
+  );
+  nodes.activityResult.className = "activity-result";
+  nodes.activityResult.replaceChildren(wrapper);
+}
+
+function activityLine(text, tagName = "p") {
+  const element = document.createElement(tagName);
+  element.textContent = text;
+  return element;
+}
+
+function activitySection(title, text) {
+  const section = document.createElement("div");
+  section.className = "activity-section";
+  section.append(activityLine(title, "strong"), activityLine(text || "—", "span"));
+  return section;
+}
+
+function activityList(title, items) {
+  const section = document.createElement("div");
+  section.className = "activity-section";
+  const list = document.createElement("ul");
+  for (const item of items.length ? items : ["—"]) {
+    const li = document.createElement("li");
+    li.textContent = item;
+    list.append(li);
+  }
+  section.append(activityLine(title, "strong"), list);
+  return section;
+}
+
+function activityStaleSection(staleTabs) {
+  const section = document.createElement("div");
+  section.className = "activity-section stale-section";
+  const hint = document.createElement("small");
+  hint.textContent = t("activity.staleHint");
+  const list = document.createElement("ul");
+  const items = staleTabs.slice(0, 5);
+  if (!items.length) {
+    const empty = document.createElement("li");
+    empty.textContent = t("activity.noStale");
+    list.append(empty);
+  } else {
+    for (const tab of items) {
+      const li = document.createElement("li");
+      li.textContent = `${tab.title || tab.hostname || "Untitled"} · ${formatRelativeAge(tab.ageMs)}`;
+      list.append(li);
+    }
+  }
+  section.append(activityLine(t("activity.stale"), "strong"), hint, list);
+  return section;
+}
+
 function resetToSetup() {
   lastPreview = null;
   lastCanApply = false;
@@ -1417,6 +1546,13 @@ function formatElapsedSeconds(totalSeconds) {
   const seconds = totalSeconds % 60;
   if (uiLanguage === "en-US") return seconds ? `${minutes}m ${seconds}s` : `${minutes}m`;
   return seconds ? `${minutes}分${seconds}秒` : `${minutes}分`;
+}
+
+function formatRelativeAge(ms) {
+  const days = Math.max(0, Math.floor(Number(ms || 0) / (24 * 60 * 60 * 1000)));
+  if (days >= 1) return uiLanguage === "en-US" ? `first seen ${days}d ago` : `首次见到约 ${days} 天前`;
+  const hours = Math.max(1, Math.floor(Number(ms || 0) / (60 * 60 * 1000)));
+  return uiLanguage === "en-US" ? `first seen ${hours}h ago` : `首次见到约 ${hours} 小时前`;
 }
 
 function isLiveJob(job) {
@@ -1851,6 +1987,35 @@ async function mockMessage(message) {
     return { cleared: true };
   }
   if (message.type === "tabs:cancelActiveJob") return { canceled: false, job: mockActiveJob };
+  if (message.type === "activity:getOverview") {
+    return {
+      rangeMs: message.rangeMs || 604800000,
+      generatedAt: new Date().toISOString(),
+      cache: { entries: 18, sampledEntries: 7 },
+      openTabs: { total: 24, tracked: 18, staleCandidates: 2 },
+      recap: {
+        entries: 18,
+        sampledEntries: 7,
+        topHosts: [
+          { value: "github.com", count: 5 },
+          { value: "developer.chrome.com", count: 3 }
+        ],
+        topTerms: [
+          { value: "extensions", count: 4 },
+          { value: "tabs", count: 3 },
+          { value: "agent", count: 2 }
+        ],
+        recentPages: [
+          { title: "Chrome extensions API", hostname: "developer.chrome.com", seenCount: 3, hasSummary: true },
+          { title: "Current project issues", hostname: "github.com", seenCount: 2, hasSummary: false }
+        ]
+      },
+      staleTabs: [
+        { title: "Old comparison notes", hostname: "example.com", ageMs: 16 * 24 * 60 * 60 * 1000 },
+        { title: "Previous research", hostname: "example.org", ageMs: 22 * 24 * 60 * 60 * 1000 }
+      ]
+    };
+  }
   throw new Error(`Mock does not implement ${message.type}`);
 }
 
