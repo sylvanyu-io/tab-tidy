@@ -36,8 +36,8 @@ export async function cachedPageSampleForTab(chromeApi, tabDescriptor) {
 export async function capturePageSummaryIfAllowed(chromeApi, tab, rawSettings = {}) {
   const settings = normalizeSettings(rawSettings);
   if (!settings.continuousPageSummaries) return { status: "disabled", reason: "Continuous summaries are off." };
-  await rememberOpenTabActivity(chromeApi, tab).catch(() => null);
   if (!isSafeBackgroundTab(tab)) return { status: "skipped", reason: "Tab is not eligible for background summary capture." };
+  await rememberOpenTabActivity(chromeApi, tab).catch(() => null);
   if (!chromeApi.permissions?.contains || !chromeApi.scripting?.executeScript) {
     return { status: "blocked", reason: "Required permissions or scripting API are unavailable." };
   }

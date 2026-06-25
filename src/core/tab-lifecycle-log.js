@@ -13,12 +13,15 @@ let lifecycleWriteQueue = Promise.resolve();
 export async function rememberTabLifecycle(chromeApi, type, tab, options = {}) {
   const normalizedTab = normalizeLifecycleTab(tab);
   if (!normalizedTab) return null;
+  if (normalizedTab.incognito && !options.includeIncognitoTabs) return null;
   const now = normalizeNow(options.now);
   return mutateLifecycleLog(chromeApi, now, (log) => upsertOpenSession(log, normalizedTab, type || "tab_seen", now, options));
 }
 
 export async function rememberTabsLifecycle(chromeApi, tabs = [], options = {}) {
-  const normalizedTabs = tabs.map(normalizeLifecycleTab).filter(Boolean);
+  const normalizedTabs = tabs
+    .map(normalizeLifecycleTab)
+    .filter((tab) => tab && (!tab.incognito || options.includeIncognitoTabs));
   if (!normalizedTabs.length) return { stored: 0 };
   const now = normalizeNow(options.now);
   return mutateLifecycleLog(chromeApi, now, (log) => {
@@ -55,7 +58,7 @@ export async function recordTabClosed(chromeApi, tabId, removeInfo = {}, options
 
 export async function reconcileTabLifecycle(chromeApi, options = {}) {
   const now = normalizeNow(options.now);
-  const currentTabs = await collectCurrentLifecycleTabs(chromeApi);
+  const currentTabs = await collectCurrentLifecycleTabs(chromeApi, options);
   return mutateLifecycleLog(chromeApi, now, (log) => {
     const currentTabIds = new Set(currentTabs.map((tab) => String(tab.id)));
     let observed = 0;
@@ -213,9 +216,12 @@ function closeSession(log, session, now, reason) {
   });
 }
 
-async function collectCurrentLifecycleTabs(chromeApi) {
+async function collectCurrentLifecycleTabs(chromeApi, options = {}) {
   const windows = await chromeApi.windows?.getAll?.({ populate: true, windowTypes: ["normal"] }).catch(() => []);
-  return windows.flatMap((window) => window.tabs || []).map(normalizeLifecycleTab).filter(Boolean);
+  return windows
+    .flatMap((window) => window.tabs || [])
+    .map(normalizeLifecycleTab)
+    .filter((tab) => tab && (!tab.incognito || options.includeIncognitoTabs));
 }
 
 function normalizeLifecycleTab(tab) {

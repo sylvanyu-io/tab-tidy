@@ -11,6 +11,7 @@ const OLD_TAB_AGE_MS = 14 * 24 * 60 * 60 * 1000;
 const OLD_TAB_IDLE_MS = 7 * 24 * 60 * 60 * 1000;
 
 export async function rememberOpenTabActivity(chromeApi, tab, sampleResult = null, options = {}) {
+  if (tab?.incognito && !options.includeIncognitoTabs) return null;
   const rawUrl = activityTabUrl(tab);
   const key = pageActivityCacheKey(rawUrl);
   if (!key) return null;
@@ -60,7 +61,7 @@ export async function getActivityOverview(chromeApi, options = {}) {
   const now = Number.isFinite(options.now) ? options.now : Date.now();
   const rangeMs = normalizeRangeMs(options.rangeMs);
   const cache = pruneActivityCache(normalizeActivityCache(await getLocal(chromeApi, STORAGE_KEYS.pageActivityCache, null)), now);
-  const currentTabs = await collectCurrentNormalTabs(chromeApi);
+  const currentTabs = await collectCurrentNormalTabs(chromeApi, options);
   const since = now - rangeMs;
   const entries = Object.values(cache.entries)
     .filter((entry) => activityTimeForRange(entry) >= since)
@@ -147,9 +148,11 @@ function activityTimeForRange(entry) {
   return [sampledAt, firstSeenAt, lastSeenAt].find(Number.isFinite) || 0;
 }
 
-async function collectCurrentNormalTabs(chromeApi) {
+async function collectCurrentNormalTabs(chromeApi, options = {}) {
   const windows = await chromeApi.windows?.getAll?.({ populate: true, windowTypes: ["normal"] }).catch(() => []);
-  return windows.flatMap((window) => window.tabs || []).filter((tab) => typeof tab.id === "number" && canSampleUrl(activityTabUrl(tab)));
+  return windows
+    .flatMap((window) => window.tabs || [])
+    .filter((tab) => typeof tab.id === "number" && (!tab.incognito || options.includeIncognitoTabs) && canSampleUrl(activityTabUrl(tab)));
 }
 
 function normalizeActivitySample(sample = {}) {

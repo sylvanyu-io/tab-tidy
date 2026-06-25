@@ -59,12 +59,15 @@ chrome.alarms?.onAlarm?.addListener((alarm) => {
 });
 
 chrome.tabs.onActivated?.addListener(({ tabId }) => {
-  chrome.tabs.get(tabId).then((tab) => rememberTabLifecycle(chrome, "tab_activated", tab)).catch((error) => console.debug(error));
+  chrome.tabs
+    .get(tabId)
+    .then((tab) => rememberTabLifecycleWithSettings("tab_activated", tab))
+    .catch((error) => console.debug(error));
   scheduleSummaryCapture(tabId);
 });
 
 chrome.tabs.onCreated?.addListener((tab) => {
-  rememberTabLifecycle(chrome, "tab_created", tab).catch((error) => console.debug(error));
+  rememberTabLifecycleWithSettings("tab_created", tab).catch((error) => console.debug(error));
 });
 
 chrome.tabs.onRemoved?.addListener((tabId, removeInfo) => {
@@ -75,7 +78,7 @@ chrome.tabs.onRemoved?.addListener((tabId, removeInfo) => {
 
 chrome.tabs.onUpdated?.addListener((tabId, changeInfo, tab) => {
   if (changeInfo.url || changeInfo.status === "complete" || changeInfo.title) {
-    rememberTabLifecycle(chrome, "tab_updated", tab).catch((error) => console.debug(error));
+    rememberTabLifecycleWithSettings("tab_updated", tab).catch((error) => console.debug(error));
   }
   if (changeInfo.status === "complete") {
     scheduleSummaryCapture(tabId);
@@ -86,7 +89,7 @@ chrome.windows.onFocusChanged?.addListener((windowId) => {
   if (windowId === chrome.windows.WINDOW_ID_NONE) return;
   chrome.tabs.query({ active: true, windowId }).then(([tab]) => {
     if (tab?.id) {
-      rememberTabLifecycle(chrome, "window_focused", tab).catch((error) => console.debug(error));
+      rememberTabLifecycleWithSettings("window_focused", tab).catch((error) => console.debug(error));
       scheduleSummaryCapture(tab.id);
     }
   }).catch((error) => console.debug(error));
@@ -159,4 +162,8 @@ async function captureSummaryForTab(tabId) {
   if (!tab) return;
   await rememberOpenTabActivity(chrome, tab).catch((error) => console.debug(error));
   await capturePageSummaryIfAllowed(chrome, tab, settings);
+}
+
+async function rememberTabLifecycleWithSettings(type, tab) {
+  return rememberTabLifecycle(chrome, type, tab);
 }
