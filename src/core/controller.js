@@ -132,12 +132,17 @@ export async function handleRuntimeMessage(chromeApi, message) {
 
 async function focusActivityTab(chromeApi, message = {}) {
   const tabId = Number(message.tabId);
-  if (!Number.isInteger(tabId)) throw new Error("Missing tab id.");
+  const languageMode = message.languageMode || "zh-CN";
+  if (!Number.isInteger(tabId)) {
+    throw new Error(localizedText(languageMode, "找不到这个标签页。请刷新清理建议。", "This tab cannot be found. Refresh cleanup suggestions."));
+  }
   const expectedWindowId = Number(message.windowId);
   const tab = await chromeApi.tabs?.get?.(tabId);
-  if (!tab) throw new Error("The tab is no longer open.");
+  if (!tab) {
+    throw new Error(localizedText(languageMode, "这个标签页已经关闭。请刷新清理建议。", "This tab has already been closed. Refresh cleanup suggestions."));
+  }
   if (Number.isInteger(expectedWindowId) && tab.windowId !== expectedWindowId) {
-    throw new Error("这个标签页已经不在原来的窗口，请重新获取清理建议。");
+    throw new Error(localizedText(languageMode, "这个标签页已经不在原来的窗口，请重新获取清理建议。", "This tab moved to another window. Refresh cleanup suggestions."));
   }
   await chromeApi.windows?.update?.(tab.windowId, { focused: true }).catch(() => null);
   await chromeApi.tabs?.update?.(tabId, { active: true });

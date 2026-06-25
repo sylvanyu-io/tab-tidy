@@ -726,6 +726,68 @@ test("side panel shows optimistic progress while waiting for AI", async ({ page 
   await expect(page.getByRole("button", { name: "取消" })).toBeVisible();
 });
 
+test("English UI localizes known background progress messages", async ({ page }) => {
+  await page.addInitScript(() => {
+    localStorage.removeItem("tabTidy.uiLanguage");
+    Object.defineProperty(navigator, "language", { get: () => "en-US" });
+    Object.defineProperty(navigator, "languages", { get: () => ["en-US"] });
+    const settings = {
+      organizeMode: "current_window",
+      targetWindowMode: "current_window",
+      existingGroupMode: "preserve_existing_groups",
+      reviewGroupMode: "create_review_group",
+      undoTargetWindowMode: "leave_empty_target_window",
+      pageContextMode: "off",
+      hostPermissionRequestMode: "never",
+      pageSamplingConsentMode: "not_acknowledged",
+      urlPrivacyMode: "sanitized_url",
+      includePinnedTabs: false,
+      includeIncognitoTabs: false,
+      collapseGroupsAfterApply: false,
+      minConfidenceToApply: 0.65,
+      maxTabsPerGroup: 40,
+      promptPreset: "conservative",
+      plannerProvider: "gateway",
+      rememberProviderKeys: false,
+      gatewayBaseUrl: "",
+      gatewayModel: "gpt-5.5",
+      gatewayThinkingIntensity: "high",
+      gatewayApiKey: "",
+      customPrompt: ""
+    };
+    window.chrome = {
+      runtime: {
+        sendMessage: async (message) => {
+          if (message.type === "settings:get") return { ok: true, result: settings };
+          if (message.type === "tabs:getActiveJob") {
+            return {
+              ok: true,
+              result: {
+                operationId: "job_topic_lanes",
+                status: "running",
+                phase: "coarse_planning",
+                progress: 55,
+                message: "已找到 6 个主题方向",
+                createdAt: new Date().toISOString(),
+                updatedAt: new Date().toISOString(),
+                tabCount: 180,
+                windowCount: 3
+              }
+            };
+          }
+          if (message.type === "progressCopy:generate") return { ok: false, error: "skip generated copy" };
+          return { ok: true, result: null };
+        }
+      }
+    };
+  });
+
+  await page.goto(`${baseUrl}/src/sidepanel/index.html`);
+  await expect(page.locator("#progressLabel")).toContainText("Found 6 topic lanes");
+  await expect(page.locator("#progressLabel")).not.toContainText("候选");
+  await expect(page.locator("#progressLabel")).not.toContainText("candidate");
+});
+
 test("default gateway permission request is narrow and compact", async ({ page }) => {
   await page.addInitScript(() => {
     const settings = {

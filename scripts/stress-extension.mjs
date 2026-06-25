@@ -57,6 +57,12 @@ try {
     const chunks = chunk(urls, Math.ceil(urls.length / windowCount));
     const createdWindows = await createTestWindows(control, chunks, baseUrl);
     await waitForTestTabs(control, baseUrl, totalTabs);
+    const sourceWindowUrl = await control.evaluate(
+      (windowId) => chrome.runtime.getURL(`src/sidepanel/index.html?sourceWindowId=${windowId}`),
+      createdWindows[0].id
+    );
+    await control.goto(sourceWindowUrl);
+    await control.waitForLoadState("domcontentloaded");
     const initial = await inspectTestTabs(control, baseUrl);
     assertEqual(initial.totalTestTabs, totalTabs, "test tab count after setup");
     assertDeepEqual(
@@ -91,17 +97,17 @@ try {
     assertEqual(allJob.preview.pageSampling.requested, 0, "metadata-only page sample count");
 
     const allApplyConfirmation = await timed("fake all-window confirmation gate", () =>
-      sendRuntime(control, { type: "tabs:applyLastPlan" })
+      sendRuntime(control, { type: "tabs:applyLastPlan", windowId: createdWindows[0].id })
     );
     assertEqual(allApplyConfirmation.requiresMultiWindowConfirmation, true, "all-window apply requires confirmation");
     const allApply = await timed("fake all-window apply", () =>
-      sendRuntime(control, { type: "tabs:applyLastPlan", confirmMultiWindow: true })
+      sendRuntime(control, { type: "tabs:applyLastPlan", windowId: createdWindows[0].id, confirmMultiWindow: true })
     );
     assertEqual(allApply.movedTabsCount, totalTabs, "all-window moved tab count");
     const afterAllApply = await inspectTestTabs(control, baseUrl);
     assertEqual(afterAllApply.windowsWithTestTabs.length, 1, "all-window apply target window count");
 
-    const allUndo = await timed("fake all-window undo", () => sendRuntime(control, { type: "tabs:undoLastApply" }));
+    const allUndo = await timed("fake all-window undo", () => sendRuntime(control, { type: "tabs:undoLastApply", windowId: createdWindows[0].id }));
     assertEqual(allUndo.restoredTabs, totalTabs, "all-window undo restored tab count");
     const afterAllUndo = await inspectTestTabs(control, baseUrl);
     assertDeepEqual(
@@ -123,8 +129,12 @@ try {
     assertEqual(currentJob.inventory.tabs.length, currentWindow.testTabCount, "current-window inventory size");
     assertEqual(currentJob.inventory.scope.windowIds.length, 1, "current-window scope size");
 
-    const currentApply = await timed("fake current-window apply", () => sendRuntime(control, { type: "tabs:applyLastPlan" }));
-    const currentUndo = await timed("fake current-window undo", () => sendRuntime(control, { type: "tabs:undoLastApply" }));
+    const currentApply = await timed("fake current-window apply", () =>
+      sendRuntime(control, { type: "tabs:applyLastPlan", windowId: currentWindow.id })
+    );
+    const currentUndo = await timed("fake current-window undo", () =>
+      sendRuntime(control, { type: "tabs:undoLastApply", windowId: currentWindow.id })
+    );
     assertEqual(currentUndo.restoredTabs, currentWindow.testTabCount, "current-window undo restored tab count");
     record("current-window apply and undo", {
       windowTabs: currentWindow.testTabCount,
@@ -408,10 +418,28 @@ async function runUiSamplingAnalyze(page, options) {
       throw new Error(`Timed out waiting for page sampling origin cache: ${error.message}; ${JSON.stringify(debug)}`);
     });
   await page.click("#analyzeBtn");
-  await page.waitForFunction(() => {
-    const text = document.querySelector("#detailsText")?.textContent || "";
-    return text.includes('"pageSamples"') && text.includes('"pageSampling"');
-  }, null, { timeout: 180000 });
+  await page
+    .waitForFunction(() => {
+      const text = document.querySelector("#detailsText")?.textContent || "";
+      return text.includes('"pageSamples"') && text.includes('"pageSampling"');
+    }, null, { timeout: 180000 })
+    .catch(async (error) => {
+      const debug = await page.evaluate(async () => {
+        const activeJobResponse = await chrome.runtime.sendMessage({ type: "tabs:getActiveJob" }).catch(() => null);
+        return {
+          status: document.querySelector("#statusText")?.textContent || "",
+          progress: document.querySelector("#progressLabel")?.textContent || "",
+          details: document.querySelector("#detailsText")?.textContent?.slice(0, 500) || "",
+          activeJob: activeJobResponse?.result || null,
+          ackSampling: document.querySelector("#ackSampling")?.checked,
+          pageContextMode: document.querySelector("#pageContextMode")?.value,
+          hostPermissionRequestMode: document.querySelector("#hostPermissionRequestMode")?.value,
+          organizeMode: document.querySelector("#organizeMode")?.value,
+          originCache: window.__semanticTabAgentPageSamplingOrigins || null
+        };
+      });
+      throw new Error(`Timed out waiting for UI sampling result: ${error.message}; ${JSON.stringify(debug)}`);
+    });
   const job = await page.evaluate(() => JSON.parse(document.querySelector("#detailsText").textContent));
   const statuses = countBy((job.inventory.pageSamples || []).map((sample) => sample.status));
   if (job.preview.pageSampling.ok !== options.expectedSamples) {

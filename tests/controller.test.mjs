@@ -102,6 +102,23 @@ test("cleanup candidate focus activates the tab without closing anything", async
   assert.equal((await chrome.tabs.query({})).length, 2);
 });
 
+test("cleanup candidate focus errors follow the requested UI language", async () => {
+  const chrome = createFakeChrome({
+    windows: [
+      {
+        id: 1,
+        focused: true,
+        tabs: [{ id: 10, title: "Moved tab", url: "https://example.com/moved", active: true }]
+      }
+    ]
+  });
+
+  await assert.rejects(
+    () => handleRuntimeMessage(chrome, { type: "activity:focusTab", tabId: 10, windowId: 2, languageMode: "en-US" }),
+    /This tab moved to another window/
+  );
+});
+
 test("window-scoped jobs and undo state do not overwrite another window", async () => {
   const chrome = createFakeChrome({
     windows: [

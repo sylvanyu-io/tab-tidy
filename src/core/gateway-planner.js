@@ -134,7 +134,7 @@ async function createHierarchicalGatewayPlan(inventory, settings, fetchImpl, opt
   await emitProgress(options, {
     phase: "coarse_planning",
     progress: 55,
-    message: `粗分完成：${coarse.buckets.length} 个候选主题`
+    message: `已找到 ${coarse.buckets.length} 个主题方向`
   });
   const finalGroups = [];
   const finalReviewTabs = [];

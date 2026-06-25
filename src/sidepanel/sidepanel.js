@@ -42,6 +42,10 @@ const UI_COPY = Object.freeze({
     "status.applyDone": "已创建 {groupCount} 个分组",
     "status.applyReviewSuffix": "，{reviewCount} 个放进「{reviewTitle}」",
     "status.undoDone": "已恢复 {count} 个标签页",
+    "status.noPlanToApply": "还没有可应用的方案，请先生成方案。",
+    "status.noRollback": "还没有可回退的记录。",
+    "status.invalidPlan": "当前方案不可用，请重新生成。",
+    "status.progressCopyFailed": "提示文案生成失败，请稍后重试。",
     "button.generate": "生成方案",
     "button.regenerate": "重新生成",
     "button.cancel": "取消",
@@ -83,7 +87,7 @@ const UI_COPY = Object.freeze({
     "activity.focusTab": "去看看",
     "activity.focusTabAria": "定位标签页：{title}",
     "activity.focused": "已定位标签页",
-    "activity.focusFailed": "标签页可能已经关闭，请刷新候选。",
+    "activity.focusFailed": "标签页可能已经关闭，请刷新清理建议。",
     "activity.firstSeen": "首次见到 {age}",
     "activity.lastActive": "最近活跃 {age}",
     "activity.seenCount": "记录 {count} 次",
@@ -171,7 +175,7 @@ const UI_COPY = Object.freeze({
     "confirm.duplicate": "{count} 个重复引用会跳过。",
     "confirm.continue": "确认继续整理吗？",
     "aiWait.planning": ["理解标题线索", "寻找相邻任务", "避开域名硬分组", "检查不确定页", "整理分组边界"],
-    "aiWait.coarse_planning": ["快速扫一遍", "寻找跨窗口主题", "切出候选大组", "标记模糊标签"],
+    "aiWait.coarse_planning": ["快速扫一遍", "寻找跨窗口主题", "拆出主题方向", "标记模糊标签"],
     "aiWait.refining": ["拆开过大的组", "复核模糊边界", "合并同一任务", "保留原始顺序"],
     "aiWait.retrying": ["修正校验问题", "补齐遗漏标签", "移除重复分配", "重新检查结构"]
   },
@@ -212,6 +216,10 @@ const UI_COPY = Object.freeze({
     "status.applyDone": "Created {groupCount} groups",
     "status.applyReviewSuffix": ", {reviewCount} added to \"{reviewTitle}\"",
     "status.undoDone": "Restored {count} tabs",
+    "status.noPlanToApply": "No plan is ready yet. Generate one first.",
+    "status.noRollback": "No rollback snapshot is available yet.",
+    "status.invalidPlan": "This plan is not ready to apply. Generate a new one.",
+    "status.progressCopyFailed": "Progress captions could not be generated. Try again later.",
     "button.generate": "Generate plan",
     "button.regenerate": "Regenerate",
     "button.cancel": "Cancel",
@@ -253,7 +261,7 @@ const UI_COPY = Object.freeze({
     "activity.focusTab": "Open",
     "activity.focusTabAria": "Find tab: {title}",
     "activity.focused": "Tab focused",
-    "activity.focusFailed": "The tab may already be closed. Refresh candidates.",
+    "activity.focusFailed": "The tab may already be closed. Refresh suggestions.",
     "activity.firstSeen": "First seen {age}",
     "activity.lastActive": "Last active {age}",
     "activity.seenCount": "Seen {count} times",
@@ -341,7 +349,7 @@ const UI_COPY = Object.freeze({
     "confirm.duplicate": "{count} duplicate references will be skipped.",
     "confirm.continue": "Continue organizing?",
     "aiWait.planning": ["Reading title clues", "Finding neighboring tasks", "Avoiding domain-only groups", "Checking uncertain pages", "Tightening group edges"],
-    "aiWait.coarse_planning": ["Scanning the tab set", "Finding cross-window topics", "Splitting candidate buckets", "Marking fuzzy tabs"],
+    "aiWait.coarse_planning": ["Scanning the tab set", "Finding cross-window topics", "Shaping topic lanes", "Marking fuzzy tabs"],
     "aiWait.refining": ["Breaking up large groups", "Reviewing fuzzy edges", "Merging one task", "Keeping tab order"],
     "aiWait.retrying": ["Fixing validation issues", "Filling missing tabs", "Removing duplicates", "Checking structure again"]
   }
@@ -875,8 +883,9 @@ async function analyze() {
     if (isCancellationError(error)) {
       setStatusKey("status.canceled");
     } else {
-      setStatus(error.message, true);
-      renderError(error);
+      const message = friendlyErrorMessage(error);
+      setStatus(message, true);
+      renderError(new Error(message));
     }
   } finally {
     stopProgressPolling();
@@ -898,11 +907,21 @@ function isCancellationError(error) {
   return /已取消整理|Cleanup canceled|canceled/i.test(String(error?.message || ""));
 }
 
+function friendlyErrorMessage(error) {
+  const message = String(error?.message || "").trim();
+  if (!message) return t("status.default");
+  if (/No analyzed plan is available/i.test(message)) return t("status.noPlanToApply");
+  if (/No rollback snapshot is available/i.test(message)) return t("status.noRollback");
+  if (/Cannot apply an invalid plan/i.test(message)) return t("status.invalidPlan");
+  if (/Progress copy generation returned invalid JSON/i.test(message)) return t("status.progressCopyFailed");
+  return message;
+}
+
 async function cancelAnalyze() {
   nodes.cancelBtn.disabled = true;
   setStatusKey("status.canceling");
   try {
-    const result = await sendMessage({ type: "tabs:cancelActiveJob" });
+    const result = await sendMessage(scopedWindowMessage({ type: "tabs:cancelActiveJob" }));
     if (result?.job) updateProgressFromJob(result.job);
     if (result?.job?.status === "canceled") {
       stopProgressPolling();
@@ -910,7 +929,7 @@ async function cancelAnalyze() {
       setStatusKey("status.canceled");
     }
   } catch (error) {
-    setStatus(error.message, true);
+    setStatus(friendlyErrorMessage(error), true);
     nodes.cancelBtn.disabled = false;
   }
 }
@@ -925,7 +944,7 @@ async function applyLastPlan() {
 
   setBusy(true, t("status.organizing"));
   try {
-    let result = await sendMessage({ type: "tabs:applyLastPlan", confirmMultiWindow });
+    let result = await sendMessage(scopedWindowMessage({ type: "tabs:applyLastPlan", confirmMultiWindow }));
     if (result?.requiresMultiWindowConfirmation) {
       const confirmed = confirm(t("confirm.applyMultiWindow"));
       if (!confirmed) {
@@ -933,7 +952,7 @@ async function applyLastPlan() {
         return;
       }
       confirmMultiWindow = true;
-      result = await sendMessage({ type: "tabs:applyLastPlan", confirmMultiWindow });
+      result = await sendMessage(scopedWindowMessage({ type: "tabs:applyLastPlan", confirmMultiWindow }));
     }
     if (result?.requiresChangedTabsConfirmation) {
       const confirmed = confirm(changedTabsConfirmationText(result.rebasedPlan));
@@ -942,12 +961,12 @@ async function applyLastPlan() {
         return;
       }
       setStatusKey("status.organizingChanged");
-      result = await sendMessage({
+      result = await sendMessage(scopedWindowMessage({
         type: "tabs:applyLastPlan",
         confirmChangedTabs: true,
         confirmationToken: result.rebasedPlan?.confirmationToken || "",
         confirmMultiWindow
-      });
+      }));
       if (result?.requiresChangedTabsConfirmation) {
         setStatusKey("status.previousFailed", {}, true);
         renderError(new Error(changedTabsConfirmationText(result.rebasedPlan)));
@@ -960,7 +979,7 @@ async function applyLastPlan() {
     resetToSetup();
     setStatus(status);
   } catch (error) {
-    setStatus(error.message, true);
+    setStatus(friendlyErrorMessage(error), true);
   } finally {
     setBusy(false);
   }
@@ -1004,12 +1023,12 @@ function applyResultStatus(result) {
 async function undoLastApply() {
   setBusy(true, t("status.undoing"));
   try {
-    const result = await sendMessage({ type: "tabs:undoLastApply" });
+    const result = await sendMessage(scopedWindowMessage({ type: "tabs:undoLastApply" }));
     canUndo = false;
     setStatus(t("status.undoDone", { count: result.restoredTabs || 0 }));
     renderDetails({ undoResult: result });
   } catch (error) {
-    setStatus(error.message, true);
+    setStatus(friendlyErrorMessage(error), true);
   } finally {
     setBusy(false);
   }
@@ -1234,8 +1253,9 @@ async function loadActivityOverview(rangeMs) {
     setStatusKey("status.default");
   } catch (error) {
     nodes.activityResult.className = "activity-result error-panel";
-    nodes.activityResult.textContent = error.message;
-    setStatus(error.message, true);
+    const message = friendlyErrorMessage(error);
+    nodes.activityResult.textContent = message;
+    setStatus(message, true);
   } finally {
     setBusy(false);
   }
@@ -1396,10 +1416,10 @@ function cleanupSummaryClue(tab) {
 
 async function focusActivityTab(tab) {
   try {
-    await sendMessage({ type: "activity:focusTab", tabId: tab.tabId, windowId: tab.windowId });
+    await sendMessage({ type: "activity:focusTab", tabId: tab.tabId, windowId: tab.windowId, languageMode: uiLanguage });
     setStatusKey("activity.focused");
   } catch (error) {
-    setStatus(error.message || t("activity.focusFailed"), true);
+    setStatus(friendlyErrorMessage(error) || t("activity.focusFailed"), true);
   }
 }
 
@@ -1462,7 +1482,7 @@ function setBusy(isBusy, label = "", options = {}) {
 }
 
 async function hydrateActiveJob() {
-  const job = await sendMessage({ type: "tabs:getActiveJob" }).catch(() => null);
+  const job = await sendMessage(scopedWindowMessage({ type: "tabs:getActiveJob" })).catch(() => null);
   if (!job) return;
   if (isLiveJob(job)) {
     updateProgressFromJob(job);
@@ -1476,13 +1496,13 @@ async function hydrateActiveJob() {
 }
 
 async function hydrateUndoState() {
-  const result = await sendMessage({ type: "tabs:canUndo" }).catch(() => null);
+  const result = await sendMessage(scopedWindowMessage({ type: "tabs:canUndo" })).catch(() => null);
   canUndo = Boolean(result?.canUndo);
 }
 
 async function restoreCompletedJob(activeJob = {}) {
   stopProgressPolling();
-  const job = await sendMessage({ type: "tabs:getLastJob" }).catch(() => null);
+  const job = await sendMessage(scopedWindowMessage({ type: "tabs:getLastJob" })).catch(() => null);
   if (!job?.preview) {
     const message = t("status.generatedButMissingPreview");
     setStatusKey("status.generatedButMissingPreview", {}, true);
@@ -1526,7 +1546,7 @@ function stopProgressPolling() {
 
 async function pollActiveJob() {
   try {
-    const job = await sendMessage({ type: "tabs:getActiveJob" });
+    const job = await sendMessage(scopedWindowMessage({ type: "tabs:getActiveJob" }));
     updateProgressFromJob(job);
     if (job?.status === "complete") {
       await restoreCompletedJob(job);
@@ -1542,7 +1562,7 @@ async function pollActiveJob() {
 
 async function waitForAnalysisCompletion(operationId) {
   while (true) {
-    const activeJob = await sendMessage({ type: "tabs:getActiveJob" });
+    const activeJob = await sendMessage(scopedWindowMessage({ type: "tabs:getActiveJob" }));
     updateProgressFromJob(activeJob);
 
     if (!activeJob) {
@@ -1552,7 +1572,7 @@ async function waitForAnalysisCompletion(operationId) {
       throw new Error(t("status.anotherJobRunning"));
     }
     if (activeJob.status === "complete") {
-      const job = await sendMessage({ type: "tabs:getLastJob" });
+      const job = await sendMessage(scopedWindowMessage({ type: "tabs:getLastJob" }));
       if (!job?.preview) throw new Error(t("status.generatedButMissingPreview"));
       return job;
     }
@@ -1678,6 +1698,10 @@ function progressCopyOperationId(job) {
   return job.operationId || `${job.phase || "planning"}:${job.createdAt || ""}`;
 }
 
+function scopedWindowMessage(message) {
+  return Number.isInteger(panelWindowId) ? { ...message, windowId: panelWindowId } : message;
+}
+
 function rememberGeneratedProgressCopy(operationId, messages) {
   if (!generatedCopyByOperation.has(operationId) && generatedCopyByOperation.size >= GENERATED_COPY_CACHE_LIMIT) {
     const oldestKey = generatedCopyByOperation.keys().next().value;
@@ -1762,8 +1786,8 @@ function localizeKnownMessage(message = "") {
   if (match) return `Adding page clues, ${match[1]} added`;
   match = text.match(/^已补充 (\d+) 个页面摘要$/);
   if (match) return `Added ${match[1]} page summaries`;
-  match = text.match(/^粗分完成：(\d+) 个候选主题$/);
-  if (match) return `Coarse pass found ${match[1]} candidate topics`;
+  match = text.match(/^已找到 (\d+) 个主题方向$/);
+  if (match) return `Found ${match[1]} topic lanes`;
   match = text.match(/^正在精分「(.+)」$/);
   if (match) return `Refining "${match[1]}"`;
   match = text.match(/^已精分「(.+)」$/);
