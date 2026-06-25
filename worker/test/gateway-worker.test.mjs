@@ -28,21 +28,39 @@ test("worker validates models and token caps before forwarding", async () => {
   assert.equal(badModel.status, 400);
   assert.equal((await badModel.json()).error.code, "model_not_allowed");
 
-  const progressCopyModel = await handle(
-    chatRequest({ model: "gpt-5.3-codex-spark", response_format: { type: "json_object" }, max_tokens: 1200 }),
-    env
-  );
+  const progressCopyModel = await handle(chatRequest(validProgressCopyBody()), env);
   assert.equal(progressCopyModel.status, 200);
-  const sparkToolRequest = await handle(
-    chatRequest({ model: "gpt-5.3-codex-spark", response_format: { type: "json_object" }, tools: [{ type: "function" }] }),
-    env
-  );
-  assert.equal(sparkToolRequest.status, 400);
-  assert.equal((await sparkToolRequest.json()).error.code, "spark_tools_not_allowed");
 
   const tooManyTokens = await handle(chatRequest({ max_tokens: 9000 }), env);
   assert.equal(tooManyTokens.status, 400);
   assert.equal((await tooManyTokens.json()).error.code, "max_tokens_exceeded");
+});
+
+test("worker only accepts Tab Tidy request shapes", async () => {
+  const env = envWithKv();
+  const streamRequest = await handle(chatRequest({ stream: true }), env);
+  assert.equal(streamRequest.status, 400);
+  assert.equal((await streamRequest.json()).error.code, "request_shape_not_allowed");
+
+  const toolRequest = await handle(chatRequest({ tools: [{ type: "function" }] }), env);
+  assert.equal(toolRequest.status, 400);
+  assert.equal((await toolRequest.json()).error.code, "request_shape_not_allowed");
+
+  const genericChat = await handle(
+    chatRequest({
+      messages: [
+        { role: "system", content: "You are a helpful assistant." },
+        { role: "user", content: "Write a poem." }
+      ]
+    }),
+    env
+  );
+  assert.equal(genericChat.status, 400);
+  assert.equal((await genericChat.json()).error.code, "planner_shape_required");
+
+  const markdownChat = await handle(chatRequest({ response_format: { type: "text" } }), env);
+  assert.equal(markdownChat.status, 400);
+  assert.equal((await markdownChat.json()).error.code, "json_required");
 });
 
 test("worker rejects oversized bodies using content length", async () => {
@@ -83,6 +101,13 @@ test("worker forwards with upstream secret and strips client authorization", asy
   assert.equal(calls[0].options.headers.authorization, "Bearer upstream-secret");
   assert.equal(calls[0].options.headers["cf-access-client-id"], "access-id");
   assert.equal(calls[0].options.headers["cf-access-client-secret"], "access-secret");
+  assert.deepEqual(Object.keys(JSON.parse(calls[0].options.body)).sort(), [
+    "max_tokens",
+    "messages",
+    "model",
+    "reasoning_effort",
+    "response_format"
+  ]);
 });
 
 test("worker applies install id, ip, global, and page-summary quotas", async () => {
@@ -144,8 +169,47 @@ function chatRequest(overrides = {}, headers = {}) {
 function validBody(overrides = {}) {
   return {
     model: "gpt-5.5",
-    messages: [{ role: "user", content: "classify tabs" }],
+    messages: [
+      {
+        role: "system",
+        content: "You are a JSON-only planner for a Chrome tab organization extension."
+      },
+      {
+        role: "user",
+        content: [
+          "Software engineering task input: classify this browser tab inventory for a Chrome extension runtime.",
+          "Return the JSON action plan only.",
+          JSON.stringify({
+            schema: "tab_tidy_compact_v1",
+            tabFields: ["id", "windowId", "index", "sequenceIndex", "title"],
+            tabs: [[10, 1, 0, 0, "Chrome tabs API docs"]]
+          })
+        ].join("\n")
+      }
+    ],
+    response_format: { type: "json_object" },
     max_tokens: 1024,
+    reasoning_effort: "high",
+    ...overrides
+  };
+}
+
+function validProgressCopyBody(overrides = {}) {
+  return {
+    model: "gpt-5.3-codex-spark",
+    messages: [
+      {
+        role: "system",
+        content: "Write short loading captions for an AI browser-tab organization extension. Return strict JSON only."
+      },
+      {
+        role: "user",
+        content: JSON.stringify({ languageMode: "zh-CN", phase: "planning", tabCount: 120, windowCount: 3 })
+      }
+    ],
+    response_format: { type: "json_object" },
+    max_tokens: 1200,
+    reasoning_effort: undefined,
     ...overrides
   };
 }

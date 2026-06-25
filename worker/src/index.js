@@ -1,4 +1,6 @@
 const DEFAULT_ALLOWED_MODELS = ["gpt-5.5", "claude-opus-4-8", "claude-sonnet-4-6", "gpt-5.3-codex-spark"];
+const FORWARDED_CHAT_FIELDS = Object.freeze(["model", "messages", "response_format", "max_tokens", "reasoning_effort", "thinking"]);
+const PLANNER_MODELS = new Set(DEFAULT_ALLOWED_MODELS.filter((model) => model !== "gpt-5.3-codex-spark"));
 const DEFAULT_LIMITS = Object.freeze({
   bodyBytes: 1_000_000,
   maxTokens: 8192,
@@ -60,7 +62,7 @@ export async function handleRequest(request, env = {}, ctx = {}, options = {}) {
   }
 
   const fetchImpl = options.fetchImpl || fetch;
-  const upstreamResponse = await fetchImpl(upstream.url, upstreamRequest(bodyText.text, upstream, request.signal));
+  const upstreamResponse = await fetchImpl(upstream.url, upstreamRequest(JSON.stringify(forwardedChatBody(body)), upstream, request.signal));
 
   return relayUpstreamResponse(upstreamResponse, request);
 }
@@ -96,8 +98,13 @@ function validateChatRequest(body, env, limits) {
   if (!modelAllowlist.includes(body?.model)) {
     return { ok: false, code: "model_not_allowed", message: "This model is not available on the free gateway." };
   }
+  const fieldValidation = validateTopLevelFields(body);
+  if (!fieldValidation.ok) return fieldValidation;
   if (!Array.isArray(body.messages) || !body.messages.length) {
     return { ok: false, code: "invalid_messages", message: "messages must be a non-empty array." };
+  }
+  if (body.response_format?.type !== "json_object") {
+    return { ok: false, code: "json_required", message: "Tab Tidy gateway requests must use JSON object output." };
   }
   if (Number(body.max_tokens || 0) > limits.maxTokens) {
     return { ok: false, code: "max_tokens_exceeded", message: `max_tokens must be <= ${limits.maxTokens}.` };
@@ -105,6 +112,9 @@ function validateChatRequest(body, env, limits) {
   if (body.model === "gpt-5.3-codex-spark") {
     const sparkValidation = validateProgressCopyRequest(body);
     if (!sparkValidation.ok) return sparkValidation;
+  } else {
+    const plannerValidation = validatePlannerRequest(body);
+    if (!plannerValidation.ok) return plannerValidation;
   }
   if (body.base_url || body.baseURL || body.provider_url) {
     return { ok: false, code: "proxy_target_not_allowed", message: "Custom upstream targets are not allowed." };
@@ -112,23 +122,88 @@ function validateChatRequest(body, env, limits) {
   return { ok: true };
 }
 
+function validateTopLevelFields(body) {
+  if (!body || typeof body !== "object" || Array.isArray(body)) {
+    return { ok: false, code: "invalid_request", message: "Request body must be an object." };
+  }
+  const allowed = new Set(FORWARDED_CHAT_FIELDS);
+  const unsupported = Object.keys(body).filter((key) => !allowed.has(key));
+  if (unsupported.length) {
+    return {
+      ok: false,
+      code: "request_shape_not_allowed",
+      message: `This gateway only accepts Tab Tidy planner fields. Unsupported field: ${unsupported[0]}.`
+    };
+  }
+  if (body.stream || body.tools || body.functions || body.tool_choice || body.function_call || body.max_completion_tokens) {
+    return { ok: false, code: "request_shape_not_allowed", message: "This gateway only accepts Tab Tidy JSON planning requests." };
+  }
+  return { ok: true };
+}
+
+function validatePlannerRequest(body) {
+  if (!PLANNER_MODELS.has(body.model)) {
+    return { ok: false, code: "planner_model_not_allowed", message: "This model is not available for Tab Tidy planning." };
+  }
+  if (body.messages.length !== 2) {
+    return { ok: false, code: "planner_shape_required", message: "Planner requests must use the Tab Tidy two-message shape." };
+  }
+  const [system, user] = body.messages;
+  const systemText = messageText(system);
+  const userText = messageText(user);
+  if (system?.role !== "system" || user?.role !== "user") {
+    return { ok: false, code: "planner_shape_required", message: "Planner requests must include one system message and one user message." };
+  }
+  if (!/Chrome tab organization extension|Chrome extension runtime|Chrome tab organization/i.test(systemText)) {
+    return { ok: false, code: "planner_shape_required", message: "Planner system prompt is not recognized as a Tab Tidy request." };
+  }
+  if (!/browser tabs|browser tab inventory|tab inventory|broad semantic buckets/i.test(userText)) {
+    return { ok: false, code: "planner_shape_required", message: "Planner user payload is not recognized as a Tab Tidy request." };
+  }
+  if (!/"tabFields"\s*:/.test(userText) || !/"tabs"\s*:/.test(userText)) {
+    return { ok: false, code: "planner_payload_required", message: "Planner payload must include compact Tab Tidy tab fields." };
+  }
+  return { ok: true };
+}
+
 function validateProgressCopyRequest(body) {
-  if (body.stream) {
-    return { ok: false, code: "spark_stream_not_allowed", message: "Progress copy requests cannot use streaming." };
-  }
-  if (body.tools || body.functions || body.tool_choice || body.function_call) {
-    return { ok: false, code: "spark_tools_not_allowed", message: "Progress copy requests cannot use tools." };
-  }
-  if (Number(body.n || 1) > 1) {
-    return { ok: false, code: "spark_multi_choice_not_allowed", message: "Progress copy requests must request one choice." };
-  }
   if (Number(body.max_tokens || 0) > 1200) {
     return { ok: false, code: "spark_token_cap_exceeded", message: "Progress copy max_tokens must be <= 1200." };
   }
-  if (body.response_format?.type !== "json_object") {
-    return { ok: false, code: "spark_json_required", message: "Progress copy requests must use JSON object output." };
+  if (body.messages.length !== 2) {
+    return { ok: false, code: "spark_shape_required", message: "Progress copy requests must use the Tab Tidy two-message shape." };
+  }
+  const [system, user] = body.messages;
+  const systemText = messageText(system);
+  const userText = messageText(user);
+  if (system?.role !== "system" || user?.role !== "user") {
+    return { ok: false, code: "spark_shape_required", message: "Progress copy requests must include one system message and one user message." };
+  }
+  if (!/AI browser-tab organization extension|loading captions/i.test(systemText)) {
+    return { ok: false, code: "spark_shape_required", message: "Progress copy system prompt is not recognized as a Tab Tidy request." };
+  }
+  let payload;
+  try {
+    payload = JSON.parse(userText);
+  } catch {
+    return { ok: false, code: "spark_payload_required", message: "Progress copy user payload must be JSON." };
+  }
+  if (!payload || typeof payload !== "object" || !("languageMode" in payload) || !("phase" in payload)) {
+    return { ok: false, code: "spark_payload_required", message: "Progress copy payload must include Tab Tidy progress fields." };
   }
   return { ok: true };
+}
+
+function messageText(message) {
+  if (typeof message?.content === "string") return message.content;
+  if (Array.isArray(message?.content)) {
+    return message.content.map((part) => (typeof part === "string" ? part : part?.text || "")).join("\n");
+  }
+  return "";
+}
+
+function forwardedChatBody(body) {
+  return Object.fromEntries(FORWARDED_CHAT_FIELDS.filter((key) => body[key] !== undefined).map((key) => [key, body[key]]));
 }
 
 async function checkRateLimits(request, env, limits) {
@@ -212,11 +287,12 @@ function relayUpstreamResponse(response, request) {
 }
 
 function allowedModels(env) {
-  return String(env.ALLOWED_MODELS || "")
+  const configured = String(env.ALLOWED_MODELS || "")
     .split(",")
     .map((model) => model.trim())
-    .filter(Boolean)
-    .concat(DEFAULT_ALLOWED_MODELS)
+    .filter(Boolean);
+  const models = configured.length ? configured : DEFAULT_ALLOWED_MODELS;
+  return models
     .filter((model, index, values) => values.indexOf(model) === index);
 }
 
