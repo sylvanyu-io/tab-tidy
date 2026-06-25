@@ -22,6 +22,7 @@ import { collectTabInventory } from "./tab-inventory.js";
 import { validatePlan } from "./plan-validator.js";
 
 const activeAnalyses = new Map();
+let browserMutationQueue = Promise.resolve();
 const ACTIVE_JOB_TERMINAL_STATUSES = new Set(["complete", "canceled", "error"]);
 const APPLY_REBASE_MAX_CHANGED_TABS = 25;
 const APPLY_REBASE_MAX_CHANGED_RATIO = 0.2;
@@ -39,9 +40,9 @@ export async function handleRuntimeMessage(chromeApi, message) {
     case "settings:save":
       return saveSettings(chromeApi, message.settings);
     case "tabs:startAnalyze":
-      return startAnalyzeTabs(chromeApi, message.settings, { windowId: message.windowId });
+      return startAnalyzeTabs(chromeApi, message.settings, { windowId: message.windowId }, message.persistedSettings);
     case "tabs:analyze":
-      return analyzeTabs(chromeApi, message.settings, { windowId: message.windowId });
+      return analyzeTabs(chromeApi, message.settings, { windowId: message.windowId }, message.persistedSettings);
     case "tabs:getActiveJob":
       return getActiveJob(chromeApi);
     case "tabs:getLastJob":
@@ -53,8 +54,9 @@ export async function handleRuntimeMessage(chromeApi, message) {
     case "progressCopy:generate":
       return generateProgressCopy(chromeApi, message);
     case "activity:getOverview":
-      await reconcileTabLifecycle(chromeApi).catch(() => null);
-      return getActivityOverview(chromeApi, { rangeMs: message.rangeMs });
+      const settings = await getSettings(chromeApi);
+      await reconcileTabLifecycle(chromeApi, { includeIncognitoTabs: settings.includeIncognitoTabs }).catch(() => null);
+      return getActivityOverview(chromeApi, { rangeMs: message.rangeMs, includeIncognitoTabs: settings.includeIncognitoTabs });
     case "tabs:applyLastPlan":
       return applyLastPlan(chromeApi, {
         confirmChangedTabs: Boolean(message.confirmChangedTabs),
@@ -80,14 +82,14 @@ export async function saveSettings(chromeApi, nextSettings) {
   return settings;
 }
 
-export async function analyzeTabs(chromeApi, rawSettings, invocation = {}) {
+export async function analyzeTabs(chromeApi, rawSettings, invocation = {}, persistedSettings = null) {
   const { operationId, abortController } = await createActiveAnalysis(chromeApi, rawSettings, invocation);
-  return runActiveAnalysis(chromeApi, rawSettings, invocation, operationId, abortController);
+  return runActiveAnalysis(chromeApi, rawSettings, invocation, operationId, abortController, persistedSettings);
 }
 
-export async function startAnalyzeTabs(chromeApi, rawSettings, invocation = {}) {
+export async function startAnalyzeTabs(chromeApi, rawSettings, invocation = {}, persistedSettings = null) {
   const { operationId, abortController } = await createActiveAnalysis(chromeApi, rawSettings, invocation);
-  runActiveAnalysis(chromeApi, rawSettings, invocation, operationId, abortController).catch(() => {});
+  runActiveAnalysis(chromeApi, rawSettings, invocation, operationId, abortController, persistedSettings).catch(() => {});
   return { operationId };
 }
 
@@ -111,20 +113,21 @@ async function createActiveAnalysis(chromeApi, rawSettings, invocation = {}) {
   return { operationId, abortController };
 }
 
-async function runActiveAnalysis(chromeApi, rawSettings, invocation, operationId, abortController) {
+async function runActiveAnalysis(chromeApi, rawSettings, invocation, operationId, abortController, persistedSettings = null) {
   const reportProgress = (patch) => updateActiveJob(chromeApi, operationId, patch);
 
   try {
     await reportProgress({ phase: "settings", progress: 4, message: "正在保存偏好" });
-    const settings = await saveSettings(chromeApi, rawSettings);
+    await saveSettings(chromeApi, persistedSettings || rawSettings);
+    const settings = normalizeSettings(rawSettings);
     throwIfCanceled(abortController.signal);
 
     await reportProgress({ phase: "inventory", progress: 10, message: "正在读取标签页" });
     const inventory = await collectTabInventory(chromeApi, settings, invocation);
     if (inventory.tabs?.length) {
       await Promise.allSettled([
-        rememberOpenTabsActivity(chromeApi, inventory.tabs || []),
-        rememberTabsLifecycle(chromeApi, inventory.tabs || [])
+        rememberOpenTabsActivity(chromeApi, inventory.tabs || [], { includeIncognitoTabs: settings.includeIncognitoTabs }),
+        rememberTabsLifecycle(chromeApi, inventory.tabs || [], { includeIncognitoTabs: settings.includeIncognitoTabs })
       ]);
     }
     await reportProgress({
@@ -310,6 +313,10 @@ export async function generateProgressCopy(chromeApi, request = {}) {
 }
 
 export async function applyLastPlan(chromeApi, options = {}) {
+  return enqueueBrowserMutation(() => applyLastPlanLocked(chromeApi, options));
+}
+
+async function applyLastPlanLocked(chromeApi, options = {}) {
   const job = await getLocal(chromeApi, STORAGE_KEYS.lastJob);
   if (!job) throw new Error("No analyzed plan is available.");
   if (!job.validation?.ok) {
@@ -319,7 +326,7 @@ export async function applyLastPlan(chromeApi, options = {}) {
     return { requiresMultiWindowConfirmation: true };
   }
 
-  const latestInventory = await collectTabInventory(chromeApi, job.settings, job.invocation);
+  const latestInventory = await collectTabInventory(chromeApi, job.settings, invocationForApply(job));
   let planForApply = job.plan;
   let inventoryForApply = latestInventory;
   let rebaseSummary = null;
@@ -360,6 +367,7 @@ export async function applyLastPlan(chromeApi, options = {}) {
     (nextRollback) => setLocal(chromeApi, STORAGE_KEYS.lastRollback, nextRollback)
   );
   await setLocal(chromeApi, STORAGE_KEYS.lastRollback, rollback);
+  await removeLocal(chromeApi, STORAGE_KEYS.lastJob);
   return rebaseSummary ? { ...result, rebasedPlan: rebaseSummary } : result;
 }
 
@@ -657,7 +665,24 @@ function normalizeProgressLanguage(value) {
   return value === "en-US" ? "en-US" : "zh-CN";
 }
 
+function enqueueBrowserMutation(fn) {
+  const run = browserMutationQueue.catch(() => null).then(fn);
+  browserMutationQueue = run.catch(() => null);
+  return run;
+}
+
+function invocationForApply(job = {}) {
+  const settings = normalizeSettings(job.settings || {});
+  if (settings.organizeMode !== ORGANIZE_MODES.CURRENT_WINDOW) return job.invocation || {};
+  const windowId = job.inventory?.scope?.currentWindowId ?? job.invocation?.windowId;
+  return { ...(job.invocation || {}), windowId, strictWindowId: true };
+}
+
 export async function undoLastApply(chromeApi) {
+  return enqueueBrowserMutation(() => undoLastApplyLocked(chromeApi));
+}
+
+async function undoLastApplyLocked(chromeApi) {
   const rollback = await getLocal(chromeApi, STORAGE_KEYS.lastRollback);
   if (!rollback) throw new Error("No rollback snapshot is available.");
   const result = await undoFromRollback(chromeApi, rollback);

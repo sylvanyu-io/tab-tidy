@@ -8,7 +8,7 @@ export async function collectTabInventory(chromeApi, rawSettings, invocation = {
   const windows =
     settings.organizeMode === ORGANIZE_MODES.CONSOLIDATE_ONE_WINDOW
       ? await chromeApi.windows.getAll({ populate: true, windowTypes: ["normal"] })
-      : [await resolveCurrentWindow(chromeApi, invocation.windowId)];
+      : [await resolveCurrentWindow(chromeApi, invocation.windowId, { strict: Boolean(invocation.strictWindowId) })];
 
   const normalWindows = windows.filter((window) => window?.type === "normal");
   if (!normalWindows.length) {
@@ -64,10 +64,13 @@ export async function collectTabInventory(chromeApi, rawSettings, invocation = {
   };
 }
 
-async function resolveCurrentWindow(chromeApi, windowId) {
+async function resolveCurrentWindow(chromeApi, windowId, options = {}) {
   if (Number.isInteger(windowId) && windowId > 0) {
     const requestedWindow = await chromeApi.windows.get(windowId, { populate: true }).catch(() => null);
     if (requestedWindow?.type === "normal") return requestedWindow;
+    if (options.strict) {
+      throw new Error("预览中的当前窗口已关闭，请重新生成方案。");
+    }
   }
 
   if (chromeApi.windows.getLastFocused) {

@@ -270,6 +270,59 @@ test("apply asks to regenerate when too many tabs changed since preview", async 
   await assert.rejects(() => applyLastPlan(chrome), /标签页变化较多，请重新生成方案。变化标签页 16 个。/);
 });
 
+test("current-window apply refuses to drift to another window after preview", async () => {
+  const chrome = createFakeChrome({
+    windows: [
+      {
+        id: 1,
+        focused: true,
+        tabs: [
+          { id: 10, title: "GitHub pull request", url: "https://github.com/acme/repo/pull/1", active: true },
+          { id: 11, title: "GitLab issue", url: "https://gitlab.com/acme/repo/-/issues/2" }
+        ]
+      },
+      {
+        id: 2,
+        tabs: [{ id: 20, title: "Shopping cart", url: "https://shop.example/cart" }]
+      }
+    ]
+  });
+
+  const job = await analyzeTabs(chrome, FAKE_PLANNER_SETTINGS, { windowId: 1 });
+  assert.equal(job.validation.ok, true);
+  await chrome.windows.remove(1);
+  chrome.__state.windows.get(2).focused = true;
+
+  await assert.rejects(() => applyLastPlan(chrome), /预览中的当前窗口已关闭，请重新生成方案。/);
+  assert.equal((await chrome.tabs.get(20)).groupId, -1);
+});
+
+test("apply operations are serialized so double submit cannot mutate twice", async () => {
+  const chrome = createFakeChrome({
+    windows: [
+      {
+        id: 1,
+        focused: true,
+        tabs: [
+          { id: 10, title: "GitHub pull request", url: "https://github.com/acme/repo/pull/1", active: true },
+          { id: 11, title: "GitLab issue", url: "https://gitlab.com/acme/repo/-/issues/2" }
+        ]
+      }
+    ]
+  });
+
+  const job = await analyzeTabs(chrome, FAKE_PLANNER_SETTINGS, { windowId: 1 });
+  assert.equal(job.validation.ok, true);
+
+  const results = await Promise.allSettled([applyLastPlan(chrome), applyLastPlan(chrome)]);
+  assert.equal(results.filter((result) => result.status === "fulfilled").length, 1);
+  assert.equal(results.filter((result) => result.status === "rejected").length, 1);
+  assert.match(results.find((result) => result.status === "rejected").reason.message, /No analyzed plan is available/);
+
+  const groups = await chrome.tabGroups.query({ windowId: 1 });
+  assert.equal(groups.length, 1);
+});
+
 test("review group title follows the selected result language when applying", async () => {
   const chrome = createFakeChrome({
     windows: [
