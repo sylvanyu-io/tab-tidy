@@ -255,16 +255,16 @@ test("cleanup candidates use AI analysis without starting organization", async (
       })
     )
     .toBe(true);
-  await page.getByText("清理候选", { exact: true }).click();
+  await page.getByText("清理助手", { exact: true }).click();
   await page.getByRole("button", { name: "7 天" }).click();
 
-  await expect(page.getByText("AI 参考 24 个打开标签页、18 条本机记录，给出 2 个复核候选。")).toBeVisible();
-  await expect(page.getByText("AI 挑出 2 个适合先复核的旧标签页。")).toBeVisible();
+  await expect(page.getByText("已看过 24 个打开的标签页，整理出 2 个可以先检查的页面。")).toBeVisible();
+  await expect(page.getByText("这 2 个标签页看起来更像旧任务遗留，可以先从它们开始。")).toBeVisible();
   await expect(page.getByText("近期线索")).toBeVisible();
-  await expect(page.getByText("AI 建议先看这些")).toBeVisible();
+  await expect(page.getByText("建议先检查")).toBeVisible();
   await expect(page.getByText(/Old comparison notes/)).toBeVisible();
   await expect(page.getByText("分组：Research")).toBeVisible();
-  await expect(page.getByText("AI 判断：这像是上一轮对比调研的遗留页，时间较久且近期没有再打开。")).toBeVisible();
+  await expect(page.getByText("为什么：它像是上一轮对比调研留下的页面，时间较久且近期没有再打开。")).toBeVisible();
   await expect(page.getByText("线索：Comparison notes for an earlier investigation")).toBeVisible();
   await expect(page.locator("#previewSection")).toBeHidden();
   await expect(page.locator("#statusText")).toHaveText("AI 标签页整理");

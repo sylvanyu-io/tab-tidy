@@ -478,6 +478,33 @@ test("AI gateway planner adapts common tabIds output and strips markdown fences"
   assert.deepEqual(plan.reviewTabs, []);
 });
 
+test("AI gateway planner hides invalid model output details from product UI", async () => {
+  const fetchImpl = async () => ({
+    ok: true,
+    async json() {
+      return {
+        choices: [
+          {
+            message: {
+              content: "```json\nnot actually json\n```"
+            }
+          }
+        ]
+      };
+    }
+  });
+
+  await assert.rejects(
+    () =>
+      createGatewayPlan(
+        inventory,
+        { ...DEFAULT_SETTINGS, plannerProvider: PLANNER_PROVIDERS.GATEWAY, gatewayApiKey: "gateway-test-key" },
+        fetchImpl
+      ),
+    /AI 这次生成的方案格式不完整/
+  );
+});
+
 test("AI gateway planner adapts schemaVersion one plans that still use tabIds", async () => {
   const fetchImpl = async () => ({
     ok: true,
@@ -765,7 +792,7 @@ test("AI gateway planner surfaces auth failures as product copy", async () => {
   );
 });
 
-test("AI gateway planner surfaces plain-text gateway failures without JSON parse noise", async () => {
+test("AI gateway planner surfaces infrastructure failures as product copy", async () => {
   const fetchImpl = async () => ({
     ok: false,
     status: 502,
@@ -786,16 +813,39 @@ test("AI gateway planner surfaces plain-text gateway failures without JSON parse
         },
         fetchImpl
       ),
-    /AI 服务返回 502：error code: 502/
+    /自定义 AI 网关暂时连不上/
   );
 });
 
-test("AI gateway planner accepts common string error payloads", async () => {
+test("AI gateway planner maps built-in tunnel errors to retry copy", async () => {
   const fetchImpl = async () => ({
     ok: false,
-    status: 503,
+    status: 530,
+    async text() {
+      return "error code: 1033";
+    }
+  });
+
+  await assert.rejects(
+    () =>
+      createGatewayPlan(
+        inventory,
+        {
+          ...DEFAULT_SETTINGS,
+          plannerProvider: PLANNER_PROVIDERS.GATEWAY
+        },
+        fetchImpl
+      ),
+    /默认 AI 服务暂时不可用/
+  );
+});
+
+test("AI gateway planner accepts common non-infrastructure string error payloads", async () => {
+  const fetchImpl = async () => ({
+    ok: false,
+    status: 400,
     async json() {
-      return { error: "upstream overloaded" };
+      return { error: "bad prompt shape" };
     }
   });
 
@@ -811,7 +861,7 @@ test("AI gateway planner accepts common string error payloads", async () => {
         },
         fetchImpl
       ),
-    /AI 服务返回 503：upstream overloaded/
+    /自定义 AI 网关这次没有完成请求（400）。bad prompt shape/
   );
 });
 

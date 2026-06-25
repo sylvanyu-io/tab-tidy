@@ -59,7 +59,7 @@ export async function createGatewayCleanupAnalysis(inventory, activityOverview =
     throw new Error("Fetch is not available in this environment.");
   }
 
-  await emitProgress(options, { phase: "cleanup_planning", progress: 44, message: "AI 正在分析清理候选" });
+  await emitProgress(options, { phase: "cleanup_planning", progress: 44, message: "正在整理清理建议" });
   const body = {
     model: requireGatewayModel(settings),
     messages: [
@@ -87,7 +87,7 @@ export async function createGatewayCleanupAnalysis(inventory, activityOverview =
     throw new Error(gatewayErrorMessage(response, data, settings));
   }
 
-  await emitProgress(options, { phase: "cleanup_planning", progress: 82, message: "AI 已返回清理建议" });
+  await emitProgress(options, { phase: "cleanup_planning", progress: 82, message: "清理建议已生成" });
   return normalizeCleanupAnalysis(parseGatewayJson(data), inventory, activityOverview, settings);
 }
 
@@ -123,7 +123,7 @@ async function createSingleGatewayPlan(inventory, settings, fetchImpl, options =
   }
 
   if (!options.suppressSingleRequestProgress) {
-    await emitProgress(options, { phase: "planning", progress: 82, message: "AI 已返回，正在解析方案" });
+    await emitProgress(options, { phase: "planning", progress: 82, message: "正在整理可执行方案" });
   }
   return parsePlanFromGatewayResponse(data, inventory, settings);
 }
@@ -269,9 +269,19 @@ function gatewayErrorMessage(response, data, settings) {
       ? "AI 服务拒绝访问。请检查自定义网关地址和密钥。"
       : "默认 AI 服务拒绝访问。请稍后重试，或在更多选项里切换自定义网关。";
   }
+  if (isGatewayInfrastructureError(response, providerMessage)) {
+    return settings.gatewayBaseUrl
+      ? "自定义 AI 网关暂时连不上。请检查网关地址、隧道或上游服务是否在线。"
+      : "默认 AI 服务暂时不可用。请稍后再试，或在更多选项里临时切换自定义 AI 网关。";
+  }
+  if (settings.gatewayBaseUrl) {
+    return providerMessage
+      ? `自定义 AI 网关这次没有完成请求（${response.status}）。${providerMessage}`
+      : `自定义 AI 网关这次没有完成请求（${response.status}）。请检查网关服务后重试。`;
+  }
   return providerMessage
-    ? `AI 服务返回 ${response.status}：${providerMessage}`
-    : `AI gateway planner failed with status ${response.status}.`;
+    ? "默认 AI 服务这次没有成功完成。请稍后再试，或在更多选项里临时切换自定义 AI 网关。"
+    : "默认 AI 服务这次没有成功响应。请稍后再试，或在更多选项里临时切换自定义 AI 网关。";
 }
 
 function extractProviderErrorMessage(data) {
@@ -280,6 +290,17 @@ function extractProviderErrorMessage(data) {
   if (typeof data.error?.message === "string") return data.error.message.trim();
   if (typeof data.message === "string") return data.message.trim();
   return "";
+}
+
+function isGatewayInfrastructureError(response, providerMessage) {
+  const message = String(providerMessage || "");
+  return (
+    response.status === 502 ||
+    response.status === 503 ||
+    response.status === 504 ||
+    (response.status === 530 && /1033|cloudflare|argo|tunnel/i.test(message)) ||
+    /cloudflare tunnel|argo tunnel|error code:\s*1033/i.test(message)
+  );
 }
 
 export function buildPlannerSystemPrompt(settings) {
@@ -561,8 +582,8 @@ function normalizeCleanupAnalysis(parsed, inventory, activityOverview = {}, sett
       source?.summary ||
         localizedText(
           settings.languageMode,
-          `AI 挑出 ${candidates.length} 个适合先复核的标签页。`,
-          `AI picked ${candidates.length} tabs worth reviewing first.`
+          `找到 ${candidates.length} 个可以先检查的标签页。`,
+          `Found ${candidates.length} tabs worth reviewing first.`
         )
     ).slice(0, 220),
     candidates
@@ -984,14 +1005,14 @@ function parseGatewayJson(data) {
 
   if (!text) {
     const refusal = findRefusal(data);
-    if (refusal) throw new Error(`AI gateway planner refused: ${refusal}`);
-    throw new Error("AI gateway planner returned no text output.");
+    if (refusal) throw new Error("AI 没有生成可用方案。请调整自定义要求后重新生成。");
+    throw new Error("AI 这次没有生成可用方案。请重新生成。");
   }
 
   try {
     return JSON.parse(extractJsonObjectText(text));
-  } catch (error) {
-    throw new Error(`AI gateway planner returned invalid JSON: ${error.message}`);
+  } catch {
+    throw new Error("AI 这次生成的方案格式不完整。请重新生成，或换一个模型再试。");
   }
 }
 

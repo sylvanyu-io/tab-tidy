@@ -137,7 +137,7 @@ async function focusActivityTab(chromeApi, message = {}) {
   const tab = await chromeApi.tabs?.get?.(tabId);
   if (!tab) throw new Error("The tab is no longer open.");
   if (Number.isInteger(expectedWindowId) && tab.windowId !== expectedWindowId) {
-    throw new Error("The tab moved to another window. Refresh cleanup candidates.");
+    throw new Error("这个标签页已经不在原来的窗口，请重新获取清理建议。");
   }
   await chromeApi.windows?.update?.(tab.windowId, { focused: true }).catch(() => null);
   await chromeApi.tabs?.update?.(tabId, { active: true });
@@ -183,8 +183,8 @@ function createLocalCleanupAnalysis(inventory, overview, settings) {
       priority: tab.ageMs >= 30 * 24 * 60 * 60 * 1000 || tab.idleMs >= 14 * 24 * 60 * 60 * 1000 ? "high" : "medium",
       reason: localizedText(
         settings.languageMode,
-        "本地记录显示它已经较久没有活跃，适合先复核是否还需要保留。",
-        "Local records show this tab has been inactive for a while, so it is worth reviewing first."
+        "它已经较久没有活跃，可能是上一个阶段留下来的页面。",
+        "It has been inactive for a while and may belong to an earlier task."
       ),
       evidence: [
         localizedText(settings.languageMode, `首次见到 ${formatDaysForCleanup(tab.ageMs)}`, `First seen ${formatDaysForCleanup(tab.ageMs)}`),
@@ -195,8 +195,8 @@ function createLocalCleanupAnalysis(inventory, overview, settings) {
     schema: "tab_tidy_cleanup_v1",
     summary: localizedText(
       settings.languageMode,
-      `已从本机记录里挑出 ${candidates.length} 个适合先复核的标签页。`,
-      `Picked ${candidates.length} tabs worth reviewing first from local records.`
+      `找到 ${candidates.length} 个可以先检查的标签页。`,
+      `Found ${candidates.length} tabs worth reviewing first.`
     ),
     candidates
   };
