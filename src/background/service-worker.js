@@ -1,13 +1,18 @@
 import { getSettings, handleRuntimeMessage } from "../core/controller.js";
 import { rememberOpenTabActivity } from "../core/page-activity-cache.js";
 import { capturePageSummaryIfAllowed } from "../core/page-summary-cache.js";
+import { reconcileTabLifecycle, recordTabClosed, rememberTabLifecycle } from "../core/tab-lifecycle-log.js";
 
 const summaryCaptureTimers = new Map();
 const SUMMARY_SWEEP_ALARM = "tabTidy.summarySweep";
+const LIFECYCLE_RECONCILE_ALARM = "tabTidy.lifecycleReconcile";
 const SUMMARY_SWEEP_PERIOD_MINUTES = 30;
+const LIFECYCLE_RECONCILE_PERIOD_MINUTES = 15;
 const SUMMARY_CAPTURE_DELAY_MS = 1200;
 
 configureSidePanel();
+syncLifecycleReconcileAlarm().catch((error) => console.debug(error));
+scheduleLifecycleReconcile();
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   handleRuntimeMessage(chrome, message, sender)
@@ -30,27 +35,48 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
 chrome.runtime.onInstalled?.addListener(() => {
   configureSidePanel();
+  syncLifecycleReconcileAlarm().catch((error) => console.debug(error));
+  scheduleLifecycleReconcile();
   syncSummarySweepAlarm().catch((error) => console.debug(error));
   scheduleOpenTabSummarySweep();
 });
 
 chrome.runtime.onStartup?.addListener(() => {
   configureSidePanel();
+  syncLifecycleReconcileAlarm().catch((error) => console.debug(error));
+  scheduleLifecycleReconcile();
   syncSummarySweepAlarm().catch((error) => console.debug(error));
   scheduleOpenTabSummarySweep();
 });
 
 chrome.alarms?.onAlarm?.addListener((alarm) => {
+  if (alarm?.name === LIFECYCLE_RECONCILE_ALARM) {
+    scheduleLifecycleReconcile();
+  }
   if (alarm?.name === SUMMARY_SWEEP_ALARM) {
     scheduleOpenTabSummarySweep();
   }
 });
 
 chrome.tabs.onActivated?.addListener(({ tabId }) => {
+  chrome.tabs.get(tabId).then((tab) => rememberTabLifecycle(chrome, "tab_activated", tab)).catch((error) => console.debug(error));
   scheduleSummaryCapture(tabId);
 });
 
+chrome.tabs.onCreated?.addListener((tab) => {
+  rememberTabLifecycle(chrome, "tab_created", tab).catch((error) => console.debug(error));
+});
+
+chrome.tabs.onRemoved?.addListener((tabId, removeInfo) => {
+  clearTimeout(summaryCaptureTimers.get(tabId));
+  summaryCaptureTimers.delete(tabId);
+  recordTabClosed(chrome, tabId, removeInfo).catch((error) => console.debug(error));
+});
+
 chrome.tabs.onUpdated?.addListener((tabId, changeInfo, tab) => {
+  if (changeInfo.url || changeInfo.status === "complete" || changeInfo.title) {
+    rememberTabLifecycle(chrome, "tab_updated", tab).catch((error) => console.debug(error));
+  }
   if (changeInfo.status === "complete") {
     scheduleSummaryCapture(tabId);
   }
@@ -59,7 +85,10 @@ chrome.tabs.onUpdated?.addListener((tabId, changeInfo, tab) => {
 chrome.windows.onFocusChanged?.addListener((windowId) => {
   if (windowId === chrome.windows.WINDOW_ID_NONE) return;
   chrome.tabs.query({ active: true, windowId }).then(([tab]) => {
-    if (tab?.id) scheduleSummaryCapture(tab.id);
+    if (tab?.id) {
+      rememberTabLifecycle(chrome, "window_focused", tab).catch((error) => console.debug(error));
+      scheduleSummaryCapture(tab.id);
+    }
   }).catch((error) => console.debug(error));
 });
 
@@ -90,6 +119,20 @@ async function syncSummarySweepAlarm() {
     periodInMinutes: SUMMARY_SWEEP_PERIOD_MINUTES,
     delayInMinutes: 1
   });
+}
+
+async function syncLifecycleReconcileAlarm() {
+  if (!chrome.alarms?.create) return;
+  await chrome.alarms.create(LIFECYCLE_RECONCILE_ALARM, {
+    periodInMinutes: LIFECYCLE_RECONCILE_PERIOD_MINUTES,
+    delayInMinutes: 1
+  });
+}
+
+function scheduleLifecycleReconcile() {
+  setTimeout(() => {
+    reconcileTabLifecycle(chrome).catch((error) => console.debug(error));
+  }, 0);
 }
 
 function scheduleOpenTabSummarySweep() {

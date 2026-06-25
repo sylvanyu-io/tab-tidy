@@ -12,6 +12,7 @@ import { applyValidatedPlan, createRollbackSnapshot, undoFromRollback } from "./
 import { getActivityOverview, rememberOpenTabsActivity } from "./page-activity-cache.js";
 import { cachedPageSampleForTab, rememberPageSummary } from "./page-summary-cache.js";
 import { requestPageSample } from "./page-sampler.js";
+import { reconcileTabLifecycle, rememberTabsLifecycle } from "./tab-lifecycle-log.js";
 import { fetchJsonWithTimeout } from "./fetch-timeout.js";
 import { createPlan } from "./planner.js";
 import { normalizePlanForSettings } from "./plan-normalizer.js";
@@ -52,6 +53,7 @@ export async function handleRuntimeMessage(chromeApi, message) {
     case "progressCopy:generate":
       return generateProgressCopy(chromeApi, message);
     case "activity:getOverview":
+      await reconcileTabLifecycle(chromeApi).catch(() => null);
       return getActivityOverview(chromeApi, { rangeMs: message.rangeMs });
     case "tabs:applyLastPlan":
       return applyLastPlan(chromeApi, {
@@ -119,8 +121,11 @@ async function runActiveAnalysis(chromeApi, rawSettings, invocation, operationId
 
     await reportProgress({ phase: "inventory", progress: 10, message: "正在读取标签页" });
     const inventory = await collectTabInventory(chromeApi, settings, invocation);
-    if (settings.continuousPageSummaries) {
-      await rememberOpenTabsActivity(chromeApi, inventory.tabs || []).catch(() => null);
+    if (inventory.tabs?.length) {
+      await Promise.allSettled([
+        rememberOpenTabsActivity(chromeApi, inventory.tabs || []),
+        rememberTabsLifecycle(chromeApi, inventory.tabs || [])
+      ]);
     }
     await reportProgress({
       phase: "inventory",

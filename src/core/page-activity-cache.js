@@ -1,5 +1,6 @@
 import { URL_PRIVACY_MODES } from "../shared/settings.js";
 import { STORAGE_KEYS, getLocal, setLocal } from "./storage.js";
+import { getTabLifecycleStats } from "./tab-lifecycle-log.js";
 import { canSampleUrl, getTabUrl, sanitizeTabUrl } from "./url-sanitizer.js";
 
 const CACHE_VERSION = 1;
@@ -83,6 +84,7 @@ export async function getActivityOverview(chromeApi, options = {}) {
       tracked: openTabEntries.length,
       staleCandidates: staleTabs.length
     },
+    lifecycle: await getTabLifecycleStats(chromeApi, { now }),
     recap: buildLocalRecap(entries, rangeMs),
     staleTabs
   };
