@@ -87,6 +87,7 @@ export async function getActivityOverview(chromeApi, options = {}) {
       tracked: openTabEntries.length,
       staleCandidates: staleTabs.length
     },
+    openTabSignals: openTabEntries,
     lifecycle,
     recap: buildLocalRecap(entries, rangeMs),
     staleTabs

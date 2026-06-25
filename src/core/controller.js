@@ -7,6 +7,7 @@ import {
   TARGET_WINDOW_MODES,
   normalizeSettings
 } from "../shared/settings.js";
+import { localizedText } from "../shared/language.js";
 import { shouldShowPageSampleCount } from "../shared/page-sampling-copy.js";
 import { applyValidatedPlan, createRollbackSnapshot, undoFromRollback } from "./chrome-executor.js";
 import { getActivityOverview, rememberOpenTabsActivity } from "./page-activity-cache.js";
@@ -14,6 +15,7 @@ import { cachedPageSampleForTab, rememberPageSummary } from "./page-summary-cach
 import { requestPageSample } from "./page-sampler.js";
 import { reconcileTabLifecycle, rememberTabsLifecycle } from "./tab-lifecycle-log.js";
 import { fetchJsonWithTimeout } from "./fetch-timeout.js";
+import { createGatewayCleanupAnalysis } from "./gateway-planner.js";
 import { createPlan } from "./planner.js";
 import { normalizePlanForSettings } from "./plan-normalizer.js";
 import { buildPreview } from "./preview.js";
@@ -108,6 +110,8 @@ export async function handleRuntimeMessage(chromeApi, message) {
       const settings = await getSettings(chromeApi);
       await reconcileTabLifecycle(chromeApi, { includeIncognitoTabs: settings.includeIncognitoTabs }).catch(() => null);
       return getActivityOverview(chromeApi, { rangeMs: message.rangeMs, includeIncognitoTabs: settings.includeIncognitoTabs });
+    case "activity:analyzeCleanup":
+      return analyzeCleanupCandidates(chromeApi, message.settings, { windowId: message.windowId, rangeMs: message.rangeMs });
     case "activity:focusTab":
       return focusActivityTab(chromeApi, message);
     case "tabs:applyLastPlan":
@@ -138,6 +142,69 @@ async function focusActivityTab(chromeApi, message = {}) {
   await chromeApi.windows?.update?.(tab.windowId, { focused: true }).catch(() => null);
   await chromeApi.tabs?.update?.(tabId, { active: true });
   return { focused: true, tabId, windowId: tab.windowId };
+}
+
+async function analyzeCleanupCandidates(chromeApi, rawSettings, invocation = {}) {
+  const settings = normalizeSettings(rawSettings || (await getSettings(chromeApi)));
+  const windowId = await resolveStateWindowId(chromeApi, invocation.windowId);
+  const inventory = await collectTabInventory(chromeApi, settings, { windowId });
+  if (inventory.tabs?.length) {
+    await Promise.allSettled([
+      rememberOpenTabsActivity(chromeApi, inventory.tabs || [], { includeIncognitoTabs: settings.includeIncognitoTabs }),
+      rememberTabsLifecycle(chromeApi, inventory.tabs || [], { includeIncognitoTabs: settings.includeIncognitoTabs })
+    ]);
+  }
+  await attachPageSamples(chromeApi, inventory, settings);
+  await reconcileTabLifecycle(chromeApi, { includeIncognitoTabs: settings.includeIncognitoTabs }).catch(() => null);
+  const overview = await getActivityOverview(chromeApi, {
+    rangeMs: invocation.rangeMs,
+    includeIncognitoTabs: settings.includeIncognitoTabs
+  });
+  const lastJob = await getScopedLocal(chromeApi, STORAGE_KEYS.lastJob, windowId, null).catch(() => null);
+
+  const cleanup =
+    settings.plannerProvider === PLANNER_PROVIDERS.GATEWAY
+      ? await createGatewayCleanupAnalysis(inventory, overview, settings, globalThis.fetch, {
+          installId: await getOrCreateInstallId(chromeApi),
+          lastJob
+        })
+      : createLocalCleanupAnalysis(inventory, overview, settings);
+
+  return { overview, cleanup };
+}
+
+function createLocalCleanupAnalysis(inventory, overview, settings) {
+  const plannerIds = new Set((inventory.plannerTabs || []).map((tab) => tab.tabId));
+  const candidates = (overview.staleTabs || [])
+    .filter((tab) => plannerIds.has(tab.tabId))
+    .slice(0, 12)
+    .map((tab) => ({
+      ...tab,
+      priority: tab.ageMs >= 30 * 24 * 60 * 60 * 1000 || tab.idleMs >= 14 * 24 * 60 * 60 * 1000 ? "high" : "medium",
+      reason: localizedText(
+        settings.languageMode,
+        "本地记录显示它已经较久没有活跃，适合先复核是否还需要保留。",
+        "Local records show this tab has been inactive for a while, so it is worth reviewing first."
+      ),
+      evidence: [
+        localizedText(settings.languageMode, `首次见到 ${formatDaysForCleanup(tab.ageMs)}`, `First seen ${formatDaysForCleanup(tab.ageMs)}`),
+        localizedText(settings.languageMode, `最近活跃 ${formatDaysForCleanup(tab.idleMs)}`, `Last active ${formatDaysForCleanup(tab.idleMs)}`)
+      ]
+    }));
+  return {
+    schema: "tab_tidy_cleanup_v1",
+    summary: localizedText(
+      settings.languageMode,
+      `已从本机记录里挑出 ${candidates.length} 个适合先复核的标签页。`,
+      `Picked ${candidates.length} tabs worth reviewing first from local records.`
+    ),
+    candidates
+  };
+}
+
+function formatDaysForCleanup(ms) {
+  const days = Math.max(0, Math.round(Number(ms || 0) / (24 * 60 * 60 * 1000)));
+  return `${days}d`;
 }
 
 export async function getSettings(chromeApi) {

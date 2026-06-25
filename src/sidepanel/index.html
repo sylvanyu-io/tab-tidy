@@ -25,6 +25,22 @@
       </header>
 
       <div class="scroll-region">
+        <details class="activity-panel">
+          <summary>清理候选</summary>
+          <div class="activity-inner">
+            <div class="activity-copy">
+              <strong>让 AI 先筛一遍可能该关的标签页</strong>
+              <small>结合时间、分组和内容线索，只给复核顺序，不会自动关闭。</small>
+            </div>
+            <div class="activity-range" role="group" aria-label="清理候选时间范围">
+              <button type="button" data-activity-range="86400000">1 天</button>
+              <button type="button" data-activity-range="604800000">7 天</button>
+              <button type="button" data-activity-range="2592000000">30 天</button>
+            </div>
+            <div id="activityResult" class="activity-result empty">还没有清理候选。</div>
+          </div>
+        </details>
+
         <section class="launch-panel">
           <div class="control-group">
             <div class="control-label">
@@ -125,22 +141,6 @@
             </div>
           </div>
         </section>
-
-        <details class="activity-panel">
-          <summary>清理候选</summary>
-          <div class="activity-inner">
-            <div class="activity-copy">
-              <strong>先找可能该关的旧标签页</strong>
-              <small>按首次见到和最近活跃排序，只辅助判断，不会自动关闭。</small>
-            </div>
-            <div class="activity-range" role="group" aria-label="清理候选时间范围">
-              <button type="button" data-activity-range="86400000">1 天</button>
-              <button type="button" data-activity-range="604800000">7 天</button>
-              <button type="button" data-activity-range="2592000000">30 天</button>
-            </div>
-            <div id="activityResult" class="activity-result empty">还没有清理候选。</div>
-          </div>
-        </details>
 
         <details class="advanced-settings">
           <summary>更多选项</summary>

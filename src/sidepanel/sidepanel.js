@@ -64,22 +64,22 @@ const UI_COPY = Object.freeze({
     "continuous.tooltip": "开启后浏览器会请求网页读取权限；之后会在后台给打开过的、未休眠、非无痕页面保存短摘要。整理时，相关摘要会发送给 AI 辅助归类；不会主动唤醒标签页。",
     "continuous.aria": "持续摘要说明",
     "activity.summary": "清理候选",
-    "activity.title": "先找可能该关的旧标签页",
-    "activity.subtitle": "按首次见到和最近活跃排序，只辅助判断，不会自动关闭。",
+    "activity.title": "让 AI 先筛一遍可能该关的标签页",
+    "activity.subtitle": "结合时间、分组和内容线索，只给复核顺序，不会自动关闭。",
     "activity.rangeAria": "清理候选时间范围",
     "activity.day": "1 天",
     "activity.week": "7 天",
     "activity.month": "30 天",
     "activity.empty": "还没有清理候选。",
-    "activity.loading": "正在查找清理候选",
+    "activity.loading": "AI 正在分析清理候选",
     "activity.none": "还没有足够记录。打开一段时间后，这里会更准。",
-    "activity.coverage": "当前打开 {total} 个标签页，已追踪 {tracked} 个；找到 {stale} 个清理候选。",
+    "activity.coverage": "AI 参考 {total} 个打开标签页、{tracked} 条本机记录，给出 {stale} 个复核候选。",
     "activity.focus": "近期线索",
     "activity.sites": "常见站点",
     "activity.recent": "最近页面",
-    "activity.stale": "建议先看看这些",
-    "activity.staleHint": "按最久未活跃排序。时间来自插件本机记录，不代表完整浏览器历史。",
-    "activity.noStale": "暂时没有明显旧标签页候选。",
+    "activity.stale": "AI 建议先看这些",
+    "activity.staleHint": "按 AI 判断的清理优先级排序。只辅助决策，不会自动关闭标签页。",
+    "activity.noStale": "AI 暂时没有挑出明显需要优先复核的标签页。",
     "activity.focusTab": "定位",
     "activity.focusTabAria": "定位标签页：{title}",
     "activity.focused": "已定位标签页",
@@ -90,6 +90,10 @@ const UI_COPY = Object.freeze({
     "activity.group": "分组：{group}",
     "activity.noGroup": "未分组",
     "activity.summaryClue": "线索：{text}",
+    "activity.aiReason": "AI 判断：{text}",
+    "activity.priority.high": "高优先级",
+    "activity.priority.medium": "中优先级",
+    "activity.priority.low": "低优先级",
     "customPrompt.label": "自定义要求",
     "customPrompt.placeholder": "例如：找工作、AI 论文、当前项目分开；拿不准的先放到待分类。",
     "advanced.summary": "更多选项",
@@ -230,22 +234,22 @@ const UI_COPY = Object.freeze({
     "continuous.tooltip": "Chrome will ask for page-reading access. After that, Tab Tidy saves short summaries for opened, awake, non-incognito pages in the background. Related summaries are sent to AI during organization. It will not wake sleeping tabs.",
     "continuous.aria": "Accumulated summary details",
     "activity.summary": "Cleanup candidates",
-    "activity.title": "Find older tabs worth reviewing first",
-    "activity.subtitle": "Sorted by first seen and recent activity. Tab Tidy never closes tabs automatically.",
+    "activity.title": "Let AI find tabs worth reviewing first",
+    "activity.subtitle": "Uses time, groups, and content clues. It suggests review order only and never closes tabs.",
     "activity.rangeAria": "Cleanup candidate range",
     "activity.day": "1 day",
     "activity.week": "7 days",
     "activity.month": "30 days",
     "activity.empty": "No cleanup candidates yet.",
-    "activity.loading": "Finding cleanup candidates",
+    "activity.loading": "AI is analyzing cleanup candidates",
     "activity.none": "Not enough local records yet. This gets better after Tab Tidy has observed more tabs.",
-    "activity.coverage": "{total} tabs open, {tracked} tracked; found {stale} cleanup candidates.",
+    "activity.coverage": "AI reviewed {total} open tabs and {tracked} local records, then picked {stale} review candidates.",
     "activity.focus": "Recent clues",
     "activity.sites": "Common sites",
     "activity.recent": "Recent pages",
     "activity.stale": "Start with these",
-    "activity.staleHint": "Sorted by oldest inactive tabs. Dates come from local extension memory, not complete browser history.",
-    "activity.noStale": "No obvious older tab candidates yet.",
+    "activity.staleHint": "Sorted by AI cleanup priority. This only helps you decide; Tab Tidy will not close tabs automatically.",
+    "activity.noStale": "AI did not find clear tabs that need priority review.",
     "activity.focusTab": "Find tab",
     "activity.focusTabAria": "Find tab: {title}",
     "activity.focused": "Tab focused",
@@ -256,6 +260,10 @@ const UI_COPY = Object.freeze({
     "activity.group": "Group: {group}",
     "activity.noGroup": "Ungrouped",
     "activity.summaryClue": "Clue: {text}",
+    "activity.aiReason": "AI reason: {text}",
+    "activity.priority.high": "High",
+    "activity.priority.medium": "Medium",
+    "activity.priority.low": "Low",
     "customPrompt.label": "Custom instructions",
     "customPrompt.placeholder": "Example: keep job search, AI papers, and current projects separate; put uncertain pages in review.",
     "advanced.summary": "More options",
@@ -1208,23 +1216,43 @@ async function loadActivityOverview(rangeMs) {
   if (!nodes.activityResult) return;
   nodes.activityResult.className = "activity-result";
   nodes.activityResult.textContent = t("activity.loading");
+  setBusy(true, t("activity.loading"), { progress: 12 });
   try {
-    const overview = await sendMessage({ type: "activity:getOverview", rangeMs });
-    renderActivityOverview(overview);
+    const settings = readSettings({ effectiveForAnalysis: true });
+    settings.languageMode = effectiveResultLanguageMode(settings.languageMode);
+    validateGatewaySettingsForAnalyze(settings);
+    updateLocalProgress(t("status.checkingPermissions"), 18);
+    await ensurePlannerHostPermission(settings);
+    if (settings.pageContextMode !== "off" && settings.pageSamplingConsentMode !== "not_acknowledged") {
+      updateLocalProgress(t("status.checkingPageSummaryPermissions"), 24);
+      await ensurePageSamplingPermissions(settings, { requestMissing: false });
+      settings.hostPermissionRequestMode = "never";
+    }
+    updateLocalProgress(t("activity.loading"), 36);
+    const result = await sendMessage({ type: "activity:analyzeCleanup", settings, rangeMs, windowId: panelWindowId });
+    renderActivityOverview(result);
+    setStatusKey("status.default");
   } catch (error) {
     nodes.activityResult.className = "activity-result error-panel";
     nodes.activityResult.textContent = error.message;
+    setStatus(error.message, true);
+  } finally {
+    setBusy(false);
   }
 }
 
-function renderActivityOverview(overview = {}) {
+function renderActivityOverview(payload = {}) {
+  const overview = payload.overview || payload;
+  const cleanup = payload.cleanup || null;
   const recap = overview.recap || {};
-  if (!recap.entries) {
+  if (!cleanup && !recap.entries) {
     nodes.activityResult.className = "activity-result empty";
     nodes.activityResult.textContent = t("activity.none");
     return;
   }
 
+  const candidates = cleanup?.candidates || overview.staleTabs || [];
+  const cleanupSummary = cleanup?.summary ? [activityLine(cleanup.summary, "p")] : [];
   const wrapper = document.createElement("div");
   wrapper.className = "activity-result-content";
   wrapper.append(
@@ -1232,11 +1260,12 @@ function renderActivityOverview(overview = {}) {
       t("activity.coverage", {
         total: overview.openTabs?.total || 0,
         tracked: overview.openTabs?.tracked || 0,
-        stale: overview.openTabs?.staleCandidates || 0
+        stale: candidates.length
       }),
       "strong"
     ),
-    activityStaleSection(overview.staleTabs || []),
+    ...cleanupSummary,
+    activityStaleSection(candidates),
     activitySection(t("activity.focus"), (recap.topTerms || []).map((item) => item.value).join(" · ")),
     activitySection(t("activity.sites"), (recap.topHosts || []).map((item) => item.value).join(" · ")),
     activityList(t("activity.recent"), (recap.recentPages || []).slice(0, 5).map((page) => `${page.title}${page.hostname ? ` · ${page.hostname}` : ""}`))
@@ -1306,12 +1335,26 @@ function cleanupCandidateRow(tab) {
     .join(" · ");
   const meta = document.createElement("div");
   meta.className = "cleanup-candidate-meta";
-  meta.append(
-    cleanupMetaChip(t("activity.firstSeen", { age: formatAgo(tab.ageMs) })),
-    cleanupMetaChip(t("activity.lastActive", { age: formatAgo(tab.idleMs) })),
-    cleanupMetaChip(t("activity.seenCount", { count: tab.activeCount || 0 }))
-  );
+  meta.append(cleanupPriorityChip(tab.priority), cleanupMetaChip(t("activity.seenCount", { count: tab.activeCount || 0 })));
+  if (tab.ageMs) meta.append(cleanupMetaChip(t("activity.firstSeen", { age: formatAgo(tab.ageMs) })));
+  if (tab.idleMs) meta.append(cleanupMetaChip(t("activity.lastActive", { age: formatAgo(tab.idleMs) })));
   body.append(title, host, meta);
+
+  if (tab.reason) {
+    const reasonLine = document.createElement("small");
+    reasonLine.className = "cleanup-candidate-clue";
+    reasonLine.textContent = t("activity.aiReason", { text: tab.reason });
+    body.append(reasonLine);
+  }
+
+  if (Array.isArray(tab.evidence) && tab.evidence.length) {
+    const evidence = document.createElement("div");
+    evidence.className = "cleanup-candidate-meta cleanup-evidence";
+    for (const item of tab.evidence.slice(0, 3)) {
+      evidence.append(cleanupMetaChip(item));
+    }
+    body.append(evidence);
+  }
 
   const clue = cleanupSummaryClue(tab);
   if (clue) {
@@ -1334,6 +1377,13 @@ function cleanupCandidateRow(tab) {
 function cleanupMetaChip(text) {
   const chip = document.createElement("span");
   chip.textContent = text;
+  return chip;
+}
+
+function cleanupPriorityChip(priority) {
+  const value = ["high", "medium", "low"].includes(priority) ? priority : "medium";
+  const chip = cleanupMetaChip(t(`activity.priority.${value}`));
+  chip.dataset.priority = value;
   return chip;
 }
 
@@ -1982,7 +2032,7 @@ async function sendMessage(message) {
 
 function shouldAttachWindowId(message) {
   if (!message?.type) return false;
-  return message.type.startsWith("tabs:") || message.type === "progressCopy:generate";
+  return message.type.startsWith("tabs:") || message.type.startsWith("activity:") || message.type === "progressCopy:generate";
 }
 
 async function resolveInvocationWindowId() {
@@ -2092,8 +2142,8 @@ async function mockMessage(message) {
   }
   if (message.type === "tabs:cancelActiveJob") return { canceled: false, job: mockActiveJob };
   if (message.type === "activity:focusTab") return { focused: true, tabId: message.tabId, windowId: message.windowId };
-  if (message.type === "activity:getOverview") {
-    return {
+  if (message.type === "activity:getOverview" || message.type === "activity:analyzeCleanup") {
+    const overview = {
       rangeMs: message.rangeMs || 604800000,
       generatedAt: new Date().toISOString(),
       cache: { entries: 18, sampledEntries: 7 },
@@ -2138,6 +2188,42 @@ async function mockMessage(message) {
           activeCount: 0
         }
       ]
+    };
+    if (message.type === "activity:getOverview") return overview;
+    return {
+      overview,
+      cleanup: {
+        summary: "AI 挑出 2 个适合先复核的旧标签页。",
+        candidates: [
+          {
+            tabId: 31,
+            windowId: 1,
+            title: "Old comparison notes",
+            hostname: "example.com",
+            currentGroupTitle: "Research",
+            ageMs: 16 * 24 * 60 * 60 * 1000,
+            idleMs: 9 * 24 * 60 * 60 * 1000,
+            activeCount: 1,
+            priority: "high",
+            reason: "这像是上一轮对比调研的遗留页，时间较久且近期没有再打开。",
+            evidence: ["首次见到约 16 天前", "最近活跃约 9 天前", "当前分组 Research"],
+            summary: { metaDescription: "Comparison notes for an earlier investigation", headings: ["Old direction"] }
+          },
+          {
+            tabId: 32,
+            windowId: 1,
+            title: "Previous research",
+            hostname: "example.org",
+            currentGroupTitle: "",
+            ageMs: 22 * 24 * 60 * 60 * 1000,
+            idleMs: 18 * 24 * 60 * 60 * 1000,
+            activeCount: 0,
+            priority: "medium",
+            reason: "标题显示是旧研究资料，且没有归属到当前分组。",
+            evidence: ["未分组", "长期未活跃"]
+          }
+        ]
+      }
     };
   }
   throw new Error(`Mock does not implement ${message.type}`);

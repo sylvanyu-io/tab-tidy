@@ -211,6 +211,7 @@ test("control surface renders settings and mock preview", async ({ page }) => {
   ).toBeVisible();
   await expect(page.locator(".preview").getByText("已补充部分页面线索，并结合标题、网址和原始顺序整理。")).toBeVisible();
   await expect(page.locator(".preview").getByText("另有 1 个固定、无痕或受限标签页未参与整理。")).toBeVisible();
+  await expect(page.locator(".activity-panel")).toBeVisible();
   await expect(page.getByText("待确认")).toHaveCount(0);
   await expect(page.locator(".preview-stats")).toHaveCount(0);
   await expect(page.locator(".stat-chip")).toHaveCount(0);
@@ -242,17 +243,28 @@ test("control surface renders settings and mock preview", async ({ page }) => {
   await expect(page.getByRole("button", { name: "撤销" })).toBeVisible();
 });
 
-test("cleanup candidates render local memory without starting organization", async ({ page }) => {
+test("cleanup candidates use AI analysis without starting organization", async ({ page }) => {
   await page.goto(`${baseUrl}/src/sidepanel/index.html`);
 
+  await expect
+    .poll(() =>
+      page.evaluate(() => {
+        const activity = document.querySelector(".activity-panel")?.getBoundingClientRect();
+        const launch = document.querySelector(".launch-panel")?.getBoundingClientRect();
+        return Boolean(activity && launch && activity.top < launch.top);
+      })
+    )
+    .toBe(true);
   await page.getByText("清理候选", { exact: true }).click();
   await page.getByRole("button", { name: "7 天" }).click();
 
-  await expect(page.getByText("当前打开 24 个标签页，已追踪 18 个；找到 2 个清理候选。")).toBeVisible();
+  await expect(page.getByText("AI 参考 24 个打开标签页、18 条本机记录，给出 2 个复核候选。")).toBeVisible();
+  await expect(page.getByText("AI 挑出 2 个适合先复核的旧标签页。")).toBeVisible();
   await expect(page.getByText("近期线索")).toBeVisible();
-  await expect(page.getByText("建议先看看这些")).toBeVisible();
+  await expect(page.getByText("AI 建议先看这些")).toBeVisible();
   await expect(page.getByText(/Old comparison notes/)).toBeVisible();
   await expect(page.getByText("分组：Research")).toBeVisible();
+  await expect(page.getByText("AI 判断：这像是上一轮对比调研的遗留页，时间较久且近期没有再打开。")).toBeVisible();
   await expect(page.getByText("线索：Comparison notes for an earlier investigation")).toBeVisible();
   await expect(page.locator("#previewSection")).toBeHidden();
   await expect(page.locator("#statusText")).toHaveText("AI 标签页整理");
