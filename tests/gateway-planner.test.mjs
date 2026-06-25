@@ -99,9 +99,10 @@ test("AI gateway planner posts a chat-completions JSON request", async () => {
     const secondTab = rowToObject(payload.tabFields, payload.tabs[1]);
     assert.equal(firstTab.sequenceIndex, 0);
     assert.equal(secondTab.index, 1);
-    assert.deepEqual(payload.pageSampleFields, ["status", "title", "metaDescription", "language", "headings", "visibleText", "reason"]);
+    assert.deepEqual(payload.pageSampleFields, ["status", "title", "metaDescription", "language", "contentKind", "headings", "visibleText", "reason"]);
     const firstSample = rowToObject(payload.pageSampleFields, firstTab.pageSample);
     assert.equal(firstSample.status, "ok");
+    assert.equal(firstSample.contentKind, "");
     assert.equal(firstSample.visibleText, "JSON schema output");
     assert.equal(rowToObject(payload.pageSampleResultFields, payload.pageSampleResults[0]).status, "ok");
     return {

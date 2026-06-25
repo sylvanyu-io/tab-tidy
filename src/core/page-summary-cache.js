@@ -103,10 +103,11 @@ function normalizeCachedSample(sample = {}) {
     title: String(sample.title || "").slice(0, 180),
     metaDescription: String(sample.metaDescription || "").slice(0, 360),
     language: String(sample.language || "").slice(0, 32),
+    contentKind: String(sample.contentKind || "").slice(0, 32),
     headings: Array.isArray(sample.headings)
       ? sample.headings.map((heading) => String(heading || "").slice(0, 160)).filter(Boolean).slice(0, 12)
       : [],
-    visibleText: String(sample.visibleText || "").slice(0, 1800)
+    visibleText: String(sample.visibleText || "").slice(0, 2600)
   };
 }
 

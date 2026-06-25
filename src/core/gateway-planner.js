@@ -35,7 +35,7 @@ const TAB_FIELDS = Object.freeze([
   "existingGroup",
   "pageSample"
 ]);
-const PAGE_SAMPLE_FIELDS = Object.freeze(["status", "title", "metaDescription", "language", "headings", "visibleText", "reason"]);
+const PAGE_SAMPLE_FIELDS = Object.freeze(["status", "title", "metaDescription", "language", "contentKind", "headings", "visibleText", "reason"]);
 const EXCLUDED_FIELDS = Object.freeze(["id", "windowId", "reason"]);
 const LOCKED_GROUP_FIELDS = Object.freeze(["id", "windowId", "title", "color", "collapsed", "tabIds"]);
 const PAGE_SAMPLE_RESULT_FIELDS = Object.freeze(["id", "windowId", "status", "origin", "reason"]);
@@ -712,10 +712,19 @@ function uniquifyGroupKeys(groups, settings) {
 function formatPageSample(result) {
   if (!result) return null;
   if (result.status !== "ok") {
-    return [result.status, "", "", "", [], "", result.reason || ""];
+    return [result.status, "", "", "", "", [], "", result.reason || ""];
   }
   const sample = result.sample || {};
-  return ["ok", sample.title || "", sample.metaDescription || "", sample.language || "", sample.headings || [], sample.visibleText || "", ""];
+  return [
+    "ok",
+    sample.title || "",
+    sample.metaDescription || "",
+    sample.language || "",
+    sample.contentKind || "",
+    sample.headings || [],
+    sample.visibleText || "",
+    ""
+  ];
 }
 
 export function parsePlanFromResponse(data) {

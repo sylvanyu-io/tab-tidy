@@ -157,6 +157,7 @@ function normalizeActivitySample(sample = {}) {
     title: String(sample.title || "").slice(0, 180),
     metaDescription: String(sample.metaDescription || "").slice(0, 240),
     language: String(sample.language || "").slice(0, 32),
+    contentKind: String(sample.contentKind || "").slice(0, 32),
     headings: Array.isArray(sample.headings)
       ? sample.headings.map((heading) => String(heading || "").slice(0, 120)).filter(Boolean).slice(0, 8)
       : []

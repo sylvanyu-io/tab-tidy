@@ -20,6 +20,7 @@ test("page summary cache matches sanitized URL fingerprints without storing full
         title: "Private issue",
         metaDescription: "Useful summary",
         language: "en",
+        contentKind: "discussion",
         headings: ["Heading"],
         visibleText: "Visible text"
       }
@@ -42,6 +43,7 @@ test("page summary cache matches sanitized URL fingerprints without storing full
   });
   assert.equal(cached.status, "ok");
   assert.equal(cached.sample.visibleText, "Visible text");
+  assert.equal(cached.sample.contentKind, "discussion");
 });
 
 test("continuous summary capture skips sleeping tabs", async () => {

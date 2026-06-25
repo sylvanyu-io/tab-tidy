@@ -2,6 +2,7 @@ import { expect, test } from "@playwright/test";
 import { createServer } from "node:http";
 import { readFile } from "node:fs/promises";
 import { extname, resolve } from "node:path";
+import { samplePage } from "../src/core/page-sampler.js";
 
 const rootDir = resolve(".");
 let server;
@@ -39,6 +40,43 @@ test.beforeEach(async ({ page }, testInfo) => {
       localStorage.setItem("tabTidy.uiLanguage", "zh-CN");
     });
   }
+});
+
+test("page sampler extracts forum discussion content instead of page chrome", async ({ page }) => {
+  await page.setContent(`
+    <html lang="zh-CN">
+      <head>
+        <title>模型部署讨论 - Example Forum</title>
+        <meta name="description" content="关于模型部署和网关稳定性的讨论">
+      </head>
+      <body>
+        <header>首页 登录 注册 搜索 菜单</header>
+        <aside>广告 推荐阅读 友情链接</aside>
+        <main class="thread discussion">
+          <h1>模型部署后网关偶发 502 怎么排查？</h1>
+          <article class="post topic-body">
+            <p>我把 LLM 网关放在 Cloudflare 后面，最近在高并发请求时偶尔返回 502。</p>
+            <p>已经确认本地服务还活着，怀疑是 tunnel 和上游超时之间的配合问题。</p>
+          </article>
+          <section class="comment reply">
+            <p>建议先记录每次请求的 upstream latency、HTTP status 和 model name，再按时间窗口聚合。</p>
+          </section>
+          <section class="comment reply">
+            <p>如果是长文本规划任务，最好把 coarse planning 和 refine planning 的耗时分开看。</p>
+          </section>
+        </main>
+        <footer>隐私 条款 联系我们</footer>
+      </body>
+    </html>
+  `);
+
+  const sample = await page.evaluate(samplePage, "test forum extraction");
+
+  expect(sample.contentKind).toBe("discussion");
+  expect(sample.visibleText).toContain("LLM 网关放在 Cloudflare 后面");
+  expect(sample.visibleText).toContain("coarse planning 和 refine planning");
+  expect(sample.visibleText).not.toContain("首页 登录 注册");
+  expect(sample.visibleText).not.toContain("广告 推荐阅读");
 });
 
 test("control surface renders settings and mock preview", async ({ page }) => {

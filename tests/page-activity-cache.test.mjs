@@ -32,6 +32,7 @@ test("activity cache tracks first seen and strips sensitive URL parts", async ()
       sample: {
         title: "Issue summary",
         metaDescription: "Work item",
+        contentKind: "discussion",
         headings: ["Implementation"],
         visibleText: "Not stored in activity cache"
       }
@@ -46,6 +47,7 @@ test("activity cache tracks first seen and strips sensitive URL parts", async ()
   const entry = Object.values(cache.entries)[0];
   assert.equal(entry.seenCount, 2);
   assert.equal(entry.sample.title, "Issue summary");
+  assert.equal(entry.sample.contentKind, "discussion");
   assert.equal(entry.firstSeenAt, "2026-06-25T00:00:00.000Z");
   assert.equal(entry.lastSeenAt, "2026-06-25T00:00:01.000Z");
 });
