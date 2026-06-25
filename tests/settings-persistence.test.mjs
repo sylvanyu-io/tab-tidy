@@ -145,7 +145,7 @@ test("gateway key is not persisted unless explicitly remembered", async () => {
   assert.equal(persisted.gatewayApiKey, "gateway-test-key");
 });
 
-test("turning off continuous summaries clears cached page summaries", async () => {
+test("turning off continuous summaries preserves cached page summaries for recaps", async () => {
   const chrome = createFakeChrome();
   chrome.__state.storage[STORAGE_KEYS.pageSummaryCache] = {
     version: 1,
@@ -159,5 +159,5 @@ test("turning off continuous summaries clears cached page summaries", async () =
     continuousPageSummaries: false
   });
 
-  assert.equal(chrome.__state.storage[STORAGE_KEYS.pageSummaryCache], undefined);
+  assert.equal(chrome.__state.storage[STORAGE_KEYS.pageSummaryCache].entries.cached.sample.visibleText, "private cached text");
 });

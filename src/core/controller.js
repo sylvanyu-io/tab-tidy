@@ -9,6 +9,7 @@ import {
 } from "../shared/settings.js";
 import { shouldShowPageSampleCount } from "../shared/page-sampling-copy.js";
 import { applyValidatedPlan, createRollbackSnapshot, undoFromRollback } from "./chrome-executor.js";
+import { getActivityOverview, rememberOpenTabsActivity } from "./page-activity-cache.js";
 import { cachedPageSampleForTab, rememberPageSummary } from "./page-summary-cache.js";
 import { requestPageSample } from "./page-sampler.js";
 import { fetchJsonWithTimeout } from "./fetch-timeout.js";
@@ -50,6 +51,8 @@ export async function handleRuntimeMessage(chromeApi, message) {
       return cancelActiveJob(chromeApi);
     case "progressCopy:generate":
       return generateProgressCopy(chromeApi, message);
+    case "activity:getOverview":
+      return getActivityOverview(chromeApi, { rangeMs: message.rangeMs });
     case "tabs:applyLastPlan":
       return applyLastPlan(chromeApi, {
         confirmChangedTabs: Boolean(message.confirmChangedTabs),
@@ -72,9 +75,6 @@ export async function getSettings(chromeApi) {
 export async function saveSettings(chromeApi, nextSettings) {
   const settings = normalizeSettings(nextSettings);
   await setLocal(chromeApi, STORAGE_KEYS.settings, settingsForPersistence(settings));
-  if (!settings.continuousPageSummaries) {
-    await removeLocal(chromeApi, STORAGE_KEYS.pageSummaryCache);
-  }
   return settings;
 }
 
@@ -119,6 +119,9 @@ async function runActiveAnalysis(chromeApi, rawSettings, invocation, operationId
 
     await reportProgress({ phase: "inventory", progress: 10, message: "正在读取标签页" });
     const inventory = await collectTabInventory(chromeApi, settings, invocation);
+    if (settings.continuousPageSummaries) {
+      await rememberOpenTabsActivity(chromeApi, inventory.tabs || []).catch(() => null);
+    }
     await reportProgress({
       phase: "inventory",
       progress: 16,

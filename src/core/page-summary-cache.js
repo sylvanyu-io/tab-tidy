@@ -5,6 +5,7 @@ import {
   URL_PRIVACY_MODES,
   normalizeSettings
 } from "../shared/settings.js";
+import { rememberOpenTabActivity } from "./page-activity-cache.js";
 import { requestPageSample } from "./page-sampler.js";
 import { STORAGE_KEYS, getLocal, setLocal } from "./storage.js";
 import { canSampleUrl, getTabUrl, sanitizeTabUrl } from "./url-sanitizer.js";
@@ -35,6 +36,7 @@ export async function cachedPageSampleForTab(chromeApi, tabDescriptor) {
 export async function capturePageSummaryIfAllowed(chromeApi, tab, rawSettings = {}) {
   const settings = normalizeSettings(rawSettings);
   if (!settings.continuousPageSummaries) return { status: "disabled", reason: "Continuous summaries are off." };
+  await rememberOpenTabActivity(chromeApi, tab).catch(() => null);
   if (!isSafeBackgroundTab(tab)) return { status: "skipped", reason: "Tab is not eligible for background summary capture." };
   if (!chromeApi.permissions?.contains || !chromeApi.scripting?.executeScript) {
     return { status: "blocked", reason: "Required permissions or scripting API are unavailable." };
@@ -92,6 +94,7 @@ export async function rememberPageSummary(chromeApi, tab, sampleResult) {
 
   const pruned = pruneCache(cache, now);
   await setLocal(chromeApi, STORAGE_KEYS.pageSummaryCache, pruned);
+  await rememberOpenTabActivity(chromeApi, tab, sampleResult, { now }).catch(() => null);
   return pruned.entries[key];
 }
 
