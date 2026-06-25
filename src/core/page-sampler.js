@@ -132,7 +132,7 @@ export function samplePage(reason) {
 
     if (bestContainer.text) pieces.push(bestContainer.text);
     if (discussionSnippets.length) {
-      kind = kind === "article" ? "discussion" : kind || "discussion";
+      kind = kind === "article" && !looksLikeForumHost() ? "article" : "discussion";
       pieces.push(discussionSnippets.join(" "));
     }
     if (blockText && !pieces.some((piece) => overlapsEnough(piece, blockText))) pieces.push(blockText);
@@ -143,7 +143,7 @@ export function samplePage(reason) {
 
     return {
       kind: kind || "page",
-      text: uniqueText(pieces.join(" ")).slice(0, limit)
+      text: stripKnownForumChrome(uniqueText(pieces.join(" "))).slice(0, limit)
     };
   }
 
@@ -153,6 +153,15 @@ export function samplePage(reason) {
       "main",
       "[role='main']",
       "[itemprop='articleBody']",
+      "#siteTable",
+      "#thing_t3",
+      ".sitetable",
+      ".commentarea",
+      ".commentarea .usertext-body",
+      ".comment .usertext-body",
+      ".comment-tree",
+      ".commtext",
+      ".toptext",
       ".markdown-body",
       ".entry-content",
       ".post-content",
@@ -173,7 +182,8 @@ export function samplePage(reason) {
       ".timeline-comment",
       ".js-comment-body"
     ].join(",");
-    const candidates = [...document.querySelectorAll(selector), document.body].filter(Boolean);
+    const specificCandidates = [...document.querySelectorAll(selector)].filter(Boolean);
+    const candidates = specificCandidates.length ? specificCandidates : [document.body].filter(Boolean);
     let best = { element: null, score: 0, text: "", kind: "" };
     for (const element of candidates) {
       if (isNoiseElement(element) || isInvisible(element)) continue;
@@ -207,6 +217,12 @@ export function samplePage(reason) {
   function collectDiscussionSnippets() {
     const selector = [
       "[itemprop='comment']",
+      ".commentarea .usertext-body",
+      ".comment .usertext-body",
+      ".entry .usertext-body",
+      ".comment-tree .commtext",
+      ".commtext",
+      "shreddit-comment",
       "[class*='comment' i]",
       "[class*='reply' i]",
       "[class*='post' i]",
@@ -245,7 +261,7 @@ export function samplePage(reason) {
 
   function classifyContentElement(element) {
     const idClass = `${element.id || ""} ${element.className || ""}`;
-    if (/(comment|reply|thread|topic|discussion|forum|message)/i.test(idClass)) return "discussion";
+    if (looksLikeForumHost() || /(comment|reply|thread|topic|discussion|forum|message|sitetable|commtext)/i.test(idClass)) return "discussion";
     if (/(article|post|entry|markdown|cooked|issue|content)/i.test(idClass) || element.tagName === "ARTICLE") return "article";
     return "page";
   }
@@ -254,9 +270,13 @@ export function samplePage(reason) {
     if (!element?.closest) return false;
     return Boolean(
       element.closest(
-        "nav,header,footer,aside,form,dialog,[role='navigation'],[role='search'],[role='banner'],[role='contentinfo'],[aria-hidden='true']"
+        "nav,header,footer,aside,form,dialog,#header,.side,.titlebox,.tabmenu,.footer-parent,.nav-buttons,.infobar,.morelink,.promotedlink,[role='navigation'],[role='search'],[role='banner'],[role='contentinfo'],[aria-hidden='true']"
       )
     );
+  }
+
+  function looksLikeForumHost() {
+    return /(^|\.)reddit\.com$|news\.ycombinator\.com$|discourse\.|stackoverflow\.com$|stackexchange\.com$/i.test(location.hostname);
   }
 
   function isInvisible(element) {
@@ -291,6 +311,17 @@ export function samplePage(reason) {
       result.push(part);
     }
     return result.join(" ");
+  }
+
+  function stripKnownForumChrome(text) {
+    return cleanText(text)
+      .replace(/Welcome to Reddit[\s\S]{0,220}?×\s*\d+\s*/i, "")
+      .replace(/Welcome to Reddit, the front page of the internet\.?/gi, "")
+      .replace(/BECOME A REDDITOR and join one of thousands of communities\.?/gi, "")
+      .replace(/BECOME A REDDITOR and start exploring\.?/gi, "")
+      .replace(/Want to add to the discussion\?\s*Post a comment!\s*CREATE AN ACCOUNT/gi, "")
+      .replace(/all \d+ comments\S* sorted by:\s*\w+/gi, "")
+      .replace(/Sort by:\s*(Best|Top|New|Controversial|Old|Q&A)/gi, "");
   }
 
   function cleanText(value) {

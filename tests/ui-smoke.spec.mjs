@@ -53,6 +53,8 @@ test("page sampler extracts forum discussion content instead of page chrome", as
         <header>首页 登录 注册 搜索 菜单</header>
         <aside>广告 推荐阅读 友情链接</aside>
         <main class="thread discussion">
+          <div>Welcome to Reddit. Come for the cats, stay for the empathy. BECOME A REDDITOR and start exploring. × 21</div>
+          <div>all 120 comments sorted by: best</div>
           <h1>模型部署后网关偶发 502 怎么排查？</h1>
           <article class="post topic-body">
             <p>我把 LLM 网关放在 Cloudflare 后面，最近在高并发请求时偶尔返回 502。</p>
@@ -77,6 +79,8 @@ test("page sampler extracts forum discussion content instead of page chrome", as
   expect(sample.visibleText).toContain("coarse planning 和 refine planning");
   expect(sample.visibleText).not.toContain("首页 登录 注册");
   expect(sample.visibleText).not.toContain("广告 推荐阅读");
+  expect(sample.visibleText).not.toContain("Welcome to Reddit");
+  expect(sample.visibleText).not.toContain("all 120 comments sorted");
 });
 
 test("control surface renders settings and mock preview", async ({ page }) => {
