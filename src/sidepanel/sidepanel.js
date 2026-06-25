@@ -34,8 +34,8 @@ const UI_COPY = Object.freeze({
     "status.permissionContinuousSummary": "需要授权网页读取权限后，才能持续积累页面摘要。",
     "status.permissionPageSummary": "需要授权页面摘要权限，才能读取网页文字摘要。",
     "status.permissionFirstEnablePageSummary": "需要先打开「需要时补读页面摘要」并完成授权，才能读取页面摘要。",
-    "status.unsupportedContinuousSummary": "当前版本不支持持续积累页面摘要。",
-    "status.unsupportedPageSummary": "当前构建不包含页面摘要功能。",
+    "status.unsupportedContinuousSummary": "当前安装包没有开启长期页面摘要。",
+    "status.unsupportedPageSummary": "当前安装包没有开启页面摘要。",
     "status.customModelNeedsGateway": "自定义模型名需要先填写自定义 AI 网关地址。",
     "status.customModelMissing": "请填写自定义模型名，或者选择一个预设模型。",
     "status.applyChanged": "已创建 {groupCount} 个分组；已处理 {changedTabs} 个变化标签页{reviewText}",
@@ -56,12 +56,12 @@ const UI_COPY = Object.freeze({
     "scope.optionCurrent": "只整理当前窗口",
     "scope.optionAll": "合并并整理所有窗口",
     "sampling.title": "需要时补读页面摘要",
-    "sampling.subtitle": "默认只读拿不准的可访问页面",
-    "sampling.tooltip": "只读取标题、描述、标题层级和页面上的正文或讨论摘录；不会读取密码、表单内容、Cookie、本地存储或完整 HTML。休眠标签页不会被唤醒。",
+    "sampling.subtitle": "读取少量网页文字，帮助 AI 判断主题",
+    "sampling.tooltip": "会把标题、描述、标题层级和页面上的正文或讨论摘录发送给 AI 用于整理；不会读取密码、表单内容、Cookie、本地存储或完整 HTML。休眠标签页不会被唤醒。",
     "sampling.aria": "页面摘要说明",
     "continuous.title": "长期积累页面摘要",
-    "continuous.subtitle": "授权后自动缓存打开过的页面",
-    "continuous.tooltip": "开启后浏览器会请求网页读取权限；之后会在后台给打开过的、未休眠、非无痕页面保存短摘要，用于之后整理和时间段回顾。不会主动唤醒标签页。",
+    "continuous.subtitle": "本机保存短摘要，之后整理和回顾更准",
+    "continuous.tooltip": "开启后浏览器会请求网页读取权限；之后会在后台给打开过的、未休眠、非无痕页面保存短摘要。整理时，相关摘要会发送给 AI 辅助归类；不会主动唤醒标签页。",
     "continuous.aria": "持续摘要说明",
     "activity.summary": "时间回顾",
     "activity.title": "看看最近在忙什么",
@@ -94,7 +94,7 @@ const UI_COPY = Object.freeze({
     "switch.collapse.title": "整理后收起分组",
     "switch.collapse.subtitle": "新分组默认折叠",
     "field.urlPrivacy": "发送给 AI 的网址信息",
-    "field.pageContext": "补读页面摘要范围",
+    "field.pageContext": "页面摘要读取范围",
     "field.hostPermission": "站点授权",
     "field.resultLanguage": "结果语言",
     "field.promptPreset": "整理方式",
@@ -122,7 +122,7 @@ const UI_COPY = Object.freeze({
     "option.urlSanitized": "精简网址",
     "option.urlFull": "完整网址",
     "option.pageOff": "不补读页面摘要",
-    "option.pageAmbiguous": "开启补读时：只读拿不准的页面",
+    "option.pageAmbiguous": "只读拿不准的页面",
     "option.pageGranted": "尽量读取已授权页面",
     "option.permissionNever": "整理时不弹授权",
     "option.permissionOrigin": "按站点询问",
@@ -190,8 +190,8 @@ const UI_COPY = Object.freeze({
     "status.permissionContinuousSummary": "Allow page-reading access before accumulating page summaries.",
     "status.permissionPageSummary": "Allow page-summary access before reading page text summaries.",
     "status.permissionFirstEnablePageSummary": "Turn on page summaries and grant access before reading page summaries.",
-    "status.unsupportedContinuousSummary": "This build does not support accumulated page summaries.",
-    "status.unsupportedPageSummary": "This build does not include page summaries.",
+    "status.unsupportedContinuousSummary": "This installation does not include page memory.",
+    "status.unsupportedPageSummary": "This installation does not include page summaries.",
     "status.customModelNeedsGateway": "Custom model names require a custom AI gateway URL.",
     "status.customModelMissing": "Enter a custom model name, or choose a preset model.",
     "status.applyChanged": "Created {groupCount} groups; handled {changedTabs} changed tabs{reviewText}",
@@ -212,12 +212,12 @@ const UI_COPY = Object.freeze({
     "scope.optionCurrent": "Organize current window only",
     "scope.optionAll": "Merge and organize all windows",
     "sampling.title": "Read page summaries when useful",
-    "sampling.subtitle": "Default: only unclear accessible pages",
-    "sampling.tooltip": "Reads only title, description, headings, and visible article or discussion excerpts. It will not read passwords, form values, cookies, local storage, or full HTML. Sleeping tabs are not awakened.",
+    "sampling.subtitle": "Reads a little page text so AI can judge topics",
+    "sampling.tooltip": "Sends titles, descriptions, headings, and visible article or discussion excerpts to AI for organization. It will not read passwords, form values, cookies, local storage, or full HTML. Sleeping tabs are not awakened.",
     "sampling.aria": "Page summary details",
     "continuous.title": "Build page memory",
-    "continuous.subtitle": "Cache pages you open after permission",
-    "continuous.tooltip": "Chrome will ask for page-reading access. After that, Tab Tidy saves short summaries for opened, awake, non-incognito pages in the background, then uses them for future organization and activity recaps. It will not wake sleeping tabs.",
+    "continuous.subtitle": "Saves short local summaries for better future runs",
+    "continuous.tooltip": "Chrome will ask for page-reading access. After that, Tab Tidy saves short summaries for opened, awake, non-incognito pages in the background. Related summaries are sent to AI during organization. It will not wake sleeping tabs.",
     "continuous.aria": "Accumulated summary details",
     "activity.summary": "Activity recap",
     "activity.title": "See what you have been doing",
@@ -250,7 +250,7 @@ const UI_COPY = Object.freeze({
     "switch.collapse.title": "Collapse groups after organizing",
     "switch.collapse.subtitle": "New groups start collapsed",
     "field.urlPrivacy": "URLs sent to AI",
-    "field.pageContext": "Page summary range",
+    "field.pageContext": "Page summary reading range",
     "field.hostPermission": "Site access",
     "field.resultLanguage": "Result language",
     "field.promptPreset": "Organization mode",
@@ -278,7 +278,7 @@ const UI_COPY = Object.freeze({
     "option.urlSanitized": "Short URLs",
     "option.urlFull": "Full URLs",
     "option.pageOff": "Do not read page summaries",
-    "option.pageAmbiguous": "When enabled: only unclear pages",
+    "option.pageAmbiguous": "Only unclear pages",
     "option.pageGranted": "Read authorized pages when possible",
     "option.permissionNever": "Do not ask while organizing",
     "option.permissionOrigin": "Ask per site",
@@ -397,6 +397,7 @@ const nodes = {
 let uiLanguage = readStoredUiLanguage() || browserUiLanguage();
 let currentStatus = { key: "status.default", params: {}, text: "", isError: false };
 let lastPreview = null;
+let lastError = null;
 let lastCanApply = false;
 let canUndo = false;
 let pageSamplingOriginCache = { origins: [], refreshedAt: 0 };
@@ -606,6 +607,8 @@ function applyUiLanguage() {
   }
   if (lastPreview) {
     renderPreview({ preview: lastPreview, validation: { ok: lastCanApply }, settings: { languageMode: currentResultLanguageMode() } });
+  } else if (lastError) {
+    renderError(lastError);
   } else {
     nodes.previewCount.textContent = t("preview.pending");
     nodes.previewRoot.textContent = t("preview.empty");
@@ -815,6 +818,7 @@ async function handleAnalyzeClick() {
 async function analyze() {
   setBusy(true, t("status.preparing"), { cancelable: true, progress: 4 });
   try {
+    const persistedSettings = readSettings();
     const settings = readSettings({ effectiveForAnalysis: true });
     settings.languageMode = effectiveResultLanguageMode(settings.languageMode);
     validateGatewaySettingsForAnalyze(settings);
@@ -828,7 +832,7 @@ async function analyze() {
     updateLocalProgress(t("status.resolvingWindow"), 14);
     const windowId = await resolveInvocationWindowId();
     updateLocalProgress(t("status.startingBackground"), 16);
-    const started = await sendMessage({ type: "tabs:startAnalyze", settings, windowId });
+    const started = await sendMessage({ type: "tabs:startAnalyze", settings, persistedSettings, windowId });
     const job = await waitForAnalysisCompletion(started?.operationId);
     lastPreview = job.preview;
     lastCanApply = Boolean(job.validation?.ok);
@@ -982,6 +986,7 @@ async function undoLastApply() {
 }
 
 function renderPreview(job) {
+  lastError = null;
   nodes.previewSection.hidden = false;
   setText(".step-label", t("preview.step"));
   setText(".section-heading h2", t("preview.heading"));
@@ -1163,6 +1168,7 @@ function renderDetails(payload) {
 }
 
 function renderError(error) {
+  lastError = error instanceof Error ? error : new Error(String(error?.message || error || t("status.previousFailed")));
   lastPreview = null;
   lastCanApply = false;
   nodes.previewSection.hidden = false;
@@ -1170,9 +1176,9 @@ function renderError(error) {
   setText(".section-heading h2", t("error.heading"));
   nodes.previewCount.textContent = t("preview.error");
   nodes.previewRoot.className = "error-panel";
-  nodes.previewRoot.replaceChildren(errorPanelContent(error));
+  nodes.previewRoot.replaceChildren(errorPanelContent(lastError));
   nodes.detailsRoot.hidden = false;
-  nodes.detailsText.textContent = JSON.stringify({ error: error.message }, null, 2);
+  nodes.detailsText.textContent = JSON.stringify({ error: lastError.message }, null, 2);
   syncActionState();
 }
 
@@ -1260,6 +1266,7 @@ function activityStaleSection(staleTabs) {
 
 function resetToSetup() {
   lastPreview = null;
+  lastError = null;
   lastCanApply = false;
   nodes.previewSection.hidden = true;
   setText(".step-label", t("preview.step"));
@@ -1637,8 +1644,8 @@ function syncChoiceGroups() {
 }
 
 function syncActionState() {
-  nodes.appShell.dataset.flowState = lastPreview ? "preview" : "setup";
-  nodes.actions.dataset.state = lastPreview ? "preview" : "idle";
+  nodes.appShell.dataset.flowState = lastPreview || lastError ? "preview" : "setup";
+  nodes.actions.dataset.state = lastPreview ? "preview" : lastError ? "error" : "idle";
   nodes.actions.dataset.canUndo = canUndo ? "true" : "false";
   nodes.applyBtn.hidden = !lastPreview;
   nodes.undoBtn.hidden = !canUndo;

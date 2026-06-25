@@ -145,13 +145,13 @@ test("control surface renders settings and mock preview", async ({ page }) => {
 
   await page.locator("#ackSampling").check();
   await expect(page.locator("#samplingRisk")).toBeVisible();
-  await expect(page.getByText("默认只读拿不准的可访问页面")).toBeVisible();
+  await expect(page.getByText("读取少量网页文字，帮助 AI 判断主题")).toBeVisible();
   await expect(page.locator("#pageContextMode")).toHaveValue("ambiguous_with_permission");
   await expect(page.locator("#hostPermissionRequestMode")).toHaveValue("ask_for_all_visible_origins");
   await expect(page.locator("#pageContextMode option[value='active_tab_only']")).toHaveCount(0);
 
   await page.getByText("更多选项").click();
-  await expect(page.getByLabel("补读页面摘要范围")).toHaveValue("ambiguous_with_permission");
+  await expect(page.getByLabel("页面摘要读取范围")).toHaveValue("ambiguous_with_permission");
   await expect(page.locator("#pageContextMode")).toContainText("尽量读取已授权页面");
   await expect(page.locator("#gatewayBaseUrl")).toHaveValue("");
   await expect(page.locator("#gatewayBaseUrl")).toHaveAttribute("placeholder", "不填则使用默认服务");
@@ -350,6 +350,7 @@ test("default result language follows the English UI when generating", async ({ 
       }
     };
     window.__startedSettings = null;
+    window.__persistedSettings = null;
     window.__analysisStarted = false;
     window.chrome = {
       runtime: {
@@ -360,6 +361,7 @@ test("default result language follows the English UI when generating", async ({ 
           if (message.type === "tabs:getActiveJob") return { ok: true, result: window.__analysisStarted ? activeJob : null };
           if (message.type === "tabs:startAnalyze") {
             window.__startedSettings = message.settings;
+            window.__persistedSettings = message.persistedSettings;
             window.__analysisStarted = true;
             return { ok: true, result: { operationId: activeJob.operationId } };
           }
@@ -385,6 +387,7 @@ test("default result language follows the English UI when generating", async ({ 
   await expect(page.locator("#languageMode")).toHaveValue("auto");
   await page.getByRole("button", { name: "Generate plan" }).click();
   await expect.poll(() => page.evaluate(() => window.__startedSettings?.languageMode)).toBe("en-US");
+  await expect.poll(() => page.evaluate(() => window.__persistedSettings?.languageMode)).toBe("auto");
 });
 
 test("side panel restores a completed background preview after reopening", async ({ page }) => {
@@ -544,6 +547,7 @@ test("side panel restores a background planning error after reopening", async ({
   await expect(page.locator(".step-label")).toHaveText("出错");
   await expect(page.locator(".section-heading h2")).toHaveText("生成失败");
   await expect(page.locator(".error-panel")).toContainText("This model is not available on the free gateway.");
+  await expect(page.locator(".launch-panel")).toBeHidden();
   await expect(page.getByText("整理预览")).toBeHidden();
   await expect(page.getByRole("button", { name: "生成方案" })).toBeEnabled();
 });
@@ -1366,12 +1370,12 @@ test("page summary range can be changed while the main toggle is off", async ({ 
   await page.goto(`${baseUrl}/src/sidepanel/index.html`);
   await page.getByText("更多选项").click();
   await expect(page.locator("#ackSampling")).not.toBeChecked();
-  await expect(page.getByLabel("补读页面摘要范围")).toHaveValue("ambiguous_with_permission");
+  await expect(page.getByLabel("页面摘要读取范围")).toHaveValue("ambiguous_with_permission");
 
-  await page.getByLabel("补读页面摘要范围").selectOption("all_granted_origins");
+  await page.getByLabel("页面摘要读取范围").selectOption("all_granted_origins");
 
   await expect(page.locator("#ackSampling")).not.toBeChecked();
-  await expect(page.getByLabel("补读页面摘要范围")).toHaveValue("all_granted_origins");
+  await expect(page.getByLabel("页面摘要读取范围")).toHaveValue("all_granted_origins");
   await expect.poll(() => page.evaluate(() => window.__savedSettings.at(-1)?.pageContextMode)).toBe("all_granted_origins");
   await expect.poll(() => page.evaluate(() => window.__savedSettings.at(-1)?.pageSamplingConsentMode)).toBe(
     "not_acknowledged"
