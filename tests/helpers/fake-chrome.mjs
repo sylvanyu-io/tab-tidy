@@ -60,6 +60,16 @@ export function createFakeChrome(seed = {}) {
         if (!window) throw new Error("No focused window");
         return cloneWindow(window, Boolean(options.populate));
       },
+      async update(windowId, updateProperties = {}) {
+        const window = state.windows.get(windowId);
+        if (!window) throw new Error(`No window with id ${windowId}`);
+        if (updateProperties.focused) {
+          for (const item of state.windows.values()) item.focused = false;
+          window.focused = true;
+        }
+        Object.assign(window, updateProperties);
+        return cloneWindow(window, true);
+      },
       async create(properties = {}) {
         const windowId = state.nextWindowId++;
         const newWindow = normalizeWindow({

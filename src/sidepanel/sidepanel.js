@@ -63,23 +63,33 @@ const UI_COPY = Object.freeze({
     "continuous.subtitle": "本机保存短摘要，之后整理和回顾更准",
     "continuous.tooltip": "开启后浏览器会请求网页读取权限；之后会在后台给打开过的、未休眠、非无痕页面保存短摘要。整理时，相关摘要会发送给 AI 辅助归类；不会主动唤醒标签页。",
     "continuous.aria": "持续摘要说明",
-    "activity.summary": "时间回顾",
-    "activity.title": "看看最近在忙什么",
-    "activity.subtitle": "根据本机缓存的页面记录生成；不会关闭标签页。",
-    "activity.rangeAria": "回顾时间范围",
+    "activity.summary": "清理候选",
+    "activity.title": "先找可能该关的旧标签页",
+    "activity.subtitle": "按首次见到和最近活跃排序，只辅助判断，不会自动关闭。",
+    "activity.rangeAria": "清理候选时间范围",
     "activity.day": "1 天",
     "activity.week": "7 天",
     "activity.month": "30 天",
-    "activity.empty": "还没有回顾。",
-    "activity.loading": "正在整理时间回顾",
-    "activity.none": "这段时间还没有足够记录。开启长期积累后会越来越准。",
-    "activity.coverage": "已记录 {entries} 个页面，其中 {sampled} 个有页面摘要。",
-    "activity.focus": "高频线索",
+    "activity.empty": "还没有清理候选。",
+    "activity.loading": "正在查找清理候选",
+    "activity.none": "还没有足够记录。打开一段时间后，这里会更准。",
+    "activity.coverage": "当前打开 {total} 个标签页，已追踪 {tracked} 个；找到 {stale} 个清理候选。",
+    "activity.focus": "近期线索",
     "activity.sites": "常见站点",
     "activity.recent": "最近页面",
-    "activity.stale": "旧标签页候选",
-    "activity.staleHint": "只提示，不会自动关闭。首次见到或最近见到时间来自插件本机记录。",
+    "activity.stale": "建议先看看这些",
+    "activity.staleHint": "按最久未活跃排序。时间来自插件本机记录，不代表完整浏览器历史。",
     "activity.noStale": "暂时没有明显旧标签页候选。",
+    "activity.focusTab": "定位",
+    "activity.focusTabAria": "定位标签页：{title}",
+    "activity.focused": "已定位标签页",
+    "activity.focusFailed": "标签页可能已经关闭，请刷新候选。",
+    "activity.firstSeen": "首次见到 {age}",
+    "activity.lastActive": "最近活跃 {age}",
+    "activity.seenCount": "记录 {count} 次",
+    "activity.group": "分组：{group}",
+    "activity.noGroup": "未分组",
+    "activity.summaryClue": "线索：{text}",
     "customPrompt.label": "自定义要求",
     "customPrompt.placeholder": "例如：找工作、AI 论文、当前项目分开；拿不准的先放到待分类。",
     "advanced.summary": "更多选项",
@@ -219,23 +229,33 @@ const UI_COPY = Object.freeze({
     "continuous.subtitle": "Saves short local summaries for better future runs",
     "continuous.tooltip": "Chrome will ask for page-reading access. After that, Tab Tidy saves short summaries for opened, awake, non-incognito pages in the background. Related summaries are sent to AI during organization. It will not wake sleeping tabs.",
     "continuous.aria": "Accumulated summary details",
-    "activity.summary": "Activity recap",
-    "activity.title": "See what you have been doing",
-    "activity.subtitle": "Generated from local page memory. It never closes tabs.",
-    "activity.rangeAria": "Recap time range",
+    "activity.summary": "Cleanup candidates",
+    "activity.title": "Find older tabs worth reviewing first",
+    "activity.subtitle": "Sorted by first seen and recent activity. Tab Tidy never closes tabs automatically.",
+    "activity.rangeAria": "Cleanup candidate range",
     "activity.day": "1 day",
     "activity.week": "7 days",
     "activity.month": "30 days",
-    "activity.empty": "No recap yet.",
-    "activity.loading": "Preparing activity recap",
-    "activity.none": "Not enough records in this range yet. Page memory gets better over time.",
-    "activity.coverage": "Tracked {entries} pages, including {sampled} with page summaries.",
-    "activity.focus": "Frequent clues",
+    "activity.empty": "No cleanup candidates yet.",
+    "activity.loading": "Finding cleanup candidates",
+    "activity.none": "Not enough local records yet. This gets better after Tab Tidy has observed more tabs.",
+    "activity.coverage": "{total} tabs open, {tracked} tracked; found {stale} cleanup candidates.",
+    "activity.focus": "Recent clues",
     "activity.sites": "Common sites",
     "activity.recent": "Recent pages",
-    "activity.stale": "Older tab candidates",
-    "activity.staleHint": "Suggestions only. Tab Tidy will not close anything automatically. Dates come from local extension memory.",
+    "activity.stale": "Start with these",
+    "activity.staleHint": "Sorted by oldest inactive tabs. Dates come from local extension memory, not complete browser history.",
     "activity.noStale": "No obvious older tab candidates yet.",
+    "activity.focusTab": "Find tab",
+    "activity.focusTabAria": "Find tab: {title}",
+    "activity.focused": "Tab focused",
+    "activity.focusFailed": "The tab may already be closed. Refresh candidates.",
+    "activity.firstSeen": "First seen {age}",
+    "activity.lastActive": "Last active {age}",
+    "activity.seenCount": "Seen {count} times",
+    "activity.group": "Group: {group}",
+    "activity.noGroup": "Ungrouped",
+    "activity.summaryClue": "Clue: {text}",
     "customPrompt.label": "Custom instructions",
     "customPrompt.placeholder": "Example: keep job search, AI papers, and current projects separate; put uncertain pages in review.",
     "advanced.summary": "More options",
@@ -1208,11 +1228,18 @@ function renderActivityOverview(overview = {}) {
   const wrapper = document.createElement("div");
   wrapper.className = "activity-result-content";
   wrapper.append(
-    activityLine(t("activity.coverage", { entries: recap.entries, sampled: recap.sampledEntries || 0 }), "strong"),
+    activityLine(
+      t("activity.coverage", {
+        total: overview.openTabs?.total || 0,
+        tracked: overview.openTabs?.tracked || 0,
+        stale: overview.openTabs?.staleCandidates || 0
+      }),
+      "strong"
+    ),
+    activityStaleSection(overview.staleTabs || []),
     activitySection(t("activity.focus"), (recap.topTerms || []).map((item) => item.value).join(" · ")),
     activitySection(t("activity.sites"), (recap.topHosts || []).map((item) => item.value).join(" · ")),
-    activityList(t("activity.recent"), (recap.recentPages || []).slice(0, 5).map((page) => `${page.title}${page.hostname ? ` · ${page.hostname}` : ""}`)),
-    activityStaleSection(overview.staleTabs || [])
+    activityList(t("activity.recent"), (recap.recentPages || []).slice(0, 5).map((page) => `${page.title}${page.hostname ? ` · ${page.hostname}` : ""}`))
   );
   nodes.activityResult.className = "activity-result";
   nodes.activityResult.replaceChildren(wrapper);
@@ -1250,20 +1277,80 @@ function activityStaleSection(staleTabs) {
   const hint = document.createElement("small");
   hint.textContent = t("activity.staleHint");
   const list = document.createElement("ul");
-  const items = staleTabs.slice(0, 5);
+  list.className = "cleanup-candidate-list";
+  const items = staleTabs.slice(0, 12);
   if (!items.length) {
     const empty = document.createElement("li");
     empty.textContent = t("activity.noStale");
     list.append(empty);
   } else {
     for (const tab of items) {
-      const li = document.createElement("li");
-      li.textContent = `${tab.title || tab.hostname || "Untitled"} · ${formatRelativeAge(tab.ageMs)}`;
-      list.append(li);
+      list.append(cleanupCandidateRow(tab));
     }
   }
   section.append(activityLine(t("activity.stale"), "strong"), hint, list);
   return section;
+}
+
+function cleanupCandidateRow(tab) {
+  const row = document.createElement("li");
+  row.className = "cleanup-candidate";
+
+  const body = document.createElement("div");
+  body.className = "cleanup-candidate-body";
+  const title = document.createElement("strong");
+  title.textContent = tab.title || tab.hostname || "Untitled";
+  const host = document.createElement("small");
+  host.textContent = [tab.hostname, tab.currentGroupTitle ? t("activity.group", { group: tab.currentGroupTitle }) : t("activity.noGroup")]
+    .filter(Boolean)
+    .join(" · ");
+  const meta = document.createElement("div");
+  meta.className = "cleanup-candidate-meta";
+  meta.append(
+    cleanupMetaChip(t("activity.firstSeen", { age: formatAgo(tab.ageMs) })),
+    cleanupMetaChip(t("activity.lastActive", { age: formatAgo(tab.idleMs) })),
+    cleanupMetaChip(t("activity.seenCount", { count: tab.activeCount || 0 }))
+  );
+  body.append(title, host, meta);
+
+  const clue = cleanupSummaryClue(tab);
+  if (clue) {
+    const clueLine = document.createElement("small");
+    clueLine.className = "cleanup-candidate-clue";
+    clueLine.textContent = t("activity.summaryClue", { text: clue });
+    body.append(clueLine);
+  }
+
+  const action = document.createElement("button");
+  action.className = "candidate-action";
+  action.type = "button";
+  action.textContent = t("activity.focusTab");
+  action.setAttribute("aria-label", t("activity.focusTabAria", { title: tab.title || tab.hostname || "" }));
+  action.addEventListener("click", () => focusActivityTab(tab));
+  row.append(body, action);
+  return row;
+}
+
+function cleanupMetaChip(text) {
+  const chip = document.createElement("span");
+  chip.textContent = text;
+  return chip;
+}
+
+function cleanupSummaryClue(tab) {
+  const summary = tab.summary || {};
+  return [summary.metaDescription, ...(summary.headings || []), summary.title]
+    .map((item) => String(item || "").trim())
+    .filter(Boolean)[0]?.slice(0, 120) || "";
+}
+
+async function focusActivityTab(tab) {
+  try {
+    await sendMessage({ type: "activity:focusTab", tabId: tab.tabId, windowId: tab.windowId });
+    setStatusKey("activity.focused");
+  } catch (error) {
+    setStatus(error.message || t("activity.focusFailed"), true);
+  }
 }
 
 function resetToSetup() {
@@ -1557,11 +1644,11 @@ function formatElapsedSeconds(totalSeconds) {
   return seconds ? `${minutes}分${seconds}秒` : `${minutes}分`;
 }
 
-function formatRelativeAge(ms) {
+function formatAgo(ms) {
   const days = Math.max(0, Math.floor(Number(ms || 0) / (24 * 60 * 60 * 1000)));
-  if (days >= 1) return uiLanguage === "en-US" ? `first seen ${days}d ago` : `首次见到约 ${days} 天前`;
+  if (days >= 1) return uiLanguage === "en-US" ? `${days}d ago` : `约 ${days} 天前`;
   const hours = Math.max(1, Math.floor(Number(ms || 0) / (60 * 60 * 1000)));
-  return uiLanguage === "en-US" ? `first seen ${hours}h ago` : `首次见到约 ${hours} 小时前`;
+  return uiLanguage === "en-US" ? `${hours}h ago` : `约 ${hours} 小时前`;
 }
 
 function isLiveJob(job) {
@@ -2004,6 +2091,7 @@ async function mockMessage(message) {
     return { cleared: true };
   }
   if (message.type === "tabs:cancelActiveJob") return { canceled: false, job: mockActiveJob };
+  if (message.type === "activity:focusTab") return { focused: true, tabId: message.tabId, windowId: message.windowId };
   if (message.type === "activity:getOverview") {
     return {
       rangeMs: message.rangeMs || 604800000,
@@ -2028,8 +2116,27 @@ async function mockMessage(message) {
         ]
       },
       staleTabs: [
-        { title: "Old comparison notes", hostname: "example.com", ageMs: 16 * 24 * 60 * 60 * 1000 },
-        { title: "Previous research", hostname: "example.org", ageMs: 22 * 24 * 60 * 60 * 1000 }
+        {
+          tabId: 31,
+          windowId: 1,
+          title: "Old comparison notes",
+          hostname: "example.com",
+          currentGroupTitle: "Research",
+          ageMs: 16 * 24 * 60 * 60 * 1000,
+          idleMs: 9 * 24 * 60 * 60 * 1000,
+          activeCount: 1,
+          summary: { metaDescription: "Comparison notes for an earlier investigation", headings: ["Old direction"] }
+        },
+        {
+          tabId: 32,
+          windowId: 1,
+          title: "Previous research",
+          hostname: "example.org",
+          currentGroupTitle: "",
+          ageMs: 22 * 24 * 60 * 60 * 1000,
+          idleMs: 18 * 24 * 60 * 60 * 1000,
+          activeCount: 0
+        }
       ]
     };
   }

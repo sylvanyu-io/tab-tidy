@@ -9,6 +9,7 @@ import {
   generateProgressCopy,
   getActiveJob,
   getLastJob,
+  handleRuntimeMessage,
   startAnalyzeTabs,
   undoLastApply
 } from "../src/core/controller.js";
@@ -75,6 +76,30 @@ test("analyze/apply/undo groups only the current window by default", async () =>
   assert.equal(undo.restoredTabs, 3);
   assert.equal((await chrome.tabs.get(10)).groupId, -1);
   assert.equal((await chrome.tabs.get(11)).groupId, -1);
+});
+
+test("cleanup candidate focus activates the tab without closing anything", async () => {
+  const chrome = createFakeChrome({
+    windows: [
+      {
+        id: 1,
+        focused: false,
+        tabs: [{ id: 10, title: "Old tab", url: "https://example.com/old", active: false }]
+      },
+      {
+        id: 2,
+        focused: true,
+        tabs: [{ id: 20, title: "Current tab", url: "https://example.com/current", active: true }]
+      }
+    ]
+  });
+
+  const result = await handleRuntimeMessage(chrome, { type: "activity:focusTab", tabId: 10, windowId: 1 });
+
+  assert.equal(result.focused, true);
+  assert.equal((await chrome.windows.get(1)).focused, true);
+  assert.equal((await chrome.tabs.get(10)).active, true);
+  assert.equal((await chrome.tabs.query({})).length, 2);
 });
 
 test("window-scoped jobs and undo state do not overwrite another window", async () => {

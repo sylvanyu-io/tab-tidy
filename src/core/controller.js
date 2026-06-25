@@ -108,6 +108,8 @@ export async function handleRuntimeMessage(chromeApi, message) {
       const settings = await getSettings(chromeApi);
       await reconcileTabLifecycle(chromeApi, { includeIncognitoTabs: settings.includeIncognitoTabs }).catch(() => null);
       return getActivityOverview(chromeApi, { rangeMs: message.rangeMs, includeIncognitoTabs: settings.includeIncognitoTabs });
+    case "activity:focusTab":
+      return focusActivityTab(chromeApi, message);
     case "tabs:applyLastPlan":
       return applyLastPlan(chromeApi, {
         windowId: message.windowId,
@@ -122,6 +124,20 @@ export async function handleRuntimeMessage(chromeApi, message) {
     default:
       throw new Error(`Unknown message type: ${message?.type || "<missing>"}`);
   }
+}
+
+async function focusActivityTab(chromeApi, message = {}) {
+  const tabId = Number(message.tabId);
+  if (!Number.isInteger(tabId)) throw new Error("Missing tab id.");
+  const expectedWindowId = Number(message.windowId);
+  const tab = await chromeApi.tabs?.get?.(tabId);
+  if (!tab) throw new Error("The tab is no longer open.");
+  if (Number.isInteger(expectedWindowId) && tab.windowId !== expectedWindowId) {
+    throw new Error("The tab moved to another window. Refresh cleanup candidates.");
+  }
+  await chromeApi.windows?.update?.(tab.windowId, { focused: true }).catch(() => null);
+  await chromeApi.tabs?.update?.(tabId, { active: true });
+  return { focused: true, tabId, windowId: tab.windowId };
 }
 
 export async function getSettings(chromeApi) {

@@ -242,18 +242,23 @@ test("control surface renders settings and mock preview", async ({ page }) => {
   await expect(page.getByRole("button", { name: "撤销" })).toBeVisible();
 });
 
-test("activity recap renders local memory without starting organization", async ({ page }) => {
+test("cleanup candidates render local memory without starting organization", async ({ page }) => {
   await page.goto(`${baseUrl}/src/sidepanel/index.html`);
 
-  await page.getByText("时间回顾").click();
+  await page.getByText("清理候选", { exact: true }).click();
   await page.getByRole("button", { name: "7 天" }).click();
 
-  await expect(page.getByText("已记录 18 个页面，其中 7 个有页面摘要。")).toBeVisible();
-  await expect(page.getByText("高频线索")).toBeVisible();
-  await expect(page.getByText("旧标签页候选")).toBeVisible();
+  await expect(page.getByText("当前打开 24 个标签页，已追踪 18 个；找到 2 个清理候选。")).toBeVisible();
+  await expect(page.getByText("近期线索")).toBeVisible();
+  await expect(page.getByText("建议先看看这些")).toBeVisible();
   await expect(page.getByText(/Old comparison notes/)).toBeVisible();
+  await expect(page.getByText("分组：Research")).toBeVisible();
+  await expect(page.getByText("线索：Comparison notes for an earlier investigation")).toBeVisible();
   await expect(page.locator("#previewSection")).toBeHidden();
   await expect(page.locator("#statusText")).toHaveText("AI 标签页整理");
+
+  await page.getByRole("button", { name: /定位标签页：Old comparison notes/ }).click();
+  await expect(page.locator("#statusText")).toHaveText("已定位标签页");
 });
 
 test("auto-selects English UI and can manually switch back", async ({ page }) => {

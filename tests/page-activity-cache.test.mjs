@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { getActivityOverview, rememberOpenTabActivity, rememberOpenTabsActivity } from "../src/core/page-activity-cache.js";
 import { STORAGE_KEYS } from "../src/core/storage.js";
+import { rememberTabLifecycle } from "../src/core/tab-lifecycle-log.js";
 import { createFakeChrome } from "./helpers/fake-chrome.mjs";
 
 test("activity cache tracks first seen and strips sensitive URL parts", async () => {
@@ -56,12 +57,13 @@ test("activity overview returns local recap and old-tab candidates without closi
   const now = Date.parse("2026-06-25T00:00:00.000Z");
   const old = now - 20 * 24 * 60 * 60 * 1000;
   const chrome = createFakeChrome({
+    groups: [{ id: 77, windowId: 1, title: "AI backlog", color: "blue" }],
     windows: [
       {
         id: 1,
         focused: true,
         tabs: [
-          { id: 10, title: "Old AI paper", url: "https://papers.example/ai", active: true },
+          { id: 10, title: "Old AI paper", url: "https://papers.example/ai", active: true, groupId: 77 },
           { id: 11, title: "Fresh project issue", url: "https://github.com/acme/repo/issues/1" }
         ]
       }
@@ -69,6 +71,12 @@ test("activity overview returns local recap and old-tab candidates without closi
   });
 
   await rememberOpenTabActivity(chrome, { id: 10, windowId: 1, title: "Old AI paper", url: "https://papers.example/ai" }, null, { now: old });
+  await rememberTabLifecycle(
+    chrome,
+    "tab_activated",
+    { id: 10, windowId: 1, index: 0, title: "Old AI paper", url: "https://papers.example/ai", active: true, groupId: 77 },
+    { now: old + 1000 }
+  );
   await rememberOpenTabsActivity(
     chrome,
     [{ id: 11, windowId: 1, title: "Fresh project issue", url: "https://github.com/acme/repo/issues/1" }],
@@ -80,6 +88,8 @@ test("activity overview returns local recap and old-tab candidates without closi
   assert.equal(overview.openTabs.total, 2);
   assert.equal(overview.openTabs.staleCandidates, 1);
   assert.equal(overview.staleTabs[0].tabId, 10);
+  assert.equal(overview.staleTabs[0].currentGroupTitle, "AI backlog");
+  assert.equal(overview.staleTabs[0].activeCount, 1);
   assert.equal(overview.recap.entries >= 2, true);
   assert.equal((await chrome.tabs.get(10)).title, "Old AI paper");
 });

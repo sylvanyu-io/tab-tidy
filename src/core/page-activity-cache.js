@@ -62,11 +62,13 @@ export async function getActivityOverview(chromeApi, options = {}) {
   const rangeMs = normalizeRangeMs(options.rangeMs);
   const cache = pruneActivityCache(normalizeActivityCache(await getLocal(chromeApi, STORAGE_KEYS.pageActivityCache, null)), now);
   const currentTabs = await collectCurrentNormalTabs(chromeApi, options);
+  const lifecycle = await getTabLifecycleStats(chromeApi, { now });
+  const lifecycleByTabId = new Map((lifecycle.olderOpenTabs || []).map((tab) => [tab.tabId, tab]));
   const since = now - rangeMs;
   const entries = Object.values(cache.entries)
     .filter((entry) => activityTimeForRange(entry) >= since)
     .sort((left, right) => Date.parse(right.lastSeenAt || "") - Date.parse(left.lastSeenAt || ""));
-  const openTabEntries = matchOpenTabsToActivity(currentTabs, cache.entries, now);
+  const openTabEntries = matchOpenTabsToActivity(currentTabs, cache.entries, now, lifecycleByTabId);
   const staleTabs = openTabEntries
     .filter((item) => item.ageMs >= OLD_TAB_AGE_MS || item.idleMs >= OLD_TAB_IDLE_MS)
     .sort((left, right) => right.ageMs - left.ageMs || right.idleMs - left.idleMs)
@@ -85,7 +87,7 @@ export async function getActivityOverview(chromeApi, options = {}) {
       tracked: openTabEntries.length,
       staleCandidates: staleTabs.length
     },
-    lifecycle: await getTabLifecycleStats(chromeApi, { now }),
+    lifecycle,
     recap: buildLocalRecap(entries, rangeMs),
     staleTabs
   };
@@ -117,28 +119,52 @@ function buildLocalRecap(entries, rangeMs) {
   };
 }
 
-function matchOpenTabsToActivity(tabs, entriesByKey, now) {
+function matchOpenTabsToActivity(tabs, entriesByKey, now, lifecycleByTabId = new Map()) {
   return tabs
     .map((tab) => {
       const key = pageActivityCacheKey(activityTabUrl(tab));
       const entry = key ? entriesByKey[key] : null;
       if (!entry) return null;
-      const firstSeen = Date.parse(entry.firstSeenAt || "");
-      const lastSeen = Date.parse(entry.lastSeenAt || "");
+      const lifecycle = lifecycleByTabId.get(tab.id) || null;
+      const firstSeenAt = lifecycle?.openedAt || entry.firstSeenAt || "";
+      const lastSeenAt = latestIso(lifecycle?.lastObservedAt, entry.lastSeenAt) || entry.lastSeenAt || "";
+      const firstSeen = Date.parse(firstSeenAt || "");
+      const lastSeen = Date.parse(lastSeenAt || "");
       return {
         tabId: tab.id,
         windowId: tab.windowId,
+        index: Number.isFinite(tab.index) ? tab.index : null,
         title: String(tab.title || entry.title || "").slice(0, 180),
         hostname: entry.hostname || "",
-        firstSeenAt: entry.firstSeenAt,
-        lastSeenAt: entry.lastSeenAt,
+        sanitizedUrl: entry.sanitizedUrl || "",
+        firstSeenAt,
+        lastSeenAt,
+        firstSeenSource: lifecycle ? "tab_session" : "page_memory",
         ageMs: Number.isFinite(firstSeen) ? now - firstSeen : 0,
         idleMs: Number.isFinite(lastSeen) ? now - lastSeen : 0,
+        activeCount: Number(lifecycle?.activeCount || 0),
+        currentGroupTitle: tab.currentGroup?.title || "",
+        currentGroupColor: tab.currentGroup?.color || "",
+        summary: entry.sample
+          ? {
+              title: entry.sample.title || "",
+              metaDescription: entry.sample.metaDescription || "",
+              contentKind: entry.sample.contentKind || "",
+              headings: Array.isArray(entry.sample.headings) ? entry.sample.headings.slice(0, 3) : []
+            }
+          : null,
         discarded: Boolean(tab.discarded),
         pinned: Boolean(tab.pinned)
       };
     })
     .filter(Boolean);
+}
+
+function latestIso(...values) {
+  return values
+    .map((value) => ({ value, time: Date.parse(value || "") }))
+    .filter((item) => Number.isFinite(item.time))
+    .sort((left, right) => right.time - left.time)[0]?.value || "";
 }
 
 function activityTimeForRange(entry) {
@@ -150,9 +176,25 @@ function activityTimeForRange(entry) {
 
 async function collectCurrentNormalTabs(chromeApi, options = {}) {
   const windows = await chromeApi.windows?.getAll?.({ populate: true, windowTypes: ["normal"] }).catch(() => []);
+  const groupsById = await collectTabGroupsById(chromeApi, windows);
   return windows
-    .flatMap((window) => window.tabs || [])
+    .flatMap((window) =>
+      (window.tabs || []).map((tab) => ({
+        ...tab,
+        currentGroup: tab.groupId !== undefined && tab.groupId !== -1 ? groupsById.get(tab.groupId) || null : null
+      }))
+    )
     .filter((tab) => typeof tab.id === "number" && (!tab.incognito || options.includeIncognitoTabs) && canSampleUrl(activityTabUrl(tab)));
+}
+
+async function collectTabGroupsById(chromeApi, windows = []) {
+  const groupsById = new Map();
+  if (!chromeApi.tabGroups?.query) return groupsById;
+  for (const window of windows) {
+    const groups = await chromeApi.tabGroups.query({ windowId: window.id }).catch(() => []);
+    for (const group of groups) groupsById.set(group.id, group);
+  }
+  return groupsById;
 }
 
 function normalizeActivitySample(sample = {}) {
