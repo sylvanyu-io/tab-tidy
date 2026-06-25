@@ -55,9 +55,10 @@ Blocking gates:
 
 - `npm run check` passes.
 - `npm run release:check` passes and produces a clean extension package.
-- AI gateway live smoke passes against the configured gateway.
 - `npm run stress:extension` validates current-window apply/undo and
   consolidate-to-one-window apply/undo on a throwaway Chromium profile.
+- AI gateway live smoke passes against the configured gateway when gateway
+  credentials are available for a manual pre-release smoke.
 - Page sampling cannot run without visible risk acknowledgement.
 - Page sampling active-tab mode cannot sample background tabs.
 - Bulk page sampling returns `permission_required` without host permission.
@@ -74,9 +75,9 @@ Blocking gates:
 - No custom gateway key appears in git history, screenshots, test output, or
   fixtures.
 - Extension package contains no `node_modules`, test outputs, or local secrets.
-- Store packages remove `activeTab` and `scripting` so page-body sampling controls
-  are unavailable, while custom gateway host permissions can still be granted by
-  the user.
+- Store packages remove `activeTab`, `scripting`, and optional host permissions,
+  so page-body sampling controls and custom gateway host permission requests are
+  unavailable in that channel.
 
 Recommended before public listing:
 
