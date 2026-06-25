@@ -101,7 +101,7 @@ The implementation details for cross-window consolidation are captured in [multi
 
 See [permissions-research.md](permissions-research.md) for the Chrome permission model behind these modes.
 
-Any mode other than `off` requires a visible risk warning before the first sample is collected. The main "page summary" opt-in should move from `off` to `all_granted_origins` and request visible-site permission so the agent can read as many eligible pages as the user allows.
+Any mode other than `off` requires a visible risk warning before the first sample is collected. The main one-shot "page summary" opt-in should move from `off` to `all_granted_origins` and request visible-site permission so the agent can read as many eligible pages as the user allows. The long-term summary memory opt-in may request broad optional host access after explicit user activation.
 
 ### Host Permission Request Mode
 
@@ -423,7 +423,7 @@ Required manifest surface and permissions:
 - `"tabs"` to read tab URLs, titles, pending URLs, and favicons;
 - `"tabGroups"` to create, update, move, and query native tab groups;
 - `"storage"` for settings, job state, prompt snapshots, and rollback snapshots;
-- toolbar action popup for the control surface;
+- toolbar action side panel for the control surface;
 - provider-specific HTTPS `host_permissions` or optional host permissions for the configured LLM endpoint;
 - optional `"scripting"` only when page sampling is enabled;
 - optional host permissions for page origins only when bulk page sampling is enabled.

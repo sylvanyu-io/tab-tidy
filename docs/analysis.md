@@ -20,7 +20,7 @@ The core extension APIs are enough for a first version:
 - The `"tabs"` permission is needed to read sensitive tab properties such as `url`, `pendingUrl`, `title`, and `favIconUrl`.
 - `chrome.tabs.group()` can create/add tabs to groups; `chrome.tabGroups.update()` can set group title, color, and collapsed state.
 - `chrome.tabGroups.TabGroup.windowId` shows that browser tab groups belong to a single window. So a native Chrome tab group cannot literally span windows.
-- The toolbar action opens a native extension popup as the primary consumer-facing control surface.
+- The toolbar action opens a native side panel as the primary consumer-facing control surface.
 - `chrome.storage.local` / IndexedDB should hold job state, cached tab summaries, and undo snapshots because Manifest V3 service workers can be stopped.
 
 Important implication: native Chrome tab groups belong to one window, so the product should expose two clear MVP modes:
@@ -37,7 +37,7 @@ See [multi-window-feasibility.md](multi-window-feasibility.md) for the API-level
 Use an LLM as a planner, not as an unrestricted executor.
 
 ```text
-native action popup UI
+native side panel UI
   -> job controller
   -> tab inventory collector
   -> optional page sampler
@@ -190,7 +190,7 @@ The extension should feel like a tab operations console, not a chatbot-first pro
 
 Primary flow:
 
-1. Open the extension popup.
+1. Open the extension side panel.
 2. Choose Current Window or enable Consolidate All Windows Into One Window.
 3. Click Analyze.
 4. See proposed groups, excluded tabs, review tabs, and any cross-window move preview.
@@ -261,7 +261,7 @@ For a public release, the built-in gateway path may use a public client token, b
 MVP should implement:
 
 - Chrome Manifest V3 extension.
-- Native action popup UI.
+- Native side panel UI.
 - Analyze current normal window by default.
 - Analyze all eligible tabs across all normal windows only in consolidate-to-one-window mode.
 - Metadata-only grouping through a pluggable LLM adapter.
@@ -297,7 +297,7 @@ MVP should not implement:
 
 ## Initial Build Order
 
-1. Scaffold MV3 extension with an action popup and service worker.
+1. Scaffold MV3 extension with a side panel and service worker.
 2. Implement tab inventory and sanitized descriptors.
 3. Build a fake planner using local fixtures, so UI and executor can be tested without LLM cost.
 4. Implement preview and undo.

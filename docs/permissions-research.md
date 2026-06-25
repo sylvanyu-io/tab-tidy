@@ -30,7 +30,7 @@ For multi-tab page sampling, the practical option is optional host permissions:
 
 ### LLM Provider Network Calls
 
-The extension service worker or popup can call remote LLM providers only if the extension has host permission for those provider endpoints. Provider endpoints should be narrow or requested as optional origins, for example:
+The extension service worker or side panel can call remote LLM providers only if the extension has host permission for those provider endpoints. Provider endpoints should be narrow or requested as optional origins, for example:
 
 - `https://api.anthropic.com/`
 - `https://generativelanguage.googleapis.com/`
@@ -44,13 +44,12 @@ MVP required permissions:
 
 ```json
 {
-  "permissions": ["tabs", "tabGroups", "storage", "activeTab"],
+  "permissions": ["tabs", "tabGroups", "storage", "activeTab", "sidePanel"],
   "host_permissions": ["https://cliproxy.sylvanyu.io/*"],
   "optional_permissions": ["scripting"],
   "optional_host_permissions": ["https://*/*", "http://*/*"],
-  "action": {
-    "default_title": "Tab Tidy",
-    "default_popup": "src/sidepanel/index.html"
+  "side_panel": {
+    "default_path": "src/sidepanel/index.html"
   }
 }
 ```
@@ -60,9 +59,9 @@ Notes:
 - The built-in gateway Worker needs a narrow required host permission so metadata-only planning can call it without a runtime prompt.
 - Custom provider host permissions should stay optional and be requested during setup.
 - Keep `scripting` optional until page sampling is enabled.
-- Keep `optional_host_permissions` broad only as an optional declaration. Request concrete origins at runtime.
+- Keep `optional_host_permissions` broad only as an optional declaration. Normal one-shot page summaries request concrete origins at runtime; the long-term summary memory switch may request broad optional host access after the user explicitly turns it on.
 - Do not ask for all site access during install.
-- The toolbar action uses native `action.default_popup`. Page-content permission prompts are requested from the explicit page-summary switch, not during long-running organization jobs.
+- The toolbar action opens the native side panel. Page-content permission prompts are requested from the explicit page-summary switch, not during long-running organization jobs.
 - Background page sampling must never call `chrome.permissions.request()`; it samples already authorized pages and falls back to metadata-only for the rest.
 
 ## Page Sampling Modes
@@ -78,7 +77,7 @@ type HostPermissionRequestMode = "never" | "ask_per_origin" | "ask_for_all_visib
 
 `ambiguous_with_permission`: narrower mode for ambiguous tabs only. The runtime samples only tabs whose origins already have host permission or whose origins the user grants.
 
-`all_granted_origins`: consumer default after the user turns on page summaries. The runtime should request visible-site origins first, then sample as many eligible granted tabs as possible.
+`all_granted_origins`: consumer default after the user turns on page summaries. One-shot organization requests visible-site origins first, then samples as many eligible granted tabs as possible. Long-term summary memory requests broad optional host access after explicit opt-in so future opened pages can be cached.
 
 `ask_per_origin`: prompt for one origin at a time with a clear reason.
 

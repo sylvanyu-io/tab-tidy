@@ -7,7 +7,7 @@ extension that can be published after the gates below are satisfied.
 
 Implemented:
 
-- Manifest V3 extension shell with a native action popup.
+- Manifest V3 extension shell with a native side panel.
 - Current-window organization by default.
 - Explicit consolidate-to-one-window mode for all eligible normal-window tabs.
 - Metadata-only inventory and URL sanitization.
@@ -29,12 +29,12 @@ Implemented:
   undoable.
 - Fake Chrome harness, Playwright UI smoke test, and real-extension stress
   runner against an isolated Chromium profile.
-- Active analysis jobs expose coarse progress states in the popup and can be
+- Active analysis jobs expose coarse progress states in the side panel and can be
   canceled; cancellation aborts provider fetches when the request is still live.
 - Large AI gateway jobs use a coarse-then-refine planner: a low-effort coarse
   bucket pass, followed by high-effort refinement for oversized or uncertain
   buckets, then normal local validation.
-- Planner errors are restored in the popup with visible recovery UI instead of
+- Planner errors are restored in the side panel with visible recovery UI instead of
   being hidden in the title bar.
 - Release checks clean stale artifacts, regenerate icons, run Node and
   Playwright tests, scan current files and git history for provider-key
