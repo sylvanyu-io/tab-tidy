@@ -872,7 +872,7 @@ test("default gateway permission request is narrow and compact", async ({ page }
   await expect.poll(() => page.evaluate(() => window.__analyzeWindowId)).toBe(77);
 });
 
-test("custom model requires a custom gateway before permission request", async ({ page }) => {
+test("custom model can use the built-in gateway", async ({ page }) => {
   await page.addInitScript(() => {
     const settings = {
       organizeMode: "current_window",
@@ -916,7 +916,7 @@ test("custom model requires a custom gateway before permission request", async (
           if (message.type === "tabs:getActiveJob") return { ok: true, result: null };
           if (message.type === "tabs:startAnalyze") {
             window.__startAnalyzeCalled = true;
-            return { ok: true, result: { operationId: "should_not_start" } };
+            return { ok: true, result: { operationId: "custom_model_job" } };
           }
           return { ok: true, result: null };
         }
@@ -926,9 +926,8 @@ test("custom model requires a custom gateway before permission request", async (
 
   await page.goto(`${baseUrl}/src/sidepanel/index.html`);
   await page.getByRole("button", { name: "生成方案" }).click();
-  await expect(page.locator("#statusText")).toHaveText("自定义模型名需要先填写自定义 AI 网关地址。");
-  await expect.poll(() => page.evaluate(() => window.__permissionRequests.length)).toBe(0);
-  await expect.poll(() => page.evaluate(() => window.__startAnalyzeCalled)).toBe(false);
+  await expect.poll(() => page.evaluate(() => window.__permissionRequests)).toEqual([{ origins: ["https://cliproxy.sylvanyu.io/*"] }]);
+  await expect.poll(() => page.evaluate(() => window.__startAnalyzeCalled)).toBe(true);
 });
 
 test("current-window generation without sourceWindowId uses the focused normal window", async ({ page }) => {

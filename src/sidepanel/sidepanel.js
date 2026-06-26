@@ -36,7 +36,6 @@ const UI_COPY = Object.freeze({
     "status.permissionFirstEnablePageSummary": "需要先打开「需要时补读页面摘要」并完成授权，才能读取页面摘要。",
     "status.unsupportedContinuousSummary": "当前安装包没有开启长期页面摘要。",
     "status.unsupportedPageSummary": "当前安装包没有开启页面摘要。",
-    "status.customModelNeedsGateway": "自定义模型名需要先填写自定义 AI 网关地址。",
     "status.customModelMissing": "请填写自定义模型名，或者选择一个预设模型。",
     "status.applyChanged": "已创建 {groupCount} 个分组；已处理 {changedTabs} 个变化标签页{reviewText}",
     "status.applyDone": "已创建 {groupCount} 个分组",
@@ -210,7 +209,6 @@ const UI_COPY = Object.freeze({
     "status.permissionFirstEnablePageSummary": "Turn on page summaries and grant access before reading page summaries.",
     "status.unsupportedContinuousSummary": "This installation does not include page memory.",
     "status.unsupportedPageSummary": "This installation does not include page summaries.",
-    "status.customModelNeedsGateway": "Custom model names require a custom AI gateway URL.",
     "status.customModelMissing": "Enter a custom model name, or choose a preset model.",
     "status.applyChanged": "Created {groupCount} groups; handled {changedTabs} changed tabs{reviewText}",
     "status.applyDone": "Created {groupCount} groups",
@@ -895,9 +893,6 @@ async function analyze() {
 
 function validateGatewaySettingsForAnalyze(settings) {
   if (settings.plannerProvider !== "gateway" || settings.gatewayModel !== GATEWAY_CUSTOM_MODEL_VALUE) return;
-  if (!settings.gatewayBaseUrl.trim()) {
-    throw new Error(t("status.customModelNeedsGateway"));
-  }
   if (!settings.gatewayCustomModel.trim()) {
     throw new Error(t("status.customModelMissing"));
   }

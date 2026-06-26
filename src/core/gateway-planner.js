@@ -221,15 +221,6 @@ export function effectiveGatewayBaseUrl(settings) {
 
 function requireGatewayModel(settings) {
   const model = resolveGatewayModel(settings);
-  if (settings.gatewayModel === GATEWAY_CUSTOM_MODEL_VALUE && !settings.gatewayBaseUrl) {
-    throw new Error(
-      localizedText(
-        settings.languageMode,
-        "自定义模型名需要先填写自定义 AI 网关地址。",
-        "A custom model name requires a custom AI gateway URL."
-      )
-    );
-  }
   if (!model) {
     throw new Error(
       localizedText(
