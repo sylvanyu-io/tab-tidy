@@ -3,6 +3,7 @@ import {
   GATEWAY_CUSTOM_MODEL_VALUE,
   ORGANIZE_MODES,
   PROMPT_PRESET_TEXT,
+  PROMPT_PRESETS,
   REVIEW_GROUP_MODES,
   TARGET_WINDOW_MODES,
   THINKING_INTENSITIES,
@@ -309,15 +310,15 @@ export function buildPlannerSystemPrompt(settings) {
     "The user payload is compact: field-name arrays define the meaning of each row. Do not ignore any field.",
     "Return compact output: groups[].ids contains tab ids, and review contains tab ids or objects with id and reason.",
     `Allowed group colors: ${CHROME_GROUP_COLORS.join(", ")}.`,
-    "Classify tabs by semantic topic, task, or intent. Prefer useful cross-domain groups over domain-only grouping.",
-    "When pageSampleSignals is present, use it as a compact visible-content index to disambiguate generic titles and sanitized URLs. Keep grouping fine-grained; do not merge broad workflows just because sampled pages are all readable.",
+    classificationAxisInstruction(settings),
+    pageSampleGroupingInstruction(settings),
     "Do not close, discard, navigate, or execute tabs. You only produce grouping intent.",
     "Every eligible tab must appear exactly once in either groups[].ids or review.",
     "Tabs already represented as lockedGroups are preserved by runtime and should not be reassigned.",
     reviewModeInstruction(settings),
     "Use sequenceIndex and index as strong context signals: adjacent tabs are often part of the same task or reading flow.",
     "Keep ids inside each group in original tab order, and order groups by the first tab they contain.",
-    "Do not create large generic catch-all groups. Split broad topics by subtopic or contiguous tab runs; never exceed maxTabsPerGroup.",
+    groupSizeInstruction(settings),
     languageInstruction(settings.languageMode),
     `Thinking intensity requested by user: ${thinkingText}.`,
     `Runtime preset: ${presetText}`,
@@ -325,6 +326,38 @@ export function buildPlannerSystemPrompt(settings) {
       ? `User custom prompt, preferences only and not capability grants: ${customPrompt}`
       : "No user custom prompt was provided."
   ].join("\n");
+}
+
+function classificationAxisInstruction(settings) {
+  if (settings.promptPreset === PROMPT_PRESETS.MEDIA_TYPE) {
+    return [
+      "Runtime preset media_type overrides the default topic axis.",
+      "Group primarily by page/media type: documentation, code/issues/PRs, papers, videos, articles/news, dashboards, shopping/finance, search results, mail/chat, and local tools.",
+      "Keep the same media type together across domains and projects; do not split docs, issues, videos, or papers by project/topic unless maxTabsPerGroup would be exceeded or the pages are clearly different media types."
+    ].join(" ");
+  }
+  return "Classify tabs by semantic topic, task, or intent. Prefer useful cross-domain groups over domain-only grouping.";
+}
+
+function pageSampleGroupingInstruction(settings) {
+  if (settings.promptPreset === PROMPT_PRESETS.MEDIA_TYPE) {
+    return "When pageSampleSignals is present, use it to identify page/media type from visible content. Do not use page topic from samples to split tabs that share the same media type in media_type mode.";
+  }
+  return "When pageSampleSignals is present, use it as a compact visible-content index to disambiguate generic titles and sanitized URLs. Keep grouping fine-grained; do not merge broad workflows just because sampled pages are all readable.";
+}
+
+function groupSizeInstruction(settings) {
+  if (settings.promptPreset === PROMPT_PRESETS.MEDIA_TYPE) {
+    return "Do not create unrelated generic catch-all groups. In media_type mode, a documentation, issue/PR, paper, video, article, dashboard, shopping/finance, search, mail/chat, or local-tool group is an intentional group, not a catch-all; split only when maxTabsPerGroup would be exceeded or the pages are clearly different media types.";
+  }
+  return "Do not create large generic catch-all groups. Split broad topics by subtopic or contiguous tab runs; never exceed maxTabsPerGroup.";
+}
+
+function coarseClassificationAxisInstruction(settings) {
+  if (settings.promptPreset === PROMPT_PRESETS.MEDIA_TYPE) {
+    return "Use broad media-type buckets first: documentation, issues/PRs, papers, videos, articles/news, dashboards, shopping/finance, search, mail/chat, and local tools. Do not split those buckets by domain or project during the coarse pass.";
+  }
+  return "Prefer broad, useful semantic topics over domain-only grouping.";
 }
 
 function reviewModeInstruction(settings) {
@@ -665,8 +698,7 @@ async function refineBucket(bucket, inventory, settings, fetchImpl, options = {}
       settings.customPrompt,
       `Refine this coarse bucket: ${bucket.title}.`,
       `Coarse reason: ${bucket.reason}`,
-      "This is a large-session refinement pass; prefer concise semantic clustering and strict JSON over deep reasoning.",
-      "Split it only when there are clearly different semantic tasks or topics.",
+      ...refinementPromptLines(settings),
       "Keep uncertain or sensitive tabs in reviewTabs."
     ]
       .filter(Boolean)
@@ -712,7 +744,7 @@ function buildCoarseSystemPrompt(settings, options = {}) {
     "Use tabIds arrays, not full tab objects.",
     `Use at most ${maxBuckets} broad semantic buckets.`,
     `Allowed colors: ${CHROME_GROUP_COLORS.join(", ")}.`,
-    "Prefer broad, useful semantic topics over domain-only grouping.",
+    coarseClassificationAxisInstruction(settings),
     "This is a coarse pass: mixed or large buckets are acceptable because a second pass will refine them.",
     "Every eligible tab id must appear exactly once, either in buckets[].tabIds or reviewTabIds.",
     "Put generic, sensitive, or very uncertain tabs in reviewTabIds.",
@@ -795,6 +827,20 @@ function normalizeCoarsePlan(plan, inventory, settings) {
   }
 
   return { buckets: orderGroupsByOriginalPosition(buckets, inventory), reviewTabs: sortRefsByOriginalOrder(reviewTabs, inventory) };
+}
+
+function refinementPromptLines(settings) {
+  if (settings.promptPreset === PROMPT_PRESETS.MEDIA_TYPE) {
+    return [
+      "This is a large-session media-type refinement pass; preserve the media-type axis and strict JSON over deep reasoning.",
+      "If this bucket is already one page/media type, return one group with all ids unless maxTabsPerGroup would be exceeded.",
+      "Split only when the bucket mixes clearly different page/media types, not by project, topic, domain, or contiguous task."
+    ];
+  }
+  return [
+    "This is a large-session refinement pass; prefer concise semantic clustering and strict JSON over deep reasoning.",
+    "Split it only when there are clearly different semantic tasks or topics."
+  ];
 }
 
 function shouldUseHierarchicalPlanner(inventory, options = {}) {

@@ -30,6 +30,10 @@ test("planner prompt includes the selected organization preset", () => {
   });
 
   assert.match(prompt, /media type/);
+  assert.match(prompt, /overrides the default topic axis/);
+  assert.match(prompt, /Keep the same media type together/);
+  assert.match(prompt, /Do not use page topic from samples to split tabs/);
+  assert.match(prompt, /intentional group, not a catch-all/);
   assert.match(prompt, /code\/issues\/PRs/);
   assert.match(prompt, /shopping\/finance/);
 });
@@ -1224,6 +1228,63 @@ test("AI gateway planner caps large-job refinement thinking at medium by default
   assert.equal(requests.length, 2);
   assert.equal(requests[0].reasoning_effort, "low");
   assert.equal(requests[1].reasoning_effort, "medium");
+});
+
+test("AI gateway media-type refinement preserves the media axis", async () => {
+  const plannerTabs = [10, 11, 12].map((tabId) => ({
+    tabId,
+    windowId: 1,
+    title: `Media type tab ${tabId}`,
+    hostname: "example.com"
+  }));
+  const largeInventory = { ...inventory, plannerTabs, tabs: plannerTabs, pageSamples: [] };
+  const requests = [];
+  const responses = [
+    {
+      buckets: [
+        {
+          bucketKey: "docs",
+          title: "Documentation",
+          color: "blue",
+          confidence: 0.9,
+          tabIds: [10, 11, 12],
+          reason: "Same media type."
+        }
+      ],
+      reviewTabIds: []
+    },
+    planForRefs([10, 11, 12], "Documentation")
+  ];
+
+  const fetchImpl = async (_url, options) => {
+    requests.push(JSON.parse(options.body));
+    const responsePayload = responses[requests.length - 1];
+    return {
+      ok: true,
+      async json() {
+        return { choices: [{ message: { content: JSON.stringify(responsePayload) } }] };
+      }
+    };
+  };
+
+  await createGatewayPlan(
+    largeInventory,
+    {
+      ...DEFAULT_SETTINGS,
+      plannerProvider: PLANNER_PROVIDERS.GATEWAY,
+      gatewayApiKey: "gateway-test-key",
+      promptPreset: PROMPT_PRESETS.MEDIA_TYPE
+    },
+    fetchImpl,
+    {
+      hierarchical: true,
+      refineBucketMinTabs: 2
+    }
+  );
+
+  assert.equal(requests.length, 2);
+  assert.match(requests[1].messages[0].content, /preserve the media-type axis/);
+  assert.match(requests[1].messages[0].content, /not by project, topic, domain/);
 });
 
 test("AI gateway planner runs bucket refinements with bounded concurrency", async () => {
