@@ -61,6 +61,7 @@ Default should not be `gpt-5.5` high for every step.
 Detailed comparison record:
 
 - `docs/benchmarks/planner-model-routing.md`
+- `docs/benchmarks/gateway-planner-before-after-parallel.md`
 
 Public leaderboard signal checked on 2026-06-26:
 

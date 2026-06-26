@@ -30,6 +30,10 @@ Summary report:
 
 - `docs/benchmarks/gateway-planner-scale.md`
 
+Before/after result after the parallel-refinement change:
+
+- `docs/benchmarks/gateway-planner-before-after-parallel.md`
+
 Measured with synthetic metadata-only inventories through the live gateway:
 
 | Tabs | Strategy | Model / effort | Status | Time | Requests | Result |
@@ -144,4 +148,3 @@ Suggested next data document:
   - whether review-like groups stay at the bottom;
   - whether cleanup candidates point to stale/duplicate tabs rather than active
     core work.
-

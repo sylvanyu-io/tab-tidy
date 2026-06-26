@@ -1,5 +1,5 @@
 import { mkdir, writeFile } from "node:fs/promises";
-import { resolve } from "node:path";
+import { dirname, resolve } from "node:path";
 import { performance } from "node:perf_hooks";
 import { buildPreview } from "../src/core/preview.js";
 import { createGatewayPlan } from "../src/core/gateway-planner.js";
@@ -21,9 +21,8 @@ const DEFAULT_STRATEGY_TIMEOUT_MS = 240_000;
 const sizes = parseSizes(process.env.BENCHMARK_TAB_COUNTS || "");
 const runId = `planner-scale-${new Date().toISOString().replace(/[:.]/g, "-")}`;
 const dataDir = resolve("docs/benchmarks/data");
-const reportDir = resolve("docs/benchmarks");
 const dataPath = resolve(dataDir, `${runId}.json`);
-const reportPath = resolve(reportDir, "gateway-planner-scale.md");
+const reportPath = resolve(process.env.BENCHMARK_REPORT_PATH || "docs/benchmarks/gateway-planner-scale.md");
 
 const settings = {
   ...DEFAULT_SETTINGS,
@@ -41,7 +40,7 @@ const settings = {
     "Benchmark run. Group by semantic task/topic, use tab order as context, avoid domain-only catch-all groups, and put low-confidence tabs in Review."
 };
 
-const strategies = [
+const allStrategies = [
   {
     key: "hierarchical",
     label: "current hierarchical coarse/refine",
@@ -53,6 +52,8 @@ const strategies = [
     options: { hierarchical: false }
   }
 ];
+const selectedStrategyKeys = selectedStrategies(allStrategies.map((strategy) => strategy.key));
+const strategies = allStrategies.filter((strategy) => selectedStrategyKeys.has(strategy.key));
 
 const results = [];
 
@@ -170,6 +171,7 @@ async function writeOutputs({ partial }) {
     partial,
     sizes,
     strategyOrder: strategies.map(({ key, label }) => ({ key, label })),
+    strategyFilter: process.env.BENCHMARK_STRATEGIES || "",
     environment: {
       node: process.version,
       gatewayBaseUrl: settings.gatewayBaseUrl || "built-in default",
@@ -188,18 +190,23 @@ async function writeOutputs({ partial }) {
 
 function renderReport(payload) {
   const completed = payload.results.filter((result) => result.finishedAt);
+  const strategyKeys = new Set(payload.strategyOrder.map((strategy) => strategy.key));
+  const intro = strategyKeys.has("hierarchical") && strategyKeys.has("single_full_detail")
+    ? "This benchmark compares the current hierarchical coarse/refine planner path against a forced single full-detail planner request."
+    : "This benchmark records a filtered planner strategy run.";
   const lines = [
     "# Gateway Planner Scale Benchmark",
     "",
     `Generated: ${payload.generatedAt}`,
     "",
-    "This benchmark compares the current hierarchical coarse/refine planner path against a forced single full-detail planner request. It uses synthetic metadata-only tab inventories, so it measures gateway planning latency and output shape without reading real browsing data.",
+    `${intro} It uses synthetic metadata-only tab inventories, so it measures gateway planning latency and output shape without reading real browsing data.`,
     "",
     "## Configuration",
     "",
     `- Gateway: ${payload.environment.gatewayBaseUrl}`,
     `- Model: ${payload.environment.gatewayModel}`,
     `- Thinking intensity: ${payload.environment.gatewayThinkingIntensity}`,
+    payload.strategyFilter ? `- Strategy filter: ${payload.strategyFilter}` : "- Strategy filter: none",
     `- Page content: ${payload.environment.pageContext}`,
     `- Raw data: \`docs/benchmarks/data/${runId}.json\``,
     "",
@@ -230,9 +237,15 @@ function renderReport(payload) {
   for (const item of conclusions) lines.push(`- ${item}`);
 
   lines.push("", "## Notes", "");
-  lines.push("- Both strategies use the same synthetic inventory for each tab count.");
+  lines.push(
+    strategyKeys.has("hierarchical") && strategyKeys.has("single_full_detail")
+      ? "- Both strategies use the same synthetic inventory for each tab count."
+      : "- This filtered run should be compared against a separate baseline report."
+  );
   lines.push("- The hierarchical strategy may issue one coarse request plus one or more refinement requests.");
-  lines.push("- The single full-detail strategy sends every eligible tab in one planner request.");
+  if (strategyKeys.has("single_full_detail")) {
+    lines.push("- The single full-detail strategy sends every eligible tab in one planner request.");
+  }
   lines.push("- Full request/response metadata, normalized plans, previews, and validation output are stored in the JSON data file.");
   lines.push("");
   return `${lines.join("\n")}\n`;
@@ -240,6 +253,20 @@ function renderReport(payload) {
 
 function summarizeConclusions(completed) {
   const conclusions = [];
+  const strategyKeys = new Set(strategies.map((strategy) => strategy.key));
+  if (!strategyKeys.has("hierarchical") || !strategyKeys.has("single_full_detail")) {
+    for (const result of completed) {
+      if (result.strategy !== "hierarchical") continue;
+      conclusions.push(
+        `${result.tabCount} tabs: hierarchical completed ${result.ok ? "successfully" : "with failure"} in ${formatSeconds(
+          result.elapsedMs
+        )} with ${result.requestCount} request(s).`
+      );
+    }
+    if (!conclusions.length) conclusions.push("This filtered benchmark did not complete any comparable strategy rows.");
+    return conclusions;
+  }
+
   for (const tabCount of sizes) {
     const pair = completed.filter((result) => result.tabCount === tabCount);
     const hierarchical = pair.find((result) => result.strategy === "hierarchical");
@@ -479,6 +506,23 @@ function parseSizes(value) {
   return parsed.length ? parsed : DEFAULT_SIZES;
 }
 
+function selectedStrategies(knownKeys) {
+  const parsed = String(process.env.BENCHMARK_STRATEGIES || "")
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean);
+  const selected = new Set(parsed.length ? parsed : ["hierarchical", "single_full_detail"]);
+  const known = new Set(knownKeys);
+  const unknown = [...selected].filter((item) => !known.has(item));
+  if (unknown.length) {
+    throw new Error(`Unknown BENCHMARK_STRATEGIES value(s): ${unknown.join(", ")}. Known values: ${knownKeys.join(", ")}.`);
+  }
+  if (!selected.size) {
+    throw new Error("BENCHMARK_STRATEGIES selected no benchmark strategies.");
+  }
+  return selected;
+}
+
 function parseJsonOrNull(value) {
   try {
     return JSON.parse(value);
@@ -518,7 +562,7 @@ async function withTimeout(promise, timeoutMs, onTimeout, label) {
 
 async function main() {
   await mkdir(dataDir, { recursive: true });
-  await mkdir(reportDir, { recursive: true });
+  await mkdir(dirname(reportPath), { recursive: true });
 
   for (const tabCount of sizes) {
     const inventory = buildSyntheticInventory(tabCount, 4);
