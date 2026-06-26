@@ -25,19 +25,33 @@ Tab Tidy should borrow the workflow patterns, not the framework weight. This is
 not an open-ended coding agent. It is a bounded classification and recommendation
 pipeline over a known tab inventory.
 
-## Current Problem
+## Current Product Decision
 
-The current implementation has two extremes:
+As of the combined grouping + cleanup work on 2026-06-26, the product default is
+one full-detail planner request. The same request returns grouping
+recommendations and cleanup recommendations, controlled by `analyzeGrouping` and
+`analyzeCleanup`.
+
+The hierarchical coarse/refine path still exists for explicit benchmarks and
+research runs through `{ hierarchical: true }`, but it is not the product default
+because it breaks the "one request scans all tabs and returns both outputs"
+interaction. Previous quota/rate-limit failures from local gateway pressure are
+not treated as product evidence.
+
+## Historical Problem
+
+The earlier optimization work compared two extremes:
 
 - Single full-detail request: one large prompt, one final plan. Simple, but a
-  300-tab run failed in live gateway testing.
+  300-tab run failed in live gateway testing while the local gateway was under
+  unrelated pressure.
 - Hierarchical coarse/refine: one broad pass plus bucket refinement. More
   reliable in some cases, but refinements are serial and still use heavy
   settings, so 400 tabs can run too long.
 
 The bottleneck is model/runtime scheduling, not local JSON handling.
 
-## Proposed Harness
+## Research Harness, Not Current Product Default
 
 Use an adaptive orchestrator-worker plan:
 
@@ -83,15 +97,15 @@ Public leaderboard signal checked on 2026-06-26:
 - Claude models remain useful, but the user's Claude token budget is limited.
   Do not route every bucket refinement through Sonnet by default.
 
-Recommended runtime defaults:
+Historical runtime recommendation, now superseded for the product path by the
+combined single-request decision:
 
 - Coarse/router: selected GPT-family planner model with low thinking.
 - Refinement workers: selected GPT-family planner model with medium thinking by
   default, even when the visible user setting is high. If the user selects low,
   keep low.
-- Automatic routing: use the hierarchical coarse/refine path from 50 tabs
-  upward. Keep sub-50-tab sessions on the single full-detail path until there is
-  evidence that 20-30 tab sessions improve under hierarchy.
+- Do not automatically route product sessions to hierarchical coarse/refine
+  while cleanup recommendations are part of the same generated plan.
 - `gpt-5.4-mini`: expose as an optional preset for cost/speed-sensitive runs.
 - `claude-sonnet-4-6`: keep available as a manual choice and reserve future
   automatic use for small repair/polish slices, not full inventories.

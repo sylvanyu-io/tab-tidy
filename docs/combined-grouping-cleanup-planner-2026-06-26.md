@@ -19,6 +19,7 @@ After this change:
 - The preview shows both grouping recommendations and cleanup recommendations.
 - Closing cleanup candidates is explicit user action only.
 - Closing cleanup candidates rewrites the stored job, removes closed tabs from the plan, rebuilds validation, and refreshes the preview before the user applies grouping.
+- The old standalone cleanup runtime message and standalone gateway cleanup planner were removed so the product cannot accidentally issue a second cleanup-only LLM request.
 
 ## Request-count impact
 
@@ -46,15 +47,17 @@ The product-default planner path now uses the single full-detail request. The ol
 
 Functional checks:
 
-- `node --test tests/gateway-planner.test.mjs tests/controller.test.mjs`: 71/71 passing.
+- `node --test tests/gateway-planner.test.mjs tests/controller.test.mjs`: 72/72 passing.
+- `node --test tests/gateway-planner.test.mjs tests/controller.test.mjs tests/planner-benchmark-fixtures.test.mjs`: 80/80 passing after removing the standalone cleanup LLM path.
 - `npx playwright test tests/ui-smoke.spec.mjs`: 24/24 passing.
-- `npm test`: 133/133 passing.
+- `npm test`: 134/134 passing.
 - `npm run scan:secrets`: no provider-key patterns found.
 - `npm run build:extension`: built `dist/tab-tidy-0.1.5.zip`.
 
 New regression coverage:
 
 - Gateway planner returns cleanup candidates in the same full-detail plan request.
+- Gateway planner switch coverage verifies grouping-only and cleanup-only modes still use the same planner route.
 - 50-tab product sessions stay on the single full-detail request path.
 - Closing cleanup candidates is explicit and updates the stored plan preview.
 - UI smoke verifies generated preview includes cleanup suggestions and supports selected-candidate closing.

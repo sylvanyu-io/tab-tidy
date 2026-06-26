@@ -52,7 +52,7 @@ const allStrategies = [
   },
   {
     key: "hierarchical",
-    label: "current hierarchical coarse/refine",
+    label: "explicit hierarchical coarse/refine",
     options: { hierarchical: true, ...benchmarkPlannerOptions }
   },
   {
@@ -223,7 +223,7 @@ function renderReport(payload) {
   const completed = payload.results.filter((result) => result.finishedAt);
   const strategyKeys = new Set(payload.strategyOrder.map((strategy) => strategy.key));
   const intro = strategyKeys.has("hierarchical") && strategyKeys.has("single_full_detail")
-    ? "This benchmark compares the current hierarchical coarse/refine planner path against a forced single full-detail planner request."
+    ? "This benchmark compares an explicit hierarchical coarse/refine planner path against a forced single full-detail planner request."
     : strategyKeys.has("auto")
       ? "This benchmark records the product-default auto-routing planner path."
     : "This benchmark records a filtered planner strategy run.";
