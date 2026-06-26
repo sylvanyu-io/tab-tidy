@@ -25,6 +25,7 @@ if (outputPath) {
 
 function analyzePayload(payload) {
   return (payload.results || []).map((result) => {
+    const requestFailureCount = result.requestFailureCount ?? failedRequestCount(result.requests);
     const expectedTopics = expectedLabelByTabId(result.inventory, "topicByTabId");
     const storedFamilies = expectedLabelByTabId(result.inventory, "familyByTabId");
     const expectedFamilies = storedFamilies.size ? storedFamilies : familyLabelsFromTopics(expectedTopics);
@@ -41,8 +42,10 @@ function analyzePayload(payload) {
       tabCount: result.tabCount,
       strategy: result.strategy,
       ok: Boolean(result.ok),
+      degraded: Boolean(result.ok && (result.degraded || requestFailureCount > 0)),
       elapsedSeconds: result.elapsedSeconds,
       requestCount: result.requestCount,
+      requestFailureCount,
       groups: result.preview?.groups?.length ?? "-",
       groupedCount,
       reviewCount,
@@ -58,6 +61,10 @@ function analyzePayload(payload) {
       trueSame: topicMetrics.trueSame
     };
   });
+}
+
+function failedRequestCount(requests = []) {
+  return (requests || []).filter((request) => request.ok === false).length;
 }
 
 function expectedLabelByTabId(inventory = {}, key) {
@@ -187,9 +194,9 @@ function renderMarkdown(reports) {
           row.scenario,
           row.tabCount,
           row.strategy,
-          row.ok ? "ok" : "failed",
+          row.degraded ? "degraded" : row.ok ? "ok" : "failed",
           `${row.elapsedSeconds.toFixed(1)}s`,
-          row.requestCount,
+          row.requestFailureCount ? `${row.requestCount} (${row.requestFailureCount} failed)` : row.requestCount,
           row.groups,
           formatPercent(row.coverage),
           formatPercent(row.topicPrecision),

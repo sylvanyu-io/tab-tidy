@@ -26,6 +26,7 @@ const runId = buildBenchmarkRunId();
 const dataDir = resolve("docs/benchmarks/data");
 const dataPath = resolve(dataDir, `${runId}.json`);
 const reportPath = resolve(process.env.BENCHMARK_REPORT_PATH || "docs/benchmarks/gateway-planner-scale.md");
+const benchmarkPlannerOptions = parsePlannerOptionOverrides();
 
 const settings = {
   ...DEFAULT_SETTINGS,
@@ -47,17 +48,17 @@ const allStrategies = [
   {
     key: "auto",
     label: "product default auto route",
-    options: {}
+    options: benchmarkPlannerOptions
   },
   {
     key: "hierarchical",
     label: "current hierarchical coarse/refine",
-    options: { hierarchical: true }
+    options: { hierarchical: true, ...benchmarkPlannerOptions }
   },
   {
     key: "single_full_detail",
     label: "single full-detail request",
-    options: { hierarchical: false }
+    options: { hierarchical: false, ...benchmarkPlannerOptions }
   }
 ];
 const selectedStrategyKeys = parseBenchmarkStrategies(
@@ -108,6 +109,8 @@ async function runStrategy({ inventory, tabCount, scenario, strategy }) {
   }
 
   const elapsedMs = Math.round(performance.now() - started);
+  const fetchRecords = requests.filter((request) => request.type === "fetch");
+  const requestFailures = summarizeRequestFailures(fetchRecords);
   return {
     runId,
     startedAt,
@@ -121,12 +124,15 @@ async function runStrategy({ inventory, tabCount, scenario, strategy }) {
     settings: redactSettings(settings),
     inventory: compactInventoryForPersistence(inventory),
     ok: !error && Boolean(validation?.ok),
+    degraded: !error && Boolean(validation?.ok) && requestFailures.length > 0,
     elapsedMs,
     elapsedSeconds: Number((elapsedMs / 1000).toFixed(1)),
-    requestCount: requests.filter((request) => request.type === "fetch").length,
+    requestCount: fetchRecords.length,
+    requestFailureCount: requestFailures.length,
+    requestFailures,
     plannerRoute: inferPlannerRoute(requests),
     progressEvents: requests.filter((request) => request.type === "progress"),
-    requests: requests.filter((request) => request.type === "fetch"),
+    requests: fetchRecords,
     validation,
     preview,
     plan,
@@ -199,6 +205,7 @@ async function writeOutputs({ partial }) {
       gatewayModel: settings.gatewayModel,
       gatewayThinkingIntensity: settings.gatewayThinkingIntensity,
       promptPreset: settings.promptPreset,
+      plannerOptionOverrides: benchmarkPlannerOptions,
       requestTimeoutMs: Number(process.env.BENCHMARK_TIMEOUT_MS || DEFAULT_BENCHMARK_TIMEOUT_MS),
       strategyTimeoutMs: Number(process.env.BENCHMARK_STRATEGY_TIMEOUT_MS || DEFAULT_STRATEGY_TIMEOUT_MS),
       pageContext: scenarios.includes("low_signal_samples")
@@ -235,6 +242,7 @@ function renderReport(payload) {
     `- Prompt preset: ${payload.environment.promptPreset}`,
     payload.strategyFilter ? `- Strategy filter: ${payload.strategyFilter}` : "- Strategy filter: none",
     payload.scenarioFilter ? `- Scenario filter: ${payload.scenarioFilter}` : "- Scenario filter: task_bursts",
+    `- Planner option overrides: ${formatPlannerOptionOverrides(payload.environment.plannerOptionOverrides || {})}`,
     `- Page content: ${payload.environment.pageContext}`,
     `- Raw data: \`docs/benchmarks/data/${runId}.json\``,
     "",
@@ -244,8 +252,8 @@ function renderReport(payload) {
     "",
     "## Results",
     "",
-    "| Scenario | Tabs | Strategy | Route | Status | Time | Requests | Groups | Grouped Tabs | Review Tabs | Validation |",
-    "| --- | ---: | --- | --- | --- | ---: | ---: | ---: | ---: | ---: | --- |"
+    "| Scenario | Tabs | Strategy | Route | Status | Time | Requests | Failed Requests | Groups | Grouped Tabs | Review Tabs | Validation |",
+    "| --- | ---: | --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | --- |"
   ];
 
   for (const result of completed) {
@@ -255,13 +263,14 @@ function renderReport(payload) {
         result.tabCount,
         result.strategyLabel,
         result.plannerRoute || "-",
-        result.ok ? "ok" : "failed",
+        resultStatus(result),
         formatSeconds(result.elapsedMs),
         result.requestCount,
+        result.requestFailureCount || 0,
         result.preview?.groups?.length ?? "-",
         result.preview?.groupedTabsCount ?? "-",
         result.preview?.reviewTabsCount ?? "-",
-        result.validation?.ok ? "ok" : result.error?.message || result.validation?.errors?.join("; ") || "-"
+        validationSummary(result)
       ].join(" | ").replace(/^/, "| ").replace(/$/, " |")
     );
   }
@@ -279,6 +288,7 @@ function renderReport(payload) {
       : "- This filtered run should be compared against a separate baseline report."
   );
   lines.push("- The hierarchical strategy may issue one coarse request plus one or more refinement requests.");
+  lines.push("- `degraded` means final plan validation passed, but at least one gateway request failed and the planner used fallback output.");
   if (strategyKeys.has("single_full_detail")) {
     lines.push("- The single full-detail strategy sends every eligible tab in one planner request.");
   }
@@ -296,7 +306,7 @@ function summarizeConclusions(completed) {
         conclusions.push(
           `${BENCHMARK_SCENARIOS[result.scenario]?.label || result.scenario}, ${result.tabCount} tabs: auto used ${
             result.plannerRoute || "unknown route"
-          } and completed ${result.ok ? "successfully" : "with failure"} in ${formatSeconds(result.elapsedMs)} with ${
+          } and completed ${completionPhrase(result)} in ${formatSeconds(result.elapsedMs)} with ${
             result.requestCount
           } request(s).`
         );
@@ -304,7 +314,7 @@ function summarizeConclusions(completed) {
       }
       if (result.strategy !== "hierarchical") continue;
       conclusions.push(
-        `${result.tabCount} tabs: hierarchical completed ${result.ok ? "successfully" : "with failure"} in ${formatSeconds(
+        `${result.tabCount} tabs: hierarchical completed ${completionPhrase(result)} in ${formatSeconds(
           result.elapsedMs
         )} with ${result.requestCount} request(s).`
       );
@@ -353,6 +363,38 @@ function inferPlannerRoute(records) {
   return firstFetch ? "unknown" : "";
 }
 
+function summarizeRequestFailures(records) {
+  return records
+    .filter((record) => record.ok === false)
+    .map((record) => {
+      const error = record.response?.error || {};
+      return {
+        index: record.index,
+        status: record.status || 0,
+        code: error.code || record.error?.name || "",
+        message: String(error.message || record.error?.message || "").slice(0, 240)
+      };
+    });
+}
+
+function resultStatus(result) {
+  if (result.degraded) return "degraded";
+  return result.ok ? "ok" : "failed";
+}
+
+function completionPhrase(result) {
+  if (result.degraded) return "with degraded fallback";
+  return result.ok ? "successfully" : "with failure";
+}
+
+function validationSummary(result) {
+  if (result.degraded) {
+    const codes = (result.requestFailures || []).map((failure) => failure.code || failure.status).filter(Boolean).join(", ");
+    return `ok; degraded${codes ? `: ${codes}` : ""}`;
+  }
+  return result.validation?.ok ? "ok" : result.error?.message || result.validation?.errors?.join("; ") || "-";
+}
+
 function compactInventoryForPersistence(inventory) {
   return {
     ...inventory,
@@ -386,6 +428,43 @@ function parseSizes(value) {
     .map((item) => Number.parseInt(item.trim(), 10))
     .filter((item) => Number.isInteger(item) && item > 0);
   return parsed.length ? parsed : DEFAULT_SIZES;
+}
+
+function parsePlannerOptionOverrides() {
+  const options = {};
+  const refineBucketMinTabs = parsePositiveInteger(process.env.BENCHMARK_REFINE_BUCKET_MIN_TABS);
+  const refineMaxTabsPerRequest = parsePositiveInteger(process.env.BENCHMARK_REFINE_MAX_TABS_PER_REQUEST);
+  const refineConcurrency = parsePositiveInteger(process.env.BENCHMARK_REFINE_CONCURRENCY);
+  const refineConfidenceBelow = parseFiniteNumber(process.env.BENCHMARK_REFINE_CONFIDENCE_BELOW);
+  if (refineBucketMinTabs !== null) options.refineBucketMinTabs = refineBucketMinTabs;
+  if (refineMaxTabsPerRequest !== null) options.refineMaxTabsPerRequest = refineMaxTabsPerRequest;
+  if (refineConcurrency !== null) options.refineConcurrency = refineConcurrency;
+  if (refineConfidenceBelow !== null) options.refineConfidenceBelow = refineConfidenceBelow;
+  return options;
+}
+
+function parsePositiveInteger(value) {
+  if (value === undefined || value === "") return null;
+  const parsed = Number(value);
+  if (!Number.isInteger(parsed) || parsed <= 0) {
+    throw new Error(`Expected a positive integer benchmark option, got: ${value}`);
+  }
+  return parsed;
+}
+
+function parseFiniteNumber(value) {
+  if (value === undefined || value === "") return null;
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) {
+    throw new Error(`Expected a finite numeric benchmark option, got: ${value}`);
+  }
+  return parsed;
+}
+
+function formatPlannerOptionOverrides(options) {
+  const entries = Object.entries(options || {});
+  if (!entries.length) return "none";
+  return entries.map(([key, value]) => `${key}=${value}`).join(", ");
 }
 
 function parseJsonOrNull(value) {
@@ -456,8 +535,10 @@ async function main() {
           tabs: result.tabCount,
           strategy: result.strategy,
           ok: result.ok,
+          degraded: result.degraded,
           elapsedMs: result.elapsedMs,
           requests: result.requests.length,
+          failedRequests: result.requestFailureCount || 0,
           groups: result.preview?.groups?.length ?? null,
           groupedTabs: result.preview?.groupedTabsCount ?? null,
           reviewTabs: result.preview?.reviewTabsCount ?? null
