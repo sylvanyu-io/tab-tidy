@@ -969,10 +969,11 @@ test("AI gateway planner uses coarse then refine planning for large inventories"
   const fetchImpl = async (_url, options) => {
     const body = JSON.parse(options.body);
     requests.push(body);
+    const responsePayload = responses[requests.length - 1];
     return {
       ok: true,
       async json() {
-        return { choices: [{ message: { content: JSON.stringify(responses[requests.length - 1]) } }] };
+        return { choices: [{ message: { content: JSON.stringify(responsePayload) } }] };
       }
     };
   };
@@ -991,7 +992,7 @@ test("AI gateway planner uses coarse then refine planning for large inventories"
 
   assert.equal(requests.length, 3);
   assert.equal(requests[0].reasoning_effort, "low");
-  assert.equal(requests[1].reasoning_effort, "high");
+  assert.equal(requests[1].reasoning_effort, "medium");
   assert.match(requests[0].messages[0].content, /fast first-pass/);
   assert.match(requests[0].messages[0].content, /Write every user-facing string in English/);
   assert.match(requests[1].messages[0].content, /JSON-only planner/);
@@ -1034,10 +1035,11 @@ test("AI gateway planner splits oversized coarse buckets before refinement", asy
 
   const fetchImpl = async (_url, options) => {
     requests.push(JSON.parse(options.body));
+    const responsePayload = responses[requests.length - 1];
     return {
       ok: true,
       async json() {
-        return { choices: [{ message: { content: JSON.stringify(responses[requests.length - 1]) } }] };
+        return { choices: [{ message: { content: JSON.stringify(responsePayload) } }] };
       }
     };
   };
@@ -1051,7 +1053,7 @@ test("AI gateway planner splits oversized coarse buckets before refinement", asy
 
   assert.equal(requests.length, 4);
   assert.equal(requests[0].reasoning_effort, "low");
-  assert.equal(requests.slice(1).every((request) => request.reasoning_effort === "high"), true);
+  assert.equal(requests.slice(1).every((request) => request.reasoning_effort === "medium"), true);
   assert.equal(validation.ok, true, validation.errors.join(" "));
   assert.equal(plan.groups.length, 3);
 });
@@ -1127,7 +1129,7 @@ test("AI gateway planner splits high-confidence fallback buckets by original ord
   );
 });
 
-test("AI gateway planner keeps high refinement when large jobs request ultra thinking", async () => {
+test("AI gateway planner caps large-job refinement thinking at medium by default", async () => {
   const plannerTabs = [10, 11, 12].map((tabId) => ({
     tabId,
     windowId: 1,
@@ -1155,10 +1157,11 @@ test("AI gateway planner keeps high refinement when large jobs request ultra thi
 
   const fetchImpl = async (_url, options) => {
     requests.push(JSON.parse(options.body));
+    const responsePayload = responses[requests.length - 1];
     return {
       ok: true,
       async json() {
-        return { choices: [{ message: { content: JSON.stringify(responses[requests.length - 1]) } }] };
+        return { choices: [{ message: { content: JSON.stringify(responsePayload) } }] };
       }
     };
   };
@@ -1179,7 +1182,82 @@ test("AI gateway planner keeps high refinement when large jobs request ultra thi
 
   assert.equal(requests.length, 2);
   assert.equal(requests[0].reasoning_effort, "low");
-  assert.equal(requests[1].reasoning_effort, "high");
+  assert.equal(requests[1].reasoning_effort, "medium");
+});
+
+test("AI gateway planner runs bucket refinements with bounded concurrency", async () => {
+  const plannerTabs = Array.from({ length: 8 }, (_, index) => ({
+    tabId: 100 + index,
+    windowId: 1,
+    index,
+    sequenceIndex: index,
+    title: `Parallel refinement tab ${index + 1}`,
+    hostname: "example.com"
+  }));
+  const largeInventory = { ...inventory, plannerTabs, tabs: plannerTabs, pageSamples: [] };
+  let activeRefinements = 0;
+  let maxActiveRefinements = 0;
+  const requests = [];
+
+  const fetchImpl = async (_url, options) => {
+    const body = JSON.parse(options.body);
+    requests.push(body);
+    if (requests.length === 1) {
+      return {
+        ok: true,
+        async json() {
+          return {
+            choices: [
+              {
+                message: {
+                  content: JSON.stringify({
+                    buckets: [0, 1, 2, 3].map((bucketIndex) => ({
+                      bucketKey: `bucket-${bucketIndex + 1}`,
+                      title: `Bucket ${bucketIndex + 1}`,
+                      color: "blue",
+                      confidence: 0.9,
+                      tabIds: [100 + bucketIndex * 2, 101 + bucketIndex * 2],
+                      reason: "Needs refinement."
+                    })),
+                    reviewTabIds: []
+                  })
+                }
+              }
+            ]
+          };
+        }
+      };
+    }
+
+    activeRefinements += 1;
+    maxActiveRefinements = Math.max(maxActiveRefinements, activeRefinements);
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    activeRefinements -= 1;
+    const payload = JSON.parse(body.messages[1].content.slice(body.messages[1].content.indexOf("{")));
+    const tabIds = payload.tabs.map((row) => row[0]);
+    return {
+      ok: true,
+      async json() {
+        return { choices: [{ message: { content: JSON.stringify(planForRefs(tabIds, `Refined ${tabIds[0]}`)) } }] };
+      }
+    };
+  };
+
+  const settings = { ...DEFAULT_SETTINGS, plannerProvider: PLANNER_PROVIDERS.GATEWAY, gatewayApiKey: "gateway-test-key" };
+  const plan = await createGatewayPlan(largeInventory, settings, fetchImpl, {
+    hierarchical: true,
+    refineBucketMinTabs: 2,
+    refineConcurrency: 2
+  });
+  const validation = validatePlan(plan, largeInventory, settings);
+
+  assert.equal(requests.length, 5);
+  assert.equal(maxActiveRefinements, 2);
+  assert.equal(validation.ok, true, validation.errors.join(" "));
+  assert.deepEqual(
+    plan.groups.flatMap((group) => group.tabRefs.map((ref) => ref.tabId)),
+    plannerTabs.map((tab) => tab.tabId)
+  );
 });
 
 function planForRefs(tabIds, title) {

@@ -18,6 +18,8 @@ const HIERARCHICAL_MIN_TABS = 100;
 const REFINE_BUCKET_MIN_TABS = 50;
 const REFINE_MAX_TABS_PER_REQUEST = 80;
 const REFINE_CONFIDENCE_BELOW = 0.78;
+const REFINE_DEFAULT_CONCURRENCY = 3;
+const REFINE_MAX_CONCURRENCY = 5;
 const COARSE_MAX_BUCKETS = 24;
 const WINDOW_FIELDS = Object.freeze(["id", "type", "focused", "incognito", "tabCount"]);
 const TAB_FIELDS = Object.freeze([
@@ -69,7 +71,7 @@ export async function createGatewayCleanupAnalysis(inventory, activityOverview =
     response_format: { type: "json_object" },
     max_tokens: 4096
   };
-  applyThinkingIntensity(body, settings);
+  applyThinkingIntensity(body, settings, options.thinkingIntensity || settings.gatewayThinkingIntensity);
 
   const { response, data } = await fetchJsonWithTimeout(
     fetchImpl,
@@ -104,7 +106,7 @@ async function createSingleGatewayPlan(inventory, settings, fetchImpl, options =
     response_format: { type: "json_object" },
     max_tokens: 8192
   };
-  applyThinkingIntensity(body, settings);
+  applyThinkingIntensity(body, settings, options.thinkingIntensity || settings.gatewayThinkingIntensity);
 
   const { response, data } = await fetchJsonWithTimeout(
     fetchImpl,
@@ -139,24 +141,13 @@ async function createHierarchicalGatewayPlan(inventory, settings, fetchImpl, opt
   const finalGroups = [];
   const finalReviewTabs = [];
   const seen = new Set();
+  const refinementTasks = [];
   const refinementTotal = countRefinementRequests(coarse, settings, options);
   let refinementDone = 0;
 
   for (const bucket of coarse.buckets) {
     if (shouldRefineBucket(bucket, settings, options)) {
-      await emitProgress(options, {
-        phase: "refining",
-        progress: refinementProgress(refinementDone, refinementTotal),
-        message: `正在精分「${bucket.title}」`
-      });
-      const refined = await refineBucket(bucket, inventory, settings, fetchImpl, options);
-      refinementDone += countBucketRefinementRequests(bucket, settings, options);
-      await emitProgress(options, {
-        phase: "refining",
-        progress: refinementProgress(refinementDone, refinementTotal),
-        message: `已精分「${bucket.title}」`
-      });
-      mergePlanParts(refined.groups, refined.reviewTabs, { finalGroups, finalReviewTabs, seen, settings });
+      refinementTasks.push(...refinementTasksForBucket(bucket, settings, options));
     } else if (bucket.confidence >= settings.minConfidenceToApply) {
       mergePlanParts([bucketToGroup(bucket)], [], { finalGroups, finalReviewTabs, seen, settings });
     } else {
@@ -180,18 +171,27 @@ async function createHierarchicalGatewayPlan(inventory, settings, fetchImpl, opt
       tabRefs: coarse.reviewTabs,
       reason: localizedText(settings.languageMode, "粗分阶段认为这些标签页仍不确定。", "Coarse pass left these tabs uncertain.")
     };
+    refinementTasks.push(...refinementTasksForBucket(reviewBucket, settings, options));
+  }
+
+  const refinedResults = await mapWithConcurrency(refinementTasks, refinementConcurrency(options), async (task) => {
+    throwIfAborted(options.signal);
     await emitProgress(options, {
       phase: "refining",
       progress: refinementProgress(refinementDone, refinementTotal),
-      message: "正在细分不确定标签页"
+      message: task.messageStart
     });
-    const refined = await refineBucket(reviewBucket, inventory, settings, fetchImpl, options);
-    refinementDone += countBucketRefinementRequests(reviewBucket, settings, options);
+    const refined = await refineBucket(task.bucket, inventory, settings, fetchImpl, options);
+    refinementDone += 1;
     await emitProgress(options, {
       phase: "refining",
       progress: refinementProgress(refinementDone, refinementTotal),
-      message: "不确定标签页已细分"
+      message: task.messageDone
     });
+    return refined;
+  });
+
+  for (const refined of refinedResults) {
     mergePlanParts(refined.groups, refined.reviewTabs, { finalGroups, finalReviewTabs, seen, settings });
   }
 
@@ -645,25 +645,19 @@ async function createCoarseGatewayBuckets(inventory, settings, fetchImpl, option
 async function refineBucket(bucket, inventory, settings, fetchImpl, options = {}) {
   const maxTabsPerRequest = options.refineMaxTabsPerRequest || Math.min(settings.maxTabsPerGroup, REFINE_MAX_TABS_PER_REQUEST);
   if (bucket.tabRefs.length > maxTabsPerRequest) {
-    const refinedParts = { groups: [], reviewTabs: [] };
-    for (const [index, tabRefs] of chunkRefs(bucket.tabRefs, maxTabsPerRequest).entries()) {
-      const refined = await refineBucket(
-        {
-          ...bucket,
-          groupKey: `${bucket.groupKey}-part-${index + 1}`,
-          title: `${bucket.title} ${index + 1}`,
-          tabRefs,
-          reason: `${bucket.reason} Split from an oversized coarse bucket.`
-        },
-        inventory,
-        settings,
-        fetchImpl,
-        options
-      );
-      refinedParts.groups.push(...refined.groups);
-      refinedParts.reviewTabs.push(...refined.reviewTabs);
-    }
-    return refinedParts;
+    const refined = await mapWithConcurrency(
+      refinementTasksForBucket(bucket, settings, options).map((task) => task.bucket),
+      refinementConcurrency(options),
+      (part) => refineBucket(part, inventory, settings, fetchImpl, options)
+    );
+    return refined.reduce(
+      (parts, part) => {
+        parts.groups.push(...part.groups);
+        parts.reviewTabs.push(...part.reviewTabs);
+        return parts;
+      },
+      { groups: [], reviewTabs: [] }
+    );
   }
 
   const subInventory = subsetInventory(inventory, bucket.tabRefs);
@@ -675,7 +669,7 @@ async function refineBucket(bucket, inventory, settings, fetchImpl, options = {}
       settings.customPrompt,
       `Refine this coarse bucket: ${bucket.title}.`,
       `Coarse reason: ${bucket.reason}`,
-      "This is a large-session refinement pass; use the configured thinking effort.",
+      "This is a large-session refinement pass; prefer concise semantic clustering and strict JSON over deep reasoning.",
       "Split it only when there are clearly different semantic tasks or topics.",
       "Keep uncertain or sensitive tabs in reviewTabs."
     ]
@@ -687,6 +681,7 @@ async function refineBucket(bucket, inventory, settings, fetchImpl, options = {}
   try {
     const plan = await createSingleGatewayPlan(subInventory, refineSettings, fetchImpl, {
       ...options,
+      thinkingIntensity: refinementThinkingIntensity(settings, options),
       suppressSingleRequestProgress: true
     });
     return {
@@ -833,6 +828,58 @@ function countRefinementRequests(coarse, settings, options = {}) {
 function countBucketRefinementRequests(bucket, settings, options = {}) {
   const maxTabsPerRequest = options.refineMaxTabsPerRequest || Math.min(settings.maxTabsPerGroup, REFINE_MAX_TABS_PER_REQUEST);
   return Math.max(1, Math.ceil((bucket.tabRefs || []).length / Math.max(1, maxTabsPerRequest)));
+}
+
+function refinementTasksForBucket(bucket, settings, options = {}) {
+  const maxTabsPerRequest = options.refineMaxTabsPerRequest || Math.min(settings.maxTabsPerGroup, REFINE_MAX_TABS_PER_REQUEST);
+  const tabRefChunks = chunkRefs(bucket.tabRefs || [], maxTabsPerRequest);
+  const split = tabRefChunks.length > 1;
+  return tabRefChunks.map((tabRefs, index) => {
+    const bucketTitle = split ? `${bucket.title} ${index + 1}` : bucket.title;
+    return {
+      bucket: {
+        ...bucket,
+        groupKey: split ? `${bucket.groupKey}-part-${index + 1}` : bucket.groupKey,
+        title: bucketTitle,
+        tabRefs,
+        reason: split ? `${bucket.reason} Split from an oversized coarse bucket.` : bucket.reason
+      },
+      messageStart: localizedText(settings.languageMode, `正在精分「${bucketTitle}」`, `Refining "${bucketTitle}"`),
+      messageDone: localizedText(settings.languageMode, `已精分「${bucketTitle}」`, `Refined "${bucketTitle}"`)
+    };
+  });
+}
+
+function refinementConcurrency(options = {}) {
+  const raw = Number(options.refineConcurrency || REFINE_DEFAULT_CONCURRENCY);
+  if (!Number.isFinite(raw)) return REFINE_DEFAULT_CONCURRENCY;
+  return Math.min(REFINE_MAX_CONCURRENCY, Math.max(1, Math.floor(raw)));
+}
+
+function refinementThinkingIntensity(settings, options = {}) {
+  if (Object.values(THINKING_INTENSITIES).includes(options.refineThinkingIntensity)) {
+    return options.refineThinkingIntensity;
+  }
+  if (settings.gatewayThinkingIntensity === THINKING_INTENSITIES.LOW) {
+    return THINKING_INTENSITIES.LOW;
+  }
+  return THINKING_INTENSITIES.MEDIUM;
+}
+
+async function mapWithConcurrency(items, concurrency, worker) {
+  const results = new Array(items.length);
+  let nextIndex = 0;
+  const workerCount = Math.min(Math.max(1, concurrency), items.length);
+  await Promise.all(
+    Array.from({ length: workerCount }, async () => {
+      while (nextIndex < items.length) {
+        const index = nextIndex;
+        nextIndex += 1;
+        results[index] = await worker(items[index], index);
+      }
+    })
+  );
+  return results;
 }
 
 function refinementProgress(completed, total) {
@@ -1250,6 +1297,12 @@ function applyThinkingIntensity(body, settings, intensity = settings.gatewayThin
   }
 
   body.reasoning_effort = intensity === THINKING_INTENSITIES.ULTRA ? THINKING_INTENSITIES.HIGH : intensity;
+}
+
+function throwIfAborted(signal) {
+  if (signal?.aborted) {
+    throw new DOMException("The operation was aborted.", "AbortError");
+  }
 }
 
 function usesGlmThinking(settings) {
