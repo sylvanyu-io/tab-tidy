@@ -285,3 +285,81 @@ Conclusion:
   current `dist` package include fenced-JSON tolerance.
 - Image models are available upstream but intentionally unavailable through the
   Tab Tidy planner gateway.
+
+## Follow-up: Local Tunnel Recheck After Runtime Failures
+
+Date: 2026-06-26
+
+The gateway was rechecked after the user reported that the local Cloudflare
+Tunnel gateway could not use several models. This recheck separated four
+possible failure layers:
+
+1. local CLIProxyAPI service;
+2. origin Cloudflare Tunnel;
+3. product Worker validation and rate limits;
+4. upstream account/model runtime availability.
+
+Health checks all passed:
+
+| Layer | Result |
+| --- | --- |
+| local main `127.0.0.1:8317/healthz` | 200 |
+| local API-only proxy `127.0.0.1:18317/healthz` | 200 |
+| origin tunnel `cliproxy-origin.sylvanyu.io/healthz` | 200 |
+| product Worker `cliproxy.sylvanyu.io/healthz` | 200 |
+
+The local and origin `/v1/models` endpoints, with upstream auth, both listed the
+expected text models:
+
+- `gpt-5.5`, `gpt-5.4`, `gpt-5.4-mini`;
+- `claude-opus-4-8`, `claude-opus-4-7`, `claude-sonnet-4-6`;
+- `gpt-5.3-codex-spark`.
+
+First product-facing probes were blocked by the Worker's hourly IP limit:
+
+| Key | Count |
+| --- | --- |
+| `ip:103.26.8.125:2026-06-26T09` | 60 / 60 |
+| `global:2026-06-26` | 253 / 3000 |
+
+That IP key was cleared for diagnosis. After clearing it, product-facing model
+probes showed the real runtime state:
+
+| Model | Product Worker result | Meaning |
+| --- | --- | --- |
+| `gpt-5.5` | 429 `model_cooldown` | Codex-provider credentials are cooling down. |
+| `gpt-5.4` | 429 `model_cooldown` | Codex-provider credentials are cooling down. |
+| `gpt-5.4-mini` | 429 `model_cooldown` | Codex-provider credentials are cooling down. |
+| `claude-opus-4-8` | 200 | Usable through the product gateway. |
+| `claude-sonnet-4-6` | 200 | Usable through the product gateway. |
+| `claude-opus-4-7` | 200 | Usable through the product gateway. |
+| `gpt-5.3-codex-spark` | 200 | Usable for the bounded progress-copy route. |
+
+The CLIProxyAPI error logs for the GPT-family failures showed the underlying
+upstream error:
+
+```text
+usage_limit_reached
+plan_type: pro
+resets_in_seconds: about 7,600 to 7,900 seconds
+```
+
+CLIProxyAPI then surfaced this as:
+
+```text
+model_cooldown
+All credentials for model gpt-5.5 / gpt-5.4 / gpt-5.4-mini are cooling down via provider codex
+```
+
+Conclusion:
+
+- The local service is running.
+- The Cloudflare Tunnel is currently reachable.
+- The Worker allowlist is not the current blocker for the tested text models.
+- GPT-family planner models are currently unavailable because the Codex Pro
+  credential pool hit its upstream usage limit and entered cooldown.
+- Claude-family planner models are currently usable.
+- If this happens during product use, the immediate workaround is to choose a
+  Claude model or wait for the Codex-provider reset. Adding another Codex
+  credential, adding a non-Codex upstream model provider, or implementing an
+  explicit product-level fallback are the durable fixes.
