@@ -9,18 +9,19 @@ import {
   EXISTING_GROUP_MODES,
   ORGANIZE_MODES,
   PLANNER_PROVIDERS,
-  PROMPT_PRESETS,
   REVIEW_GROUP_MODES,
   TARGET_WINDOW_MODES,
   THINKING_INTENSITIES
 } from "../src/shared/settings.js";
 import { BENCHMARK_SCENARIOS, buildBenchmarkInventory, parseBenchmarkScenarios } from "./planner-benchmark-fixtures.mjs";
+import { parseBenchmarkPromptPreset } from "./planner-benchmark-options.mjs";
 
 const DEFAULT_SIZES = [120, 300, 400];
 const DEFAULT_BENCHMARK_TIMEOUT_MS = 180_000;
 const DEFAULT_STRATEGY_TIMEOUT_MS = 240_000;
 const sizes = parseSizes(process.env.BENCHMARK_TAB_COUNTS || "");
 const scenarios = parseBenchmarkScenarios(process.env.BENCHMARK_SCENARIOS || "");
+const benchmarkPromptPreset = parseBenchmarkPromptPreset(process.env.BENCHMARK_PROMPT_PRESET || "");
 const runId = `planner-scale-${new Date().toISOString().replace(/[:.]/g, "-")}`;
 const dataDir = resolve("docs/benchmarks/data");
 const dataPath = resolve(dataDir, `${runId}.json`);
@@ -33,7 +34,7 @@ const settings = {
   targetWindowMode: TARGET_WINDOW_MODES.CURRENT_WINDOW,
   existingGroupMode: EXISTING_GROUP_MODES.DISSOLVE,
   reviewGroupMode: REVIEW_GROUP_MODES.CREATE,
-  promptPreset: PROMPT_PRESETS.CONSERVATIVE,
+  promptPreset: benchmarkPromptPreset,
   gatewayBaseUrl: process.env.GATEWAY_BASE_URL || "",
   gatewayApiKey: process.env.GATEWAY_API_KEY || "",
   gatewayModel: process.env.GATEWAY_MODEL || DEFAULT_SETTINGS.gatewayModel,
@@ -188,6 +189,7 @@ async function writeOutputs({ partial }) {
       gatewayBaseUrl: settings.gatewayBaseUrl || "built-in default",
       gatewayModel: settings.gatewayModel,
       gatewayThinkingIntensity: settings.gatewayThinkingIntensity,
+      promptPreset: settings.promptPreset,
       requestTimeoutMs: Number(process.env.BENCHMARK_TIMEOUT_MS || DEFAULT_BENCHMARK_TIMEOUT_MS),
       strategyTimeoutMs: Number(process.env.BENCHMARK_STRATEGY_TIMEOUT_MS || DEFAULT_STRATEGY_TIMEOUT_MS),
       pageContext: scenarios.includes("low_signal_samples")
@@ -219,6 +221,7 @@ function renderReport(payload) {
     `- Gateway: ${payload.environment.gatewayBaseUrl}`,
     `- Model: ${payload.environment.gatewayModel}`,
     `- Thinking intensity: ${payload.environment.gatewayThinkingIntensity}`,
+    `- Prompt preset: ${payload.environment.promptPreset}`,
     payload.strategyFilter ? `- Strategy filter: ${payload.strategyFilter}` : "- Strategy filter: none",
     payload.scenarioFilter ? `- Scenario filter: ${payload.scenarioFilter}` : "- Scenario filter: task_bursts",
     `- Page content: ${payload.environment.pageContext}`,

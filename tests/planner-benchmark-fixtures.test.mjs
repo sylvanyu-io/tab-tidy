@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { buildPlannerPayload } from "../src/core/gateway-planner.js";
-import { DEFAULT_SETTINGS } from "../src/shared/settings.js";
+import { DEFAULT_SETTINGS, PROMPT_PRESETS } from "../src/shared/settings.js";
+import { parseBenchmarkPromptPreset } from "../scripts/planner-benchmark-options.mjs";
 import { BENCHMARK_SCENARIOS, buildBenchmarkInventory, parseBenchmarkScenarios } from "../scripts/planner-benchmark-fixtures.mjs";
 
 test("benchmark scenario parser supports all named coverage fixtures", () => {
@@ -9,6 +10,13 @@ test("benchmark scenario parser supports all named coverage fixtures", () => {
   assert.deepEqual(parseBenchmarkScenarios("all"), Object.keys(BENCHMARK_SCENARIOS));
   assert.deepEqual(parseBenchmarkScenarios("domain_traps,media_type"), ["domain_traps", "media_type"]);
   assert.throws(() => parseBenchmarkScenarios("unknown"), /Unknown BENCHMARK_SCENARIOS/);
+});
+
+test("benchmark prompt preset parser supports explicit preset comparisons", () => {
+  assert.equal(parseBenchmarkPromptPreset(""), PROMPT_PRESETS.CONSERVATIVE);
+  assert.equal(parseBenchmarkPromptPreset("media_type"), PROMPT_PRESETS.MEDIA_TYPE);
+  assert.equal(parseBenchmarkPromptPreset(" read_later "), PROMPT_PRESETS.READ_LATER);
+  assert.throws(() => parseBenchmarkPromptPreset("platform_source"), /Unknown BENCHMARK_PROMPT_PRESET/);
 });
 
 test("benchmark fixtures store ground truth without sending it to planner payload", () => {
