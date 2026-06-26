@@ -136,7 +136,7 @@ test("control surface renders settings and mock preview", async ({ page }) => {
   await expect(page.locator("#uiLanguageToggle")).toHaveText("");
   await expect(page.locator("#uiLanguageToggle svg")).toBeVisible();
   await expect(page.getByLabel("整理方式")).toHaveValue("conservative");
-  await expect(page.getByLabel("主题拆分")).toHaveValue("balanced");
+  await expect(page.getByLabel("分组数量")).toHaveValue("balanced");
   await expect.poll(() =>
     page.locator("#promptPreset option").evaluateAll((options) =>
       options.map((option) => ({ value: option.value, text: option.textContent?.trim() }))
@@ -152,9 +152,9 @@ test("control surface renders settings and mock preview", async ({ page }) => {
       options.map((option) => ({ value: option.value, text: option.textContent?.trim() }))
     )
   ).toEqual([
-    { value: "compact", text: "少分几组" },
-    { value: "balanced", text: "智能拆分" },
-    { value: "detailed", text: "细分主题" }
+    { value: "compact", text: "更少分组" },
+    { value: "balanced", text: "平衡" },
+    { value: "detailed", text: "更多分组" }
   ]);
 
   await page.locator("#ackSampling").check();
@@ -311,9 +311,9 @@ test("auto-selects English UI and can manually switch back", async ({ page }) =>
       options.map((option) => ({ value: option.value, text: option.textContent?.trim() }))
     )
   ).toEqual([
-    { value: "compact", text: "Fewer, broader groups" },
-    { value: "balanced", text: "Smart split" },
-    { value: "detailed", text: "More specific groups" }
+    { value: "compact", text: "Fewer groups" },
+    { value: "balanced", text: "Balanced" },
+    { value: "detailed", text: "More groups" }
   ]);
   await expect(page.locator("#uiLanguageToggle")).toHaveText("");
   await expect(page.locator("#uiLanguageToggle")).toHaveAttribute("aria-label", "Switch UI to Chinese");
