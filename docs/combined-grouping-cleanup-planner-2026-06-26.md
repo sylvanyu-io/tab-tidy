@@ -53,6 +53,7 @@ Functional checks:
 - `npm test`: 134/134 passing.
 - `npm run scan:secrets`: no provider-key patterns found.
 - `npm run build:extension`: built `dist/tab-tidy-0.1.5.zip`.
+- `npm run release:check`: passed Node tests, UI smoke, current/history secret scans, dev build, and store build.
 
 New regression coverage:
 
