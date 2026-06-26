@@ -31,9 +31,28 @@ test("worker validates models and token caps before forwarding", async () => {
   const progressCopyModel = await handle(chatRequest(validProgressCopyBody()), env);
   assert.equal(progressCopyModel.status, 200);
 
+  const miniPlannerModel = await handle(chatRequest({ model: "gpt-5.4-mini" }), env);
+  assert.equal(miniPlannerModel.status, 200);
+
   const tooManyTokens = await handle(chatRequest({ max_tokens: 9000 }), env);
   assert.equal(tooManyTokens.status, 400);
   assert.equal((await tooManyTokens.json()).error.code, "max_tokens_exceeded");
+});
+
+test("worker derives planner models from the configured allowlist", async () => {
+  const env = envWithKv({ ALLOWED_MODELS: "gpt-5.4-mini,gpt-5.3-codex-spark" });
+  const planner = await handle(chatRequest({ model: "gpt-5.4-mini" }), env);
+  assert.equal(planner.status, 200);
+
+  const sparkPlanner = await handle(
+    chatRequest({
+      model: "gpt-5.3-codex-spark",
+      messages: validBody().messages
+    }),
+    env
+  );
+  assert.equal(sparkPlanner.status, 400);
+  assert.equal((await sparkPlanner.json()).error.code, "spark_shape_required");
 });
 
 test("worker only accepts Tab Tidy request shapes", async () => {

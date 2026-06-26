@@ -69,7 +69,7 @@ export const BUILTIN_GATEWAY_BASE_URL = "https://cliproxy.sylvanyu.io/v1";
 export const DEFAULT_GATEWAY_BASE_URL = "";
 const LEGACY_DEFAULT_GATEWAY_BASE_URLS = new Set([BUILTIN_GATEWAY_BASE_URL]);
 
-export const GATEWAY_MODELS = Object.freeze(["gpt-5.5", "claude-opus-4-8", "claude-sonnet-4-6"]);
+export const GATEWAY_MODELS = Object.freeze(["gpt-5.5", "gpt-5.4", "gpt-5.4-mini", "claude-opus-4-8", "claude-sonnet-4-6"]);
 export const GATEWAY_CUSTOM_MODEL_VALUE = "custom";
 const MAX_CUSTOM_GATEWAY_MODEL_LENGTH = 160;
 

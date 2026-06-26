@@ -1,6 +1,6 @@
-const DEFAULT_ALLOWED_MODELS = ["gpt-5.5", "claude-opus-4-8", "claude-sonnet-4-6", "gpt-5.3-codex-spark"];
+const PROGRESS_COPY_MODEL = "gpt-5.3-codex-spark";
+const DEFAULT_ALLOWED_MODELS = ["gpt-5.5", "gpt-5.4", "gpt-5.4-mini", "claude-opus-4-8", "claude-sonnet-4-6", PROGRESS_COPY_MODEL];
 const FORWARDED_CHAT_FIELDS = Object.freeze(["model", "messages", "response_format", "max_tokens", "reasoning_effort", "thinking"]);
-const PLANNER_MODELS = new Set(DEFAULT_ALLOWED_MODELS.filter((model) => model !== "gpt-5.3-codex-spark"));
 const DEFAULT_LIMITS = Object.freeze({
   bodyBytes: 1_000_000,
   maxTokens: 8192,
@@ -109,11 +109,11 @@ function validateChatRequest(body, env, limits) {
   if (Number(body.max_tokens || 0) > limits.maxTokens) {
     return { ok: false, code: "max_tokens_exceeded", message: `max_tokens must be <= ${limits.maxTokens}.` };
   }
-  if (body.model === "gpt-5.3-codex-spark") {
+  if (body.model === PROGRESS_COPY_MODEL) {
     const sparkValidation = validateProgressCopyRequest(body);
     if (!sparkValidation.ok) return sparkValidation;
   } else {
-    const plannerValidation = validatePlannerRequest(body);
+    const plannerValidation = validatePlannerRequest(body, modelAllowlist);
     if (!plannerValidation.ok) return plannerValidation;
   }
   if (body.base_url || body.baseURL || body.provider_url) {
@@ -141,8 +141,9 @@ function validateTopLevelFields(body) {
   return { ok: true };
 }
 
-function validatePlannerRequest(body) {
-  if (!PLANNER_MODELS.has(body.model)) {
+function validatePlannerRequest(body, modelAllowlist) {
+  const plannerModels = new Set(modelAllowlist.filter((model) => model !== PROGRESS_COPY_MODEL));
+  if (!plannerModels.has(body.model)) {
     return { ok: false, code: "planner_model_not_allowed", message: "This model is not available for Tab Tidy planning." };
   }
   if (body.messages.length !== 2) {

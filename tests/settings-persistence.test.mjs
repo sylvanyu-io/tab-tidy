@@ -121,6 +121,8 @@ test("AI gateway settings normalize safely", () => {
     }).gatewayModel,
     DEFAULT_SETTINGS.gatewayModel
   );
+  assert.equal(normalizeSettings({ ...DEFAULT_SETTINGS, gatewayModel: "gpt-5.4" }).gatewayModel, "gpt-5.4");
+  assert.equal(normalizeSettings({ ...DEFAULT_SETTINGS, gatewayModel: "gpt-5.4-mini" }).gatewayModel, "gpt-5.4-mini");
 });
 
 test("gateway key is not persisted unless explicitly remembered", async () => {
