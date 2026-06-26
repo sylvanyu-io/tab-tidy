@@ -106,6 +106,43 @@ Raw data:
 Mini is not a proven default replacement. It sometimes runs fast, but the
 latency is inconsistent and quality can trail GPT-5.4.
 
+### Threshold-Adjacent GPT-5.4 Medium Recheck
+
+Raw data:
+
+- `docs/benchmarks/data/planner-scale-2026-06-26T09-17-25-037Z-pid91629.json`
+- `docs/benchmarks/data/planner-scale-2026-06-26T09-17-25-877Z-pid91707.json`
+
+Quality reports:
+
+- `docs/benchmarks/planner-threshold-task-bursts-gpt-5.4-medium-quality.md`
+- `docs/benchmarks/planner-threshold-media-type-gpt-5.4-medium-quality.md`
+
+The first parallel threshold run exposed a benchmark harness bug: two processes
+that started in the same millisecond generated the same raw-data filename. That
+run was discarded, and the runner now includes the process id in `runId` so
+parallel evidence runs cannot overwrite each other.
+
+| Scenario | Tabs | Strategy | Time | Coverage | Topic F1 | Decision signal |
+| --- | ---: | --- | ---: | ---: | ---: | --- |
+| task_bursts | 36 | hierarchical | 33.8s | 94.4% | 72.3% | Do not force hierarchy this small. |
+| task_bursts | 36 | single full-detail | 31.2s | 88.9% | 79.2% | Higher F1 and slightly faster. |
+| task_bursts | 48 | hierarchical | 13.9s | 100.0% | 71.0% | Fast but wrong enough to reject lowering threshold. |
+| task_bursts | 48 | single full-detail | 35.0s | 95.8% | 96.0% | Slower but much more accurate. |
+| task_bursts | 50 | hierarchical | 28.6s | 100.0% | 95.9% | Better coverage and F1. |
+| task_bursts | 50 | single full-detail | 25.9s | 86.0% | 90.9% | Slightly faster but leaves too much for review. |
+| media_type | 36 | hierarchical | 22.4s | 97.2% | 100.0% | Good, but not enough to offset task-bursts risk. |
+| media_type | 36 | single full-detail | 22.7s | 97.2% | 98.0% | Essentially tied. |
+| media_type | 48 | hierarchical | 19.6s | 100.0% | 99.0% | Fast and complete. |
+| media_type | 48 | single full-detail | 30.9s | 93.8% | 99.7% | Slightly higher F1, lower coverage. |
+| media_type | 50 | hierarchical | 32.8s | 100.0% | 98.5% | Slower, but complete. |
+| media_type | 50 | single full-detail | 19.8s | 94.0% | 98.7% | Faster with slightly higher F1, lower coverage. |
+
+This recheck keeps the 50-tab threshold. Lowering to 48 would make the
+task-bursts workload faster but sharply worse on fine-grained topic F1. At 50,
+the task-bursts workload gains enough coverage and F1 to justify the route, and
+the media-type workload keeps complete coverage with essentially tied F1.
+
 ## Decision
 
 Lower the automatic hierarchical threshold from 100 tabs to 50 tabs.
@@ -116,8 +153,10 @@ Why:
 
 - 24-tab evidence is mixed and often favors single full-detail on quality or
   latency.
-- 50/60/80-tab evidence repeatedly favors hierarchical for coverage and latency,
-  especially on GPT-5.5 high and GPT-5.4 medium.
+- 36/48-tab threshold-adjacent evidence rejects a lower threshold because
+  `task_bursts` drops to 72.3% / 71.0% Topic F1 on hierarchical runs.
+- 50-tab evidence favors hierarchical on coverage and task-bursts quality; 60/80
+  tab evidence more consistently adds latency wins.
 - The accepted change keeps refinement available; it does not repeat the
   rejected "skip uncertain refinement" experiment.
 - The browser mutation safety model is unchanged: plans still pass local
@@ -130,11 +169,38 @@ Implemented guardrail:
 - `tests/gateway-planner.test.mjs` verifies 49 tabs stay on the single
   full-detail path.
 
+## Product-Default Auto Route Confirmation
+
+After adding `BENCHMARK_STRATEGIES=auto`, the benchmark can record the actual
+product-default route instead of forcing a route and inferring the product
+behavior afterward.
+
+Raw data:
+
+- `docs/benchmarks/data/planner-scale-2026-06-26T08-56-42-501Z.json`
+- `docs/benchmarks/data/planner-scale-2026-06-26T08-57-52-609Z.json`
+
+Quality reports:
+
+- `docs/benchmarks/planner-auto-task-bursts-gpt-5.4-medium-quality.md`
+- `docs/benchmarks/planner-auto-media-type-gpt-5.4-medium-quality.md`
+
+| Scenario | Prompt preset | Tabs | Auto route | Time | Coverage | Topic F1 |
+| --- | --- | ---: | --- | ---: | ---: | ---: |
+| task_bursts | conservative | 24 | single_full_detail | 29.2s | 87.5% | 90.9% |
+| task_bursts | conservative | 60 | hierarchical | 25.3s | 100.0% | 97.3% |
+| media_type | media_type | 24 | single_full_detail | 14.3s | 95.8% | 100.0% |
+| media_type | media_type | 60 | hierarchical | 15.2s | 100.0% | 98.4% |
+
+This confirms the shipped router behavior directly:
+
+- below 50 tabs, the default path remains single full-detail;
+- at 50+ tabs, the default path enters hierarchical coarse/refine;
+- the 60-tab auto rows preserve high quality while increasing coverage to
+  100.0% in both scenarios.
+
 ## Follow-up
 
-- Add an explicit `auto` strategy to the benchmark runner so future reports can
-  record product-default routing directly instead of comparing only forced
-  strategies.
 - Repeat the threshold check on a real anonymized tab session when available.
 - Do not lower below 50 without evidence that 20-30 tab sessions keep or improve
   quality.
