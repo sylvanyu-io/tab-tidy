@@ -69,6 +69,7 @@ Detailed comparison record:
 - `docs/benchmarks/planner-quality-analysis.md`
 - `docs/benchmarks/planner-fixture-coverage.md`
 - `docs/benchmarks/page-summary-payload-fix.md`
+- `docs/benchmarks/page-summary-signals-experiment.md`
 
 Public leaderboard signal checked on 2026-06-26:
 
