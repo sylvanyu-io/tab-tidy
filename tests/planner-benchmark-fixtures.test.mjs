@@ -17,6 +17,10 @@ test("benchmark fixtures store ground truth without sending it to planner payloa
   assert.equal(Object.keys(inventory.benchmarkTruth.topicByTabId).length, 24);
 
   const payload = buildPlannerPayload(inventory, DEFAULT_SETTINGS);
+  const sampleColumn = payload.tabs[0][payload.tabFields.indexOf("pageSample")];
+  assert.equal(sampleColumn[payload.pageSampleFields.indexOf("status")], "ok");
+  assert.match(sampleColumn[payload.pageSampleFields.indexOf("visibleText")], /Codex|Chrome extension|Model evaluation/);
+
   const serialized = JSON.stringify(payload);
   assert.equal(serialized.includes("benchmarkTruth"), false);
   assert.equal(serialized.includes("topicByTabId"), false);

@@ -276,13 +276,15 @@ function buildPageSample(tab, topic, variant) {
     windowId: tab.windowId,
     status: "ok",
     origin: tab.origin,
-    title: `${topic.title}: ${variant.title}`,
-    metaDescription: topic.sampleText,
-    language: "en",
-    contentKind: variant.mediaType,
-    headings: [topic.title, variant.title],
-    visibleText: `${topic.sampleText} This page belongs to ${topic.title} and should not be grouped by hostname alone.`,
-    reason: ""
+    sample: {
+      title: `${topic.title}: ${variant.title}`,
+      metaDescription: topic.sampleText,
+      language: "en",
+      contentKind: variant.mediaType,
+      headings: [topic.title, variant.title],
+      visibleText: `${topic.sampleText} This page belongs to ${topic.title} and should not be grouped by hostname alone.`,
+      reason: ""
+    }
   };
 }
 
