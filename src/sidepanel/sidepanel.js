@@ -60,8 +60,8 @@ const UI_COPY = Object.freeze({
     "scope.optionAll": "合并并整理所有窗口",
     "analysis.grouping.title": "生成分组建议",
     "analysis.grouping.subtitle": "按主题和任务整理标签页",
-    "analysis.cleanup.title": "找出可清理标签页",
-    "analysis.cleanup.subtitle": "AI 标出可能过期、重复或已完成的页面",
+    "analysis.cleanup.title": "生成清理检查清单",
+    "analysis.cleanup.subtitle": "按优先级列出值得复查的标签页",
     "sampling.title": "需要时补读页面摘要",
     "sampling.subtitle": "读取少量网页文字，帮助 AI 判断主题",
     "sampling.tooltip": "会把标题、描述、标题层级和页面上的正文或讨论摘录发送给 AI 用于整理；不会读取密码、表单内容、Cookie、本地存储或完整 HTML。休眠标签页不会被唤醒。",
@@ -108,7 +108,9 @@ const UI_COPY = Object.freeze({
     "field.hostPermission": "站点授权",
     "field.resultLanguage": "结果语言",
     "field.promptPreset": "整理方式",
+    "field.groupingGranularity": "分组粒度",
     "field.gatewayModel": "AI 模型",
+    "field.gatewayAuxiliaryModel": "辅助模型",
     "field.thinking": "思考强度",
     "field.customModel": "自定义模型名",
     "field.gatewayUrl": "AI 网关地址（可选）",
@@ -144,6 +146,12 @@ const UI_COPY = Object.freeze({
     "option.presetMedia": "媒体类型",
     "option.presetReadLater": "稍后阅读",
     "option.presetAggressive": "强力归纳",
+    "option.granularityCompact": "更少分组",
+    "option.granularityBalanced": "平衡",
+    "option.granularityDetailed": "更细",
+    "option.auxSpark": "gpt-5.3-codex-spark",
+    "option.auxMini": "gpt-5.4-mini",
+    "option.auxPrimary": "跟随主模型",
     "option.customModel": "自定义模型名",
     "option.thinkingLow": "低",
     "option.thinkingMedium": "中",
@@ -169,6 +177,7 @@ const UI_COPY = Object.freeze({
     "aiWait.planning": ["理解标题线索", "寻找相邻任务", "避开域名硬分组", "检查不确定页", "整理分组边界"],
     "aiWait.coarse_planning": ["快速扫一遍", "寻找跨窗口主题", "拆出主题方向", "标记模糊标签"],
     "aiWait.refining": ["拆开过大的组", "复核模糊边界", "合并同一任务", "保留原始顺序"],
+    "aiWait.cleanup_planning": ["排序清理清单", "比较新旧任务", "挑出低价值页面", "保留手动决定权"],
     "aiWait.retrying": ["修正校验问题", "补齐遗漏标签", "移除重复分配", "重新检查结构"]
   },
   "en-US": {
@@ -226,8 +235,8 @@ const UI_COPY = Object.freeze({
     "scope.optionAll": "Merge and organize all windows",
     "analysis.grouping.title": "Suggest tab groups",
     "analysis.grouping.subtitle": "Organize tabs by topic and task",
-    "analysis.cleanup.title": "Find cleanup candidates",
-    "analysis.cleanup.subtitle": "AI flags tabs that may be old, duplicate, or done",
+    "analysis.cleanup.title": "Build cleanup checklist",
+    "analysis.cleanup.subtitle": "Rank tabs worth reviewing before closing",
     "sampling.title": "Read page summaries when useful",
     "sampling.subtitle": "Reads a little page text so AI can judge topics",
     "sampling.tooltip": "Sends titles, descriptions, headings, and visible article or discussion excerpts to AI for organization. It will not read passwords, form values, cookies, local storage, or full HTML. Sleeping tabs are not awakened.",
@@ -274,7 +283,9 @@ const UI_COPY = Object.freeze({
     "field.hostPermission": "Site access",
     "field.resultLanguage": "Result language",
     "field.promptPreset": "Organization mode",
+    "field.groupingGranularity": "Grouping granularity",
     "field.gatewayModel": "AI model",
+    "field.gatewayAuxiliaryModel": "Auxiliary model",
     "field.thinking": "Reasoning effort",
     "field.customModel": "Custom model name",
     "field.gatewayUrl": "AI gateway URL (optional)",
@@ -310,6 +321,12 @@ const UI_COPY = Object.freeze({
     "option.presetMedia": "Media type",
     "option.presetReadLater": "Read later",
     "option.presetAggressive": "Bold grouping",
+    "option.granularityCompact": "Fewer groups",
+    "option.granularityBalanced": "Balanced",
+    "option.granularityDetailed": "More detailed",
+    "option.auxSpark": "gpt-5.3-codex-spark",
+    "option.auxMini": "gpt-5.4-mini",
+    "option.auxPrimary": "Use primary model",
     "option.customModel": "Custom model name",
     "option.thinkingLow": "Low",
     "option.thinkingMedium": "Medium",
@@ -335,6 +352,7 @@ const UI_COPY = Object.freeze({
     "aiWait.planning": ["Reading title clues", "Finding neighboring tasks", "Avoiding domain-only groups", "Checking uncertain pages", "Tightening group edges"],
     "aiWait.coarse_planning": ["Scanning the tab set", "Finding cross-window topics", "Shaping topic lanes", "Marking fuzzy tabs"],
     "aiWait.refining": ["Breaking up large groups", "Reviewing fuzzy edges", "Merging one task", "Keeping tab order"],
+    "aiWait.cleanup_planning": ["Ranking cleanup checklist", "Comparing old tasks", "Finding low-value pages", "Keeping you in control"],
     "aiWait.retrying": ["Fixing validation issues", "Filling missing tabs", "Removing duplicates", "Checking structure again"]
   }
 });
@@ -350,9 +368,11 @@ const fields = {
   hostPermissionRequestMode: document.querySelector("#hostPermissionRequestMode"),
   languageMode: document.querySelector("#languageMode"),
   promptPreset: document.querySelector("#promptPreset"),
+  groupingGranularity: document.querySelector("#groupingGranularity"),
   plannerProvider: document.querySelector("#plannerProvider"),
   gatewayBaseUrl: document.querySelector("#gatewayBaseUrl"),
   gatewayModel: document.querySelector("#gatewayModel"),
+  gatewayAuxiliaryModel: document.querySelector("#gatewayAuxiliaryModel"),
   gatewayCustomModel: document.querySelector("#gatewayCustomModel"),
   gatewayThinkingIntensity: document.querySelector("#gatewayThinkingIntensity"),
   gatewayApiKey: document.querySelector("#gatewayApiKey"),
@@ -566,7 +586,9 @@ function applyUiLanguage() {
   setText('label[for="hostPermissionRequestMode"]', t("field.hostPermission"));
   setText('label[for="languageMode"]', t("field.resultLanguage"));
   setText('label[for="promptPreset"]', t("field.promptPreset"));
+  setText('label[for="groupingGranularity"]', t("field.groupingGranularity"));
   setText('label[for="gatewayModel"]', t("field.gatewayModel"));
+  setText('label[for="gatewayAuxiliaryModel"]', t("field.gatewayAuxiliaryModel"));
   setText('label[for="gatewayThinkingIntensity"]', t("field.thinking"));
   setText('label[for="gatewayCustomModel"]', t("field.customModel"));
   setText('label[for="gatewayBaseUrl"]', t("field.gatewayUrl"));
@@ -601,6 +623,12 @@ function applyUiLanguage() {
   setOptionText("#promptPreset", "media_type", t("option.presetMedia"));
   setOptionText("#promptPreset", "read_later", t("option.presetReadLater"));
   setOptionText("#promptPreset", "aggressive_cleanup", t("option.presetAggressive"));
+  setOptionText("#groupingGranularity", "compact", t("option.granularityCompact"));
+  setOptionText("#groupingGranularity", "balanced", t("option.granularityBalanced"));
+  setOptionText("#groupingGranularity", "detailed", t("option.granularityDetailed"));
+  setOptionText("#gatewayAuxiliaryModel", "gpt-5.3-codex-spark", t("option.auxSpark"));
+  setOptionText("#gatewayAuxiliaryModel", "gpt-5.4-mini", t("option.auxMini"));
+  setOptionText("#gatewayAuxiliaryModel", "same_as_primary", t("option.auxPrimary"));
   setOptionText("#gatewayModel", "custom", t("option.customModel"));
   setOptionText("#gatewayThinkingIntensity", "low", t("option.thinkingLow"));
   setOptionText("#gatewayThinkingIntensity", "medium", t("option.thinkingMedium"));
@@ -731,10 +759,12 @@ function readSettings(options = {}) {
         : "not_acknowledged",
     languageMode: fields.languageMode.value,
     promptPreset: fields.promptPreset.value,
+    groupingGranularity: fields.groupingGranularity.value,
     plannerProvider: fields.plannerProvider.value || "gateway",
     rememberProviderKeys: Boolean(fields.rememberProviderKeys.checked && fields.gatewayBaseUrl.value.trim() && fields.gatewayApiKey.value.trim()),
     gatewayBaseUrl: fields.gatewayBaseUrl.value,
     gatewayModel: fields.gatewayModel.value,
+    gatewayAuxiliaryModel: fields.gatewayAuxiliaryModel.value,
     gatewayCustomModel: fields.gatewayCustomModel.value,
     gatewayThinkingIntensity: fields.gatewayThinkingIntensity.value,
     gatewayApiKey: fields.gatewayApiKey.value,
@@ -2097,10 +2127,12 @@ async function mockMessage(message) {
       maxTabsPerGroup: 40,
       languageMode: "auto",
       promptPreset: "conservative",
+      groupingGranularity: "balanced",
       plannerProvider: "gateway",
       rememberProviderKeys: false,
       gatewayBaseUrl: "",
       gatewayModel: "gpt-5.5",
+      gatewayAuxiliaryModel: "gpt-5.3-codex-spark",
       gatewayCustomModel: "",
       gatewayThinkingIntensity: "high",
       gatewayApiKey: "",

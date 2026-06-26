@@ -124,7 +124,7 @@ test("control surface renders settings and mock preview", async ({ page }) => {
   await expect(page.locator("#analyzeGrouping")).toBeChecked();
   await expect(page.locator("#analyzeCleanup")).toBeChecked();
   await expect(page.getByText("生成分组建议")).toBeVisible();
-  await expect(page.getByText("找出可清理标签页")).toBeVisible();
+  await expect(page.getByText("生成清理检查清单")).toBeVisible();
   await expect(page.getByText("会读取页面文字摘要")).toHaveCount(0);
   await expect(page.getByText("会在后台保存短摘要")).toHaveCount(0);
   await expect(page.getByText("整理偏好")).toHaveCount(0);
@@ -136,6 +136,7 @@ test("control surface renders settings and mock preview", async ({ page }) => {
   await expect(page.locator("#uiLanguageToggle")).toHaveText("");
   await expect(page.locator("#uiLanguageToggle svg")).toBeVisible();
   await expect(page.getByLabel("整理方式")).toHaveValue("conservative");
+  await expect(page.getByLabel("分组粒度")).toHaveValue("balanced");
   await expect.poll(() =>
     page.locator("#promptPreset option").evaluateAll((options) =>
       options.map((option) => ({ value: option.value, text: option.textContent?.trim() }))
@@ -145,6 +146,15 @@ test("control surface renders settings and mock preview", async ({ page }) => {
     { value: "media_type", text: "媒体类型" },
     { value: "read_later", text: "稍后阅读" },
     { value: "aggressive_cleanup", text: "强力归纳" }
+  ]);
+  await expect.poll(() =>
+    page.locator("#groupingGranularity option").evaluateAll((options) =>
+      options.map((option) => ({ value: option.value, text: option.textContent?.trim() }))
+    )
+  ).toEqual([
+    { value: "compact", text: "更少分组" },
+    { value: "balanced", text: "平衡" },
+    { value: "detailed", text: "更细" }
   ]);
 
   await page.locator("#ackSampling").check();
@@ -161,6 +171,7 @@ test("control surface renders settings and mock preview", async ({ page }) => {
   await expect(page.locator("#gatewayBaseUrl")).toHaveAttribute("placeholder", "不填则使用默认服务");
   await expect(page.locator("#gatewayApiKey")).toHaveAttribute("placeholder", "默认服务无需填写");
   await expect(page.locator("#gatewayModel")).toHaveValue("gpt-5.5");
+  await expect(page.locator("#gatewayAuxiliaryModel")).toHaveValue("gpt-5.3-codex-spark");
   await expect(page.locator("#gatewayCustomModelField")).toBeHidden();
   await page.locator("#gatewayModel").selectOption("custom");
   await expect(page.locator("#gatewayCustomModelField")).toBeVisible();
@@ -181,7 +192,7 @@ test("control surface renders settings and mock preview", async ({ page }) => {
   await expect(page.locator(".advanced-switch-list")).toContainText("整理后收起分组");
   await expect(page.locator(".advanced-switch-list")).not.toContainText("合并到当前窗口");
   await expect(page.locator(".advanced-switch-list")).not.toContainText("撤销后关闭空窗口");
-  await expect(page.locator(".advanced-select-list .setting-select-row")).toHaveCount(6);
+  await expect(page.locator(".advanced-select-list .setting-select-row")).toHaveCount(7);
   await expect(page.locator("#urlPrivacyMode").locator("xpath=ancestor::*[contains(@class, 'advanced-select-list')]")).toHaveCount(1);
   await expect(page.locator("#dissolveExistingGroupsToggle")).toBeVisible();
   await expect(page.locator("#createReviewGroupToggle")).toBeVisible();
@@ -294,6 +305,15 @@ test("auto-selects English UI and can manually switch back", async ({ page }) =>
     { value: "media_type", text: "Media type" },
     { value: "read_later", text: "Read later" },
     { value: "aggressive_cleanup", text: "Bold grouping" }
+  ]);
+  await expect.poll(() =>
+    page.locator("#groupingGranularity option").evaluateAll((options) =>
+      options.map((option) => ({ value: option.value, text: option.textContent?.trim() }))
+    )
+  ).toEqual([
+    { value: "compact", text: "Fewer groups" },
+    { value: "balanced", text: "Balanced" },
+    { value: "detailed", text: "More detailed" }
   ]);
   await expect(page.locator("#uiLanguageToggle")).toHaveText("");
   await expect(page.locator("#uiLanguageToggle")).toHaveAttribute("aria-label", "Switch UI to Chinese");

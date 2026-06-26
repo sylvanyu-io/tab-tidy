@@ -60,6 +60,12 @@ export const PROMPT_PRESETS = Object.freeze({
   AGGRESSIVE_CLEANUP: "aggressive_cleanup"
 });
 
+export const GROUPING_GRANULARITIES = Object.freeze({
+  COMPACT: "compact",
+  BALANCED: "balanced",
+  DETAILED: "detailed"
+});
+
 export const PLANNER_PROVIDERS = Object.freeze({
   FAKE: "fake",
   GATEWAY: "gateway"
@@ -71,6 +77,7 @@ const LEGACY_DEFAULT_GATEWAY_BASE_URLS = new Set([BUILTIN_GATEWAY_BASE_URL]);
 
 export const GATEWAY_MODELS = Object.freeze(["gpt-5.5", "gpt-5.4", "gpt-5.4-mini", "claude-opus-4-8", "claude-sonnet-4-6"]);
 export const GATEWAY_CUSTOM_MODEL_VALUE = "custom";
+export const GATEWAY_AUXILIARY_MODELS = Object.freeze(["gpt-5.3-codex-spark", "gpt-5.4-mini", "same_as_primary"]);
 const MAX_CUSTOM_GATEWAY_MODEL_LENGTH = 160;
 
 export const THINKING_INTENSITIES = Object.freeze({
@@ -111,12 +118,14 @@ export const DEFAULT_SETTINGS = Object.freeze({
   undoTargetWindowMode: UNDO_TARGET_WINDOW_MODES.LEAVE_EMPTY,
   languageMode: LANGUAGE_MODES.AUTO,
   promptPreset: PROMPT_PRESETS.CONSERVATIVE,
+  groupingGranularity: GROUPING_GRANULARITIES.BALANCED,
   customPrompt: "",
   selectedTargetWindowId: null,
   plannerProvider: PLANNER_PROVIDERS.GATEWAY,
   rememberProviderKeys: false,
   gatewayBaseUrl: DEFAULT_GATEWAY_BASE_URL,
   gatewayModel: "gpt-5.5",
+  gatewayAuxiliaryModel: "gpt-5.3-codex-spark",
   gatewayCustomModel: "",
   gatewayThinkingIntensity: THINKING_INTENSITIES.HIGH,
   gatewayApiKey: ""
@@ -134,7 +143,9 @@ const enumValues = {
   urlPrivacyMode: Object.values(URL_PRIVACY_MODES),
   languageMode: LANGUAGE_MODE_VALUES,
   promptPreset: Object.values(PROMPT_PRESETS),
+  groupingGranularity: Object.values(GROUPING_GRANULARITIES),
   plannerProvider: Object.values(PLANNER_PROVIDERS),
+  gatewayAuxiliaryModel: GATEWAY_AUXILIARY_MODELS,
   gatewayThinkingIntensity: Object.values(THINKING_INTENSITIES)
 };
 
@@ -222,4 +233,13 @@ export function resolveGatewayModel(settings = DEFAULT_SETTINGS) {
     return settings.gatewayCustomModel || "";
   }
   return settings.gatewayModel || DEFAULT_SETTINGS.gatewayModel;
+}
+
+export function resolveGatewayAuxiliaryModel(settings = DEFAULT_SETTINGS) {
+  if (settings.gatewayAuxiliaryModel === "same_as_primary") {
+    return resolveGatewayModel(settings);
+  }
+  return GATEWAY_AUXILIARY_MODELS.includes(settings.gatewayAuxiliaryModel)
+    ? settings.gatewayAuxiliaryModel
+    : DEFAULT_SETTINGS.gatewayAuxiliaryModel;
 }

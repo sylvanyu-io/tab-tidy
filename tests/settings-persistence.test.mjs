@@ -5,6 +5,7 @@ import { STORAGE_KEYS } from "../src/core/storage.js";
 import {
   DEFAULT_SETTINGS,
   GATEWAY_CUSTOM_MODEL_VALUE,
+  GROUPING_GRANULARITIES,
   LANGUAGE_MODES,
   PAGE_SAMPLING_CONSENT_MODES,
   PROMPT_PRESETS,
@@ -46,6 +47,14 @@ test("prompt presets accept media type and reject removed preset values", () => 
     PROMPT_PRESETS.MEDIA_TYPE
   );
   assert.equal(normalizeSettings({ ...DEFAULT_SETTINGS, promptPreset: "platform_source" }).promptPreset, DEFAULT_SETTINGS.promptPreset);
+});
+
+test("grouping granularity accepts product values and rejects unknown values", () => {
+  assert.equal(
+    normalizeSettings({ ...DEFAULT_SETTINGS, groupingGranularity: GROUPING_GRANULARITIES.COMPACT }).groupingGranularity,
+    GROUPING_GRANULARITIES.COMPACT
+  );
+  assert.equal(normalizeSettings({ ...DEFAULT_SETTINGS, groupingGranularity: "one_group_only" }).groupingGranularity, DEFAULT_SETTINGS.groupingGranularity);
 });
 
 test("blank numeric settings fall back instead of becoming zero", () => {
@@ -123,6 +132,9 @@ test("AI gateway settings normalize safely", () => {
   );
   assert.equal(normalizeSettings({ ...DEFAULT_SETTINGS, gatewayModel: "gpt-5.4" }).gatewayModel, "gpt-5.4");
   assert.equal(normalizeSettings({ ...DEFAULT_SETTINGS, gatewayModel: "gpt-5.4-mini" }).gatewayModel, "gpt-5.4-mini");
+  assert.equal(normalizeSettings({ ...DEFAULT_SETTINGS, gatewayAuxiliaryModel: "gpt-5.3-codex-spark" }).gatewayAuxiliaryModel, "gpt-5.3-codex-spark");
+  assert.equal(normalizeSettings({ ...DEFAULT_SETTINGS, gatewayAuxiliaryModel: "same_as_primary" }).gatewayAuxiliaryModel, "same_as_primary");
+  assert.equal(normalizeSettings({ ...DEFAULT_SETTINGS, gatewayAuxiliaryModel: "unknown-helper" }).gatewayAuxiliaryModel, DEFAULT_SETTINGS.gatewayAuxiliaryModel);
 });
 
 test("gateway key is not persisted unless explicitly remembered", async () => {
