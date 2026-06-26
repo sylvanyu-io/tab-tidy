@@ -284,8 +284,12 @@ function summarizeConclusions(completed) {
 
   const successfulSingles = completed.filter((result) => result.strategy === "single_full_detail" && result.ok);
   if (successfulSingles.length === sizes.length) {
+    const minSize = Math.min(...sizes);
+    const maxSize = Math.max(...sizes);
     conclusions.push(
-      "Single full-detail planning completed successfully at every measured size, including the 300-400 tab range."
+      minSize === maxSize
+        ? `Single full-detail planning completed successfully at the measured ${minSize}-tab size.`
+        : `Single full-detail planning completed successfully at every measured size from ${minSize} to ${maxSize} tabs.`
     );
   }
 
