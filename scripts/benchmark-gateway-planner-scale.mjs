@@ -14,7 +14,7 @@ import {
   THINKING_INTENSITIES
 } from "../src/shared/settings.js";
 import { BENCHMARK_SCENARIOS, buildBenchmarkInventory, parseBenchmarkScenarios } from "./planner-benchmark-fixtures.mjs";
-import { parseBenchmarkPromptPreset } from "./planner-benchmark-options.mjs";
+import { buildBenchmarkRunId, parseBenchmarkPromptPreset, parseBenchmarkStrategies } from "./planner-benchmark-options.mjs";
 
 const DEFAULT_SIZES = [120, 300, 400];
 const DEFAULT_BENCHMARK_TIMEOUT_MS = 180_000;
@@ -22,7 +22,7 @@ const DEFAULT_STRATEGY_TIMEOUT_MS = 240_000;
 const sizes = parseSizes(process.env.BENCHMARK_TAB_COUNTS || "");
 const scenarios = parseBenchmarkScenarios(process.env.BENCHMARK_SCENARIOS || "");
 const benchmarkPromptPreset = parseBenchmarkPromptPreset(process.env.BENCHMARK_PROMPT_PRESET || "");
-const runId = `planner-scale-${new Date().toISOString().replace(/[:.]/g, "-")}`;
+const runId = buildBenchmarkRunId();
 const dataDir = resolve("docs/benchmarks/data");
 const dataPath = resolve(dataDir, `${runId}.json`);
 const reportPath = resolve(process.env.BENCHMARK_REPORT_PATH || "docs/benchmarks/gateway-planner-scale.md");
@@ -45,6 +45,11 @@ const settings = {
 
 const allStrategies = [
   {
+    key: "auto",
+    label: "product default auto route",
+    options: {}
+  },
+  {
     key: "hierarchical",
     label: "current hierarchical coarse/refine",
     options: { hierarchical: true }
@@ -55,7 +60,10 @@ const allStrategies = [
     options: { hierarchical: false }
   }
 ];
-const selectedStrategyKeys = selectedStrategies(allStrategies.map((strategy) => strategy.key));
+const selectedStrategyKeys = parseBenchmarkStrategies(
+  process.env.BENCHMARK_STRATEGIES || "",
+  allStrategies.map((strategy) => strategy.key)
+);
 const strategies = allStrategies.filter((strategy) => selectedStrategyKeys.has(strategy.key));
 
 const results = [];
@@ -116,6 +124,7 @@ async function runStrategy({ inventory, tabCount, scenario, strategy }) {
     elapsedMs,
     elapsedSeconds: Number((elapsedMs / 1000).toFixed(1)),
     requestCount: requests.filter((request) => request.type === "fetch").length,
+    plannerRoute: inferPlannerRoute(requests),
     progressEvents: requests.filter((request) => request.type === "progress"),
     requests: requests.filter((request) => request.type === "fetch"),
     validation,
@@ -208,6 +217,8 @@ function renderReport(payload) {
   const strategyKeys = new Set(payload.strategyOrder.map((strategy) => strategy.key));
   const intro = strategyKeys.has("hierarchical") && strategyKeys.has("single_full_detail")
     ? "This benchmark compares the current hierarchical coarse/refine planner path against a forced single full-detail planner request."
+    : strategyKeys.has("auto")
+      ? "This benchmark records the product-default auto-routing planner path."
     : "This benchmark records a filtered planner strategy run.";
   const lines = [
     "# Gateway Planner Scale Benchmark",
@@ -233,8 +244,8 @@ function renderReport(payload) {
     "",
     "## Results",
     "",
-    "| Scenario | Tabs | Strategy | Status | Time | Requests | Groups | Grouped Tabs | Review Tabs | Validation |",
-    "| --- | ---: | --- | --- | ---: | ---: | ---: | ---: | ---: | --- |"
+    "| Scenario | Tabs | Strategy | Route | Status | Time | Requests | Groups | Grouped Tabs | Review Tabs | Validation |",
+    "| --- | ---: | --- | --- | --- | ---: | ---: | ---: | ---: | ---: | --- |"
   ];
 
   for (const result of completed) {
@@ -243,6 +254,7 @@ function renderReport(payload) {
         result.scenarioLabel || result.scenario || "task_bursts",
         result.tabCount,
         result.strategyLabel,
+        result.plannerRoute || "-",
         result.ok ? "ok" : "failed",
         formatSeconds(result.elapsedMs),
         result.requestCount,
@@ -262,6 +274,8 @@ function renderReport(payload) {
   lines.push(
     strategyKeys.has("hierarchical") && strategyKeys.has("single_full_detail")
       ? "- Both strategies use the same synthetic inventory for each tab count."
+      : strategyKeys.has("auto")
+        ? "- Auto runs use the product-default planner router instead of forcing a specific route."
       : "- This filtered run should be compared against a separate baseline report."
   );
   lines.push("- The hierarchical strategy may issue one coarse request plus one or more refinement requests.");
@@ -278,6 +292,16 @@ function summarizeConclusions(completed) {
   const strategyKeys = new Set(strategies.map((strategy) => strategy.key));
   if (!strategyKeys.has("hierarchical") || !strategyKeys.has("single_full_detail")) {
     for (const result of completed) {
+      if (result.strategy === "auto") {
+        conclusions.push(
+          `${BENCHMARK_SCENARIOS[result.scenario]?.label || result.scenario}, ${result.tabCount} tabs: auto used ${
+            result.plannerRoute || "unknown route"
+          } and completed ${result.ok ? "successfully" : "with failure"} in ${formatSeconds(result.elapsedMs)} with ${
+            result.requestCount
+          } request(s).`
+        );
+        continue;
+      }
       if (result.strategy !== "hierarchical") continue;
       conclusions.push(
         `${result.tabCount} tabs: hierarchical completed ${result.ok ? "successfully" : "with failure"} in ${formatSeconds(
@@ -321,6 +345,14 @@ function summarizeConclusions(completed) {
   return conclusions;
 }
 
+function inferPlannerRoute(records) {
+  const firstFetch = records.find((request) => request.type === "fetch");
+  const systemPrompt = String(firstFetch?.request?.messages?.[0]?.content || "");
+  if (/fast first-pass/i.test(systemPrompt)) return "hierarchical";
+  if (/JSON-only planner/i.test(systemPrompt)) return "single_full_detail";
+  return firstFetch ? "unknown" : "";
+}
+
 function compactInventoryForPersistence(inventory) {
   return {
     ...inventory,
@@ -354,23 +386,6 @@ function parseSizes(value) {
     .map((item) => Number.parseInt(item.trim(), 10))
     .filter((item) => Number.isInteger(item) && item > 0);
   return parsed.length ? parsed : DEFAULT_SIZES;
-}
-
-function selectedStrategies(knownKeys) {
-  const parsed = String(process.env.BENCHMARK_STRATEGIES || "")
-    .split(",")
-    .map((item) => item.trim())
-    .filter(Boolean);
-  const selected = new Set(parsed.length ? parsed : ["hierarchical", "single_full_detail"]);
-  const known = new Set(knownKeys);
-  const unknown = [...selected].filter((item) => !known.has(item));
-  if (unknown.length) {
-    throw new Error(`Unknown BENCHMARK_STRATEGIES value(s): ${unknown.join(", ")}. Known values: ${knownKeys.join(", ")}.`);
-  }
-  if (!selected.size) {
-    throw new Error("BENCHMARK_STRATEGIES selected no benchmark strategies.");
-  }
-  return selected;
 }
 
 function parseJsonOrNull(value) {

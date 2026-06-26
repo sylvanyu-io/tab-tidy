@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { buildPlannerPayload } from "../src/core/gateway-planner.js";
 import { DEFAULT_SETTINGS, PROMPT_PRESETS } from "../src/shared/settings.js";
-import { parseBenchmarkPromptPreset } from "../scripts/planner-benchmark-options.mjs";
+import { buildBenchmarkRunId, parseBenchmarkPromptPreset, parseBenchmarkStrategies } from "../scripts/planner-benchmark-options.mjs";
 import { BENCHMARK_SCENARIOS, buildBenchmarkInventory, parseBenchmarkScenarios } from "../scripts/planner-benchmark-fixtures.mjs";
 
 test("benchmark scenario parser supports all named coverage fixtures", () => {
@@ -17,6 +17,20 @@ test("benchmark prompt preset parser supports explicit preset comparisons", () =
   assert.equal(parseBenchmarkPromptPreset("media_type"), PROMPT_PRESETS.MEDIA_TYPE);
   assert.equal(parseBenchmarkPromptPreset(" read_later "), PROMPT_PRESETS.READ_LATER);
   assert.throws(() => parseBenchmarkPromptPreset("platform_source"), /Unknown BENCHMARK_PROMPT_PRESET/);
+});
+
+test("benchmark strategy parser supports product-default auto runs", () => {
+  const known = ["auto", "hierarchical", "single_full_detail"];
+  assert.deepEqual([...parseBenchmarkStrategies("", known)], ["hierarchical", "single_full_detail"]);
+  assert.deepEqual([...parseBenchmarkStrategies("auto", known)], ["auto"]);
+  assert.deepEqual([...parseBenchmarkStrategies("auto,hierarchical", known)], ["auto", "hierarchical"]);
+  assert.throws(() => parseBenchmarkStrategies("fast", known), /Unknown BENCHMARK_STRATEGIES/);
+});
+
+test("benchmark run ids include process identity for parallel evidence runs", () => {
+  const now = new Date("2026-06-26T09:11:51.796Z");
+  assert.equal(buildBenchmarkRunId(now, 101), "planner-scale-2026-06-26T09-11-51-796Z-pid101");
+  assert.notEqual(buildBenchmarkRunId(now, 101), buildBenchmarkRunId(now, 202));
 });
 
 test("benchmark fixtures store ground truth without sending it to planner payload", () => {
