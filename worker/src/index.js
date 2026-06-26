@@ -1,5 +1,24 @@
 const PROGRESS_COPY_MODEL = "gpt-5.3-codex-spark";
-const DEFAULT_ALLOWED_MODELS = ["gpt-5.5", "gpt-5.4", "gpt-5.4-mini", "claude-opus-4-8", "claude-sonnet-4-6", PROGRESS_COPY_MODEL];
+const DEFAULT_ALLOWED_MODELS = [
+  "gpt-5.5",
+  "gpt-5.4",
+  "gpt-5.4-mini",
+  "codex-auto-review",
+  "claude-fable-5",
+  "claude-opus-4-8",
+  "claude-opus-4-7",
+  "claude-opus-4-6",
+  "claude-opus-4-5-20251101",
+  "claude-opus-4-1-20250805",
+  "claude-opus-4-20250514",
+  "claude-sonnet-4-6",
+  "claude-sonnet-4-5-20250929",
+  "claude-sonnet-4-20250514",
+  "claude-haiku-4-5-20251001",
+  "claude-3-7-sonnet-20250219",
+  "claude-3-5-haiku-20241022",
+  PROGRESS_COPY_MODEL
+];
 const FORWARDED_CHAT_FIELDS = Object.freeze(["model", "messages", "response_format", "max_tokens", "reasoning_effort", "thinking"]);
 const DEFAULT_LIMITS = Object.freeze({
   bodyBytes: 1_000_000,

@@ -34,6 +34,13 @@ test("worker validates models and token caps before forwarding", async () => {
   const miniPlannerModel = await handle(chatRequest({ model: "gpt-5.4-mini" }), env);
   assert.equal(miniPlannerModel.status, 200);
 
+  const olderClaudePlannerModel = await handle(chatRequest({ model: "claude-opus-4-7" }), env);
+  assert.equal(olderClaudePlannerModel.status, 200);
+
+  const imageModel = await handle(chatRequest({ model: "gpt-image-2" }), env);
+  assert.equal(imageModel.status, 400);
+  assert.equal((await imageModel.json()).error.code, "model_not_allowed");
+
   const tooManyTokens = await handle(chatRequest({ max_tokens: 9000 }), env);
   assert.equal(tooManyTokens.status, 400);
   assert.equal((await tooManyTokens.json()).error.code, "max_tokens_exceeded");

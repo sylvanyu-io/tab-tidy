@@ -11,10 +11,12 @@ upstream base URL.
 
 - No upstream API key is shipped in the extension.
 - Clients cannot override the upstream target.
-- Only the extension model allowlist is accepted by default:
-  `gpt-5.5`, `gpt-5.4`, `gpt-5.4-mini`, `claude-opus-4-8`,
-  `claude-sonnet-4-6`, and `gpt-5.3-codex-spark`. The spark model is used only
-  for bounded progress UI copy, not for tab planning.
+- Only the Tab Tidy text-model allowlist is accepted by default. It mirrors the
+  current CLIProxyAPI origin chat models, including `gpt-5.5`, `gpt-5.4`,
+  `gpt-5.4-mini`, `codex-auto-review`, Claude Opus/Sonnet/Haiku variants, and
+  `gpt-5.3-codex-spark`. The spark model is used only for bounded progress UI
+  copy, not for tab planning. Image models are intentionally excluded because
+  this Worker only exposes `/v1/chat/completions`.
 - Request body size and `max_tokens` are capped before upstream forwarding.
 - KV counters limit global, IP, install-id, and page-summary usage.
 
