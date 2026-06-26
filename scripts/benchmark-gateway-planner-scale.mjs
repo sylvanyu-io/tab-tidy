@@ -14,11 +14,13 @@ import {
   TARGET_WINDOW_MODES,
   THINKING_INTENSITIES
 } from "../src/shared/settings.js";
+import { BENCHMARK_SCENARIOS, buildBenchmarkInventory, parseBenchmarkScenarios } from "./planner-benchmark-fixtures.mjs";
 
 const DEFAULT_SIZES = [120, 300, 400];
 const DEFAULT_BENCHMARK_TIMEOUT_MS = 180_000;
 const DEFAULT_STRATEGY_TIMEOUT_MS = 240_000;
 const sizes = parseSizes(process.env.BENCHMARK_TAB_COUNTS || "");
+const scenarios = parseBenchmarkScenarios(process.env.BENCHMARK_SCENARIOS || "");
 const runId = `planner-scale-${new Date().toISOString().replace(/[:.]/g, "-")}`;
 const dataDir = resolve("docs/benchmarks/data");
 const dataPath = resolve(dataDir, `${runId}.json`);
@@ -57,7 +59,7 @@ const strategies = allStrategies.filter((strategy) => selectedStrategyKeys.has(s
 
 const results = [];
 
-async function runStrategy({ inventory, tabCount, strategy }) {
+async function runStrategy({ inventory, tabCount, scenario, strategy }) {
   const requests = [];
   const startedAt = new Date().toISOString();
   const started = performance.now();
@@ -101,6 +103,8 @@ async function runStrategy({ inventory, tabCount, strategy }) {
     runId,
     startedAt,
     finishedAt: new Date().toISOString(),
+    scenario,
+    scenarioLabel: BENCHMARK_SCENARIOS[scenario]?.label || scenario,
     tabCount,
     windowCount: inventory.windows.length,
     strategy: strategy.key,
@@ -170,8 +174,15 @@ async function writeOutputs({ partial }) {
     generatedAt: new Date().toISOString(),
     partial,
     sizes,
+    scenarios,
     strategyOrder: strategies.map(({ key, label }) => ({ key, label })),
+    scenarioOrder: scenarios.map((scenario) => ({
+      key: scenario,
+      label: BENCHMARK_SCENARIOS[scenario]?.label || scenario,
+      description: BENCHMARK_SCENARIOS[scenario]?.description || ""
+    })),
     strategyFilter: process.env.BENCHMARK_STRATEGIES || "",
+    scenarioFilter: process.env.BENCHMARK_SCENARIOS || "",
     environment: {
       node: process.version,
       gatewayBaseUrl: settings.gatewayBaseUrl || "built-in default",
@@ -179,7 +190,9 @@ async function writeOutputs({ partial }) {
       gatewayThinkingIntensity: settings.gatewayThinkingIntensity,
       requestTimeoutMs: Number(process.env.BENCHMARK_TIMEOUT_MS || DEFAULT_BENCHMARK_TIMEOUT_MS),
       strategyTimeoutMs: Number(process.env.BENCHMARK_STRATEGY_TIMEOUT_MS || DEFAULT_STRATEGY_TIMEOUT_MS),
-      pageContext: "metadata-only synthetic inventory",
+      pageContext: scenarios.includes("low_signal_samples")
+        ? "synthetic inventory with optional page summary snippets"
+        : "metadata-only synthetic inventory",
       note: "Synthetic browser tabs only; no user browsing data or gateway keys are stored."
     },
     results
@@ -199,7 +212,7 @@ function renderReport(payload) {
     "",
     `Generated: ${payload.generatedAt}`,
     "",
-    `${intro} It uses synthetic metadata-only tab inventories, so it measures gateway planning latency and output shape without reading real browsing data.`,
+    `${intro} It uses synthetic tab inventories, so it measures gateway planning latency and output shape without reading real browsing data.`,
     "",
     "## Configuration",
     "",
@@ -207,18 +220,24 @@ function renderReport(payload) {
     `- Model: ${payload.environment.gatewayModel}`,
     `- Thinking intensity: ${payload.environment.gatewayThinkingIntensity}`,
     payload.strategyFilter ? `- Strategy filter: ${payload.strategyFilter}` : "- Strategy filter: none",
+    payload.scenarioFilter ? `- Scenario filter: ${payload.scenarioFilter}` : "- Scenario filter: task_bursts",
     `- Page content: ${payload.environment.pageContext}`,
     `- Raw data: \`docs/benchmarks/data/${runId}.json\``,
     "",
+    "## Scenario Coverage",
+    "",
+    ...payload.scenarioOrder.map((scenario) => `- ${scenario.label}: ${scenario.description}`),
+    "",
     "## Results",
     "",
-    "| Tabs | Strategy | Status | Time | Requests | Groups | Grouped Tabs | Review Tabs | Validation |",
-    "| ---: | --- | --- | ---: | ---: | ---: | ---: | ---: | --- |"
+    "| Scenario | Tabs | Strategy | Status | Time | Requests | Groups | Grouped Tabs | Review Tabs | Validation |",
+    "| --- | ---: | --- | --- | ---: | ---: | ---: | ---: | ---: | --- |"
   ];
 
   for (const result of completed) {
     lines.push(
       [
+        result.scenarioLabel || result.scenario || "task_bursts",
         result.tabCount,
         result.strategyLabel,
         result.ok ? "ok" : "failed",
@@ -267,23 +286,25 @@ function summarizeConclusions(completed) {
     return conclusions;
   }
 
-  for (const tabCount of sizes) {
-    const pair = completed.filter((result) => result.tabCount === tabCount);
-    const hierarchical = pair.find((result) => result.strategy === "hierarchical");
-    const single = pair.find((result) => result.strategy === "single_full_detail");
-    if (!hierarchical || !single || !hierarchical.ok || !single.ok) continue;
-    const deltaMs = single.elapsedMs - hierarchical.elapsedMs;
-    const ratio = hierarchical.elapsedMs ? single.elapsedMs / hierarchical.elapsedMs : 0;
-    const direction = Math.abs(deltaMs) < 2000 ? "roughly tied with" : deltaMs < 0 ? "faster than" : "slower than";
-    conclusions.push(
-      `${tabCount} tabs: single full-detail was ${direction} hierarchical (${formatSeconds(single.elapsedMs)} vs ${formatSeconds(
-        hierarchical.elapsedMs
-      )}, ${ratio.toFixed(2)}x).`
-    );
+  for (const scenario of scenarios) {
+    for (const tabCount of sizes) {
+      const pair = completed.filter((result) => result.scenario === scenario && result.tabCount === tabCount);
+      const hierarchical = pair.find((result) => result.strategy === "hierarchical");
+      const single = pair.find((result) => result.strategy === "single_full_detail");
+      if (!hierarchical || !single || !hierarchical.ok || !single.ok) continue;
+      const deltaMs = single.elapsedMs - hierarchical.elapsedMs;
+      const ratio = hierarchical.elapsedMs ? single.elapsedMs / hierarchical.elapsedMs : 0;
+      const direction = Math.abs(deltaMs) < 2000 ? "roughly tied with" : deltaMs < 0 ? "faster than" : "slower than";
+      conclusions.push(
+        `${BENCHMARK_SCENARIOS[scenario]?.label || scenario}, ${tabCount} tabs: single full-detail was ${direction} hierarchical (${formatSeconds(single.elapsedMs)} vs ${formatSeconds(
+          hierarchical.elapsedMs
+        )}, ${ratio.toFixed(2)}x).`
+      );
+    }
   }
 
   const successfulSingles = completed.filter((result) => result.strategy === "single_full_detail" && result.ok);
-  if (successfulSingles.length === sizes.length) {
+  if (successfulSingles.length === sizes.length * scenarios.length) {
     const minSize = Math.min(...sizes);
     const maxSize = Math.max(...sizes);
     conclusions.push(
@@ -296,184 +317,6 @@ function summarizeConclusions(completed) {
   if (!conclusions.length) conclusions.push("The benchmark did not complete enough successful pairs to draw a latency conclusion.");
   return conclusions;
 }
-
-function buildSyntheticInventory(tabCount, windowCount) {
-  const windows = Array.from({ length: windowCount }, (_, index) => ({
-    windowId: index + 1,
-    type: "normal",
-    focused: index === 0,
-    incognito: false,
-    tabCount: 0
-  }));
-  const tabs = [];
-  const perWindow = Math.ceil(tabCount / windowCount);
-
-  for (let index = 0; index < tabCount; index += 1) {
-    const topic = topicForIndex(index);
-    const window = windows[Math.min(windowCount - 1, Math.floor(index / perWindow))];
-    const tab = buildSyntheticTab(index, topic, window.windowId, window.tabCount);
-    window.tabCount += 1;
-    tabs.push(tab);
-  }
-
-  return {
-    schemaVersion: 1,
-    mode: ORGANIZE_MODES.CONSOLIDATE_ONE_WINDOW,
-    scope: {
-      kind: "all_normal_windows",
-      currentWindowId: null,
-      invocationWindowId: 1,
-      windowIds: windows.map((window) => window.windowId)
-    },
-    windows,
-    tabs,
-    plannerTabs: tabs,
-    excludedTabs: [],
-    lockedGroups: [],
-    pageSamples: [],
-    collectedAt: new Date().toISOString()
-  };
-}
-
-function buildSyntheticTab(index, topic, windowId, windowIndex) {
-  const variant = topic.variants[index % topic.variants.length];
-  const title =
-    index % 11 === 0
-      ? `${variant.genericTitle} ${String(index).padStart(3, "0")}`
-      : `${topic.title} - ${variant.title} ${String(index).padStart(3, "0")}`;
-  const path = `${topic.slug}/${variant.slug}/${index}`;
-  return {
-    tabId: 10_000 + index,
-    windowId,
-    index: windowIndex,
-    sequenceIndex: index,
-    title,
-    audible: false,
-    discarded: index % 17 === 0,
-    pinned: false,
-    active: windowIndex === 0,
-    incognito: false,
-    groupId: -1,
-    groupTitle: "",
-    groupColor: "",
-    groupCollapsed: false,
-    favIconUrl: "",
-    sampleable: true,
-    hostname: topic.hosts[index % topic.hosts.length],
-    sanitizedUrl: `https://${topic.hosts[index % topic.hosts.length]}/${path}`,
-    urlKind: "web",
-    origin: `https://${topic.hosts[index % topic.hosts.length]}`
-  };
-}
-
-function topicForIndex(index) {
-  const session = Math.floor(index / 12);
-  const topicIndex = (session * 7 + Math.floor(index / 3) + index) % TOPICS.length;
-  return TOPICS[topicIndex];
-}
-
-const TOPICS = [
-  {
-    slug: "ai-coding",
-    title: "AI coding agents",
-    hosts: ["github.com", "docs.anthropic.com", "openai.com"],
-    variants: [
-      { slug: "codex", title: "Codex task orchestration notes", genericTitle: "Agent workbench" },
-      { slug: "mcp", title: "MCP server integration docs", genericTitle: "Tooling reference" },
-      { slug: "review", title: "Automated code review benchmark", genericTitle: "Evaluation page" }
-    ]
-  },
-  {
-    slug: "chrome-extension",
-    title: "Chrome extension APIs",
-    hosts: ["developer.chrome.com", "chromium.googlesource.com", "github.com"],
-    variants: [
-      { slug: "tabs", title: "tabs and tabGroups API reference", genericTitle: "API docs" },
-      { slug: "sidepanel", title: "side panel lifecycle guide", genericTitle: "Extension guide" },
-      { slug: "permissions", title: "optional host permissions behavior", genericTitle: "Permissions notes" }
-    ]
-  },
-  {
-    slug: "llm-evals",
-    title: "LLM evaluation research",
-    hosts: ["arxiv.org", "paperswithcode.com", "github.com"],
-    variants: [
-      { slug: "benchmarks", title: "agent benchmark paper", genericTitle: "Research paper" },
-      { slug: "datasets", title: "task dataset discussion", genericTitle: "Dataset notes" },
-      { slug: "leaderboard", title: "model leaderboard comparison", genericTitle: "Model comparison" }
-    ]
-  },
-  {
-    slug: "design",
-    title: "Product UI design",
-    hosts: ["figma.com", "mobbin.com", "linear.app"],
-    variants: [
-      { slug: "sidepanel", title: "compact side panel examples", genericTitle: "UI reference" },
-      { slug: "switches", title: "settings switch patterns", genericTitle: "Interaction examples" },
-      { slug: "readme", title: "open source README visual layout", genericTitle: "Showcase ideas" }
-    ]
-  },
-  {
-    slug: "cloudflare",
-    title: "Cloudflare Worker gateway",
-    hosts: ["developers.cloudflare.com", "dash.cloudflare.com", "github.com"],
-    variants: [
-      { slug: "workers", title: "Worker routing and secrets", genericTitle: "Gateway docs" },
-      { slug: "tunnel", title: "Cloudflare tunnel diagnostics", genericTitle: "Tunnel notes" },
-      { slug: "limits", title: "rate limit and abuse prevention", genericTitle: "Security checklist" }
-    ]
-  },
-  {
-    slug: "frontend",
-    title: "Frontend implementation",
-    hosts: ["react.dev", "developer.mozilla.org", "github.com"],
-    variants: [
-      { slug: "state", title: "state machine bug analysis", genericTitle: "Bug thread" },
-      { slug: "css", title: "CSS panel layout refinement", genericTitle: "Layout notes" },
-      { slug: "tests", title: "Playwright smoke test fixture", genericTitle: "Test plan" }
-    ]
-  },
-  {
-    slug: "data",
-    title: "Database and SQL work",
-    hosts: ["postgresql.org", "supabase.com", "stackoverflow.com"],
-    variants: [
-      { slug: "query", title: "query plan optimization", genericTitle: "SQL reference" },
-      { slug: "index", title: "index strategy discussion", genericTitle: "Database notes" },
-      { slug: "migration", title: "migration rollback checklist", genericTitle: "Schema checklist" }
-    ]
-  },
-  {
-    slug: "reading",
-    title: "Read later queue",
-    hosts: ["medium.com", "substack.com", "wikipedia.org"],
-    variants: [
-      { slug: "article", title: "long-form product essay", genericTitle: "Article" },
-      { slug: "newsletter", title: "weekly AI newsletter", genericTitle: "Newsletter" },
-      { slug: "reference", title: "background reference page", genericTitle: "Reference" }
-    ]
-  },
-  {
-    slug: "video",
-    title: "Video and media queue",
-    hosts: ["youtube.com", "bilibili.com", "vimeo.com"],
-    variants: [
-      { slug: "tutorial", title: "browser extension tutorial", genericTitle: "Video" },
-      { slug: "talk", title: "AI product talk transcript", genericTitle: "Talk" },
-      { slug: "playlist", title: "design teardown playlist", genericTitle: "Playlist" }
-    ]
-  },
-  {
-    slug: "finance",
-    title: "Shopping and finance",
-    hosts: ["stripe.com", "amazon.com", "bank.example"],
-    variants: [
-      { slug: "invoice", title: "invoice and billing portal", genericTitle: "Account page" },
-      { slug: "checkout", title: "purchase comparison", genericTitle: "Shopping page" },
-      { slug: "pricing", title: "subscription pricing review", genericTitle: "Pricing page" }
-    ]
-  }
-];
 
 function compactInventoryForPersistence(inventory) {
   return {
@@ -568,16 +411,18 @@ async function main() {
   await mkdir(dataDir, { recursive: true });
   await mkdir(dirname(reportPath), { recursive: true });
 
-  for (const tabCount of sizes) {
-    const inventory = buildSyntheticInventory(tabCount, 4);
-    for (const strategy of strategies) {
-      console.log(`[benchmark] ${tabCount} tabs / ${strategy.key} starting`);
-      const result = await runStrategy({ inventory, tabCount, strategy });
-      results.push(result);
-      console.log(
-        `[benchmark] ${tabCount} tabs / ${strategy.key} ${result.ok ? "ok" : "failed"} in ${formatSeconds(result.elapsedMs)}`
-      );
-      await writeOutputs({ partial: true });
+  for (const scenario of scenarios) {
+    for (const tabCount of sizes) {
+      const inventory = buildBenchmarkInventory(tabCount, { scenario, windowCount: 4 });
+      for (const strategy of strategies) {
+        console.log(`[benchmark] ${scenario} / ${tabCount} tabs / ${strategy.key} starting`);
+        const result = await runStrategy({ inventory, tabCount, scenario, strategy });
+        results.push(result);
+        console.log(
+          `[benchmark] ${scenario} / ${tabCount} tabs / ${strategy.key} ${result.ok ? "ok" : "failed"} in ${formatSeconds(result.elapsedMs)}`
+        );
+        await writeOutputs({ partial: true });
+      }
     }
   }
 
@@ -589,6 +434,7 @@ async function main() {
         dataPath,
         reportPath,
         rows: results.map((result) => ({
+          scenario: result.scenario,
           tabs: result.tabCount,
           strategy: result.strategy,
           ok: result.ok,

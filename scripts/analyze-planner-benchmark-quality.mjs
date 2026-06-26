@@ -25,14 +25,19 @@ if (outputPath) {
 
 function analyzePayload(payload) {
   return (payload.results || []).map((result) => {
-    const expectedTopics = expectedTopicByTabId(result.inventory);
+    const expectedTopics = expectedLabelByTabId(result.inventory, "topicByTabId");
+    const storedFamilies = expectedLabelByTabId(result.inventory, "familyByTabId");
+    const expectedFamilies = storedFamilies.size ? storedFamilies : familyLabelsFromTopics(expectedTopics);
     const predictedClusters = predictedClustersForResult(result);
-    const metrics = pairwiseMetrics(expectedTopics, predictedClusters);
+    const topicMetrics = pairwiseMetrics(expectedTopics, predictedClusters);
+    const familyMetrics = pairwiseMetrics(expectedFamilies, predictedClusters);
     const groupedCount = result.preview?.groupedTabsCount ?? groupedTabCount(predictedClusters);
     const reviewCount = result.preview?.reviewTabsCount ?? Math.max(0, expectedTopics.size - groupedCount);
     return {
       runId: payload.runId,
       partial: payload.partial,
+      scenario: result.scenario || result.inventory?.benchmarkTruth?.scenario || "legacy_url_slug",
+      dimensions: result.inventory?.benchmarkTruth?.dimensions || [],
       tabCount: result.tabCount,
       strategy: result.strategy,
       ok: Boolean(result.ok),
@@ -42,18 +47,53 @@ function analyzePayload(payload) {
       groupedCount,
       reviewCount,
       coverage: expectedTopics.size ? groupedCount / expectedTopics.size : 0,
-      ...metrics
+      topicPrecision: topicMetrics.precision,
+      topicRecall: topicMetrics.recall,
+      topicF1: topicMetrics.f1,
+      familyPrecision: familyMetrics.precision,
+      familyRecall: familyMetrics.recall,
+      familyF1: familyMetrics.f1,
+      truePositive: topicMetrics.truePositive,
+      predictedSame: topicMetrics.predictedSame,
+      trueSame: topicMetrics.trueSame
     };
   });
 }
 
-function expectedTopicByTabId(inventory = {}) {
+function expectedLabelByTabId(inventory = {}, key) {
+  if (inventory.benchmarkTruth?.[key] && typeof inventory.benchmarkTruth[key] === "object") {
+    return new Map(
+      Object.entries(inventory.benchmarkTruth[key])
+        .map(([tabId, topic]) => [Number(tabId), String(topic || "")])
+        .filter(([tabId, topic]) => Number.isInteger(tabId) && topic)
+    );
+  }
   const expected = new Map();
   for (const tab of inventory.plannerTabs || inventory.tabs || []) {
     const topic = inferTopic(tab);
     if (topic) expected.set(tab.tabId, topic);
   }
   return expected;
+}
+
+function familyLabelsFromTopics(expectedTopics) {
+  return new Map([...expectedTopics.entries()].map(([tabId, topic]) => [tabId, familyForTopic(topic)]));
+}
+
+function familyForTopic(topic) {
+  const families = {
+    "ai-coding": "ai-work",
+    "llm-evals": "ai-work",
+    "chrome-extension": "extension-build",
+    frontend: "extension-build",
+    cloudflare: "infra-data",
+    data: "infra-data",
+    design: "product-reference",
+    reading: "product-reference",
+    video: "product-reference",
+    finance: "account-work"
+  };
+  return families[topic] || topic;
 }
 
 function inferTopic(tab) {
@@ -121,7 +161,7 @@ function renderMarkdown(reports) {
     "",
     `Generated: ${new Date().toISOString()}`,
     "",
-    "This report evaluates synthetic benchmark outputs against known topic slugs embedded in synthetic URLs. Review tabs are treated as singleton clusters, so coverage and pairwise recall drop when the planner leaves tabs for manual confirmation.",
+    "This report evaluates synthetic benchmark outputs against explicit fixture truth when available, with URL-path inference kept only for older benchmark files. Review tabs are treated as singleton clusters, so coverage and recall drop when the planner leaves tabs for manual confirmation.",
     "",
     "## Inputs",
     ""
@@ -135,8 +175,8 @@ function renderMarkdown(reports) {
     "",
     "## Metrics",
     "",
-    "| Run | Tabs | Strategy | Status | Time | Requests | Groups | Coverage | Pair Precision | Pair Recall | Pair F1 |",
-    "| --- | ---: | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |"
+    "| Run | Scenario | Tabs | Strategy | Status | Time | Requests | Groups | Coverage | Topic Precision | Topic Recall | Topic F1 | Family F1 |",
+    "| --- | --- | ---: | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |"
   );
 
   for (const report of reports) {
@@ -144,6 +184,7 @@ function renderMarkdown(reports) {
       lines.push(
         [
           basename(report.inputPath),
+          row.scenario,
           row.tabCount,
           row.strategy,
           row.ok ? "ok" : "failed",
@@ -151,9 +192,10 @@ function renderMarkdown(reports) {
           row.requestCount,
           row.groups,
           formatPercent(row.coverage),
-          formatPercent(row.precision),
-          formatPercent(row.recall),
-          formatPercent(row.f1)
+          formatPercent(row.topicPrecision),
+          formatPercent(row.topicRecall),
+          formatPercent(row.topicF1),
+          formatPercent(row.familyF1)
         ].join(" | ").replace(/^/, "| ").replace(/$/, " |")
       );
     }
@@ -163,10 +205,12 @@ function renderMarkdown(reports) {
     "",
     "## Reading The Numbers",
     "",
-    "- Pair precision answers: when Tab Tidy puts two tabs in the same group, how often do they share the synthetic ground-truth topic?",
-    "- Pair recall answers: among tabs that share a ground-truth topic, how often did Tab Tidy keep them together?",
+    "- Topic precision answers: when Tab Tidy puts two tabs in the same group, how often do they share the fine-grained synthetic topic?",
+    "- Topic recall answers: among tabs that share a fine-grained synthetic topic, how often did Tab Tidy keep them together?",
+    "- Family F1 is a coarser workflow-level score. It helps distinguish useful broad grouping from genuinely wrong mixed groups.",
     "- Coverage is not accuracy. Higher review counts can improve safety but reduce automatic organization completeness.",
-    "- These are synthetic metadata-only fixtures. They are useful for regression testing planner behavior, not a substitute for real browsing-session review."
+    "- New benchmark files can carry explicit `benchmarkTruth.topicByTabId`; older files fall back to URL path inference.",
+    "- These are synthetic fixtures. They are useful for regression testing planner behavior, not a substitute for real browsing-session review."
   );
 
   return `${lines.join("\n")}\n`;
