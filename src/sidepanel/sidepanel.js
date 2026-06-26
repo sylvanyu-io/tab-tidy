@@ -2147,7 +2147,7 @@ async function mockMessage(message) {
   }
   if (message.type === "tabs:cancelActiveJob") return { canceled: false, job: mockActiveJob };
   if (message.type === "activity:focusTab") return { focused: true, tabId: message.tabId, windowId: message.windowId };
-  if (message.type === "activity:getOverview" || message.type === "activity:analyzeCleanup") {
+  if (message.type === "activity:getOverview") {
     const overview = {
       rangeMs: message.rangeMs || 604800000,
       generatedAt: new Date().toISOString(),

@@ -15,7 +15,6 @@ import { cachedPageSampleForTab, rememberPageSummary } from "./page-summary-cach
 import { requestPageSample } from "./page-sampler.js";
 import { reconcileTabLifecycle, rememberTabsLifecycle } from "./tab-lifecycle-log.js";
 import { fetchJsonWithTimeout } from "./fetch-timeout.js";
-import { createGatewayCleanupAnalysis } from "./gateway-planner.js";
 import { createPlan } from "./planner.js";
 import { normalizePlanForSettings } from "./plan-normalizer.js";
 import { buildPreview } from "./preview.js";
@@ -111,8 +110,6 @@ export async function handleRuntimeMessage(chromeApi, message) {
       const settings = await getSettings(chromeApi);
       await reconcileTabLifecycle(chromeApi, { includeIncognitoTabs: settings.includeIncognitoTabs }).catch(() => null);
       return getActivityOverview(chromeApi, { rangeMs: message.rangeMs, includeIncognitoTabs: settings.includeIncognitoTabs });
-    case "activity:analyzeCleanup":
-      return analyzeCleanupCandidates(chromeApi, message.settings, { windowId: message.windowId, rangeMs: message.rangeMs });
     case "activity:focusTab":
       return focusActivityTab(chromeApi, message);
     case "tabs:closeCleanupCandidates":
@@ -259,35 +256,6 @@ function filterPlanTabs(plan = {}, removeIds) {
         }
       : plan.cleanup
   };
-}
-
-async function analyzeCleanupCandidates(chromeApi, rawSettings, invocation = {}) {
-  const settings = normalizeSettings(rawSettings || (await getSettings(chromeApi)));
-  const windowId = await resolveStateWindowId(chromeApi, invocation.windowId);
-  const inventory = await collectTabInventory(chromeApi, settings, { windowId });
-  if (inventory.tabs?.length) {
-    await Promise.allSettled([
-      rememberOpenTabsActivity(chromeApi, inventory.tabs || [], { includeIncognitoTabs: settings.includeIncognitoTabs }),
-      rememberTabsLifecycle(chromeApi, inventory.tabs || [], { includeIncognitoTabs: settings.includeIncognitoTabs })
-    ]);
-  }
-  await attachPageSamples(chromeApi, inventory, settings);
-  await reconcileTabLifecycle(chromeApi, { includeIncognitoTabs: settings.includeIncognitoTabs }).catch(() => null);
-  const overview = await getActivityOverview(chromeApi, {
-    rangeMs: invocation.rangeMs,
-    includeIncognitoTabs: settings.includeIncognitoTabs
-  });
-  const lastJob = await getScopedLocal(chromeApi, STORAGE_KEYS.lastJob, windowId, null).catch(() => null);
-
-  const cleanup =
-    settings.plannerProvider === PLANNER_PROVIDERS.GATEWAY
-      ? await createGatewayCleanupAnalysis(inventory, overview, settings, globalThis.fetch, {
-          installId: await getOrCreateInstallId(chromeApi),
-          lastJob
-        })
-      : createLocalCleanupAnalysis(inventory, overview, settings);
-
-  return { overview, cleanup };
 }
 
 function createLocalCleanupAnalysis(inventory, overview, settings) {

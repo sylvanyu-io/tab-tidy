@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { buildPlannerSystemPrompt, createGatewayCleanupAnalysis, createGatewayPlan } from "../src/core/gateway-planner.js";
+import { buildPlannerSystemPrompt, createGatewayPlan } from "../src/core/gateway-planner.js";
 import { validatePlan } from "../src/core/plan-validator.js";
 import { DEFAULT_SETTINGS, GATEWAY_CUSTOM_MODEL_VALUE, PLANNER_PROVIDERS, PROMPT_PRESETS } from "../src/shared/settings.js";
 
@@ -137,99 +137,6 @@ test("AI gateway planner posts a chat-completions JSON request", async () => {
   assert.deepEqual(plan, expectedPlan);
 });
 
-test("AI gateway cleanup planner posts Tab Tidy JSON and filters unknown ids", async () => {
-  const activityOverview = {
-    rangeMs: 604800000,
-    cache: { entries: 2, sampledEntries: 1 },
-    openTabs: { total: 2, tracked: 2, staleCandidates: 1 },
-    recap: { topTerms: [{ value: "docs", count: 2 }], topHosts: [{ value: "docs.example", count: 1 }] },
-    openTabSignals: [
-      {
-        tabId: 10,
-        windowId: 1,
-        index: 0,
-        firstSeenAt: "2026-06-01T00:00:00.000Z",
-        lastSeenAt: "2026-06-10T00:00:00.000Z",
-        ageMs: 20 * 24 * 60 * 60 * 1000,
-        idleMs: 11 * 24 * 60 * 60 * 1000,
-        activeCount: 1,
-        currentGroupTitle: "Old docs",
-        summary: { metaDescription: "Old structured output comparison", headings: ["Legacy JSON"] }
-      }
-    ]
-  };
-
-  const fetchImpl = async (url, options) => {
-    assert.equal(url, "http://localhost:8317/v1/chat/completions");
-    const body = JSON.parse(options.body);
-    assert.equal(body.model, "gpt-5.5");
-    assert.equal(body.response_format.type, "json_object");
-    assert.match(body.messages[0].content, /cleanup planner/);
-    assert.match(body.messages[0].content, /Chrome tab organization extension/);
-    assert.match(body.messages[1].content, /browser tab inventory/);
-    const payload = JSON.parse(body.messages[1].content.slice(body.messages[1].content.indexOf("{")));
-    assert.equal(payload.schema, "tab_tidy_cleanup_compact_v1");
-    assert.equal(payload.task, "cleanup_review");
-    assert.deepEqual(payload.tabFields, [
-      "id",
-      "windowId",
-      "index",
-      "sequenceIndex",
-      "title",
-      "hostname",
-      "sanitizedUrl",
-      "urlKind",
-      "audible",
-      "discarded",
-      "sampleable",
-      "existingGroup",
-      "pageSample"
-    ]);
-    assert.equal(rowToObject(payload.activityFields, payload.activity[0]).currentGroup, "Old docs");
-    assert.deepEqual(payload.semanticGroups[0], ["Generated Docs", "Preview reason.", [10]]);
-    return {
-      ok: true,
-      async json() {
-        return {
-          choices: [
-            {
-              message: {
-                content: "```json\n{\"summary\":\"Review old docs first.\",\"candidates\":[{\"id\":999,\"priority\":\"high\",\"reason\":\"not real\"},{\"id\":10,\"priority\":\"high\",\"reason\":\"Looks stale.\",\"evidence\":[\"old group\",\"inactive\"]}]}\n```"
-              }
-            }
-          ]
-        };
-      }
-    };
-  };
-
-  const cleanup = await createGatewayCleanupAnalysis(
-    inventory,
-    activityOverview,
-    {
-      ...DEFAULT_SETTINGS,
-      plannerProvider: PLANNER_PROVIDERS.GATEWAY,
-      gatewayBaseUrl: "http://localhost:8317/v1",
-      gatewayApiKey: "gateway-test-key",
-      languageMode: "en-US"
-    },
-    fetchImpl,
-    {
-      lastJob: {
-        preview: { groups: [{ title: "Generated Docs", reason: "Preview reason." }] },
-        plan: { groups: [{ title: "raw", reason: "raw", tabRefs: [{ tabId: 10, windowId: 1 }] }] }
-      }
-    }
-  );
-
-  assert.equal(cleanup.summary, "Review old docs first.");
-  assert.equal(cleanup.candidates.length, 1);
-  assert.equal(cleanup.candidates[0].tabId, 10);
-  assert.equal(cleanup.candidates[0].priority, "high");
-  assert.equal(cleanup.candidates[0].currentGroupTitle, "Old docs");
-  assert.deepEqual(cleanup.candidates[0].evidence, ["old group", "inactive"]);
-});
-
 test("AI gateway planner returns cleanup candidates in the same full-detail plan request", async () => {
   const activityOverview = {
     rangeMs: 2592000000,
@@ -310,6 +217,139 @@ test("AI gateway planner returns cleanup candidates in the same full-detail plan
   assert.equal(plan.cleanup.candidates[0].tabId, 10);
   assert.equal(plan.cleanup.candidates[0].ageMs, 18 * 24 * 60 * 60 * 1000);
   assert.deepEqual(plan.cleanup.candidates[0].evidence, ["18 days old", "low activity"]);
+});
+
+test("AI gateway planner omits cleanup payload when cleanup analysis is disabled", async () => {
+  const fetchImpl = async (_url, options) => {
+    const body = JSON.parse(options.body);
+    assert.match(body.messages[0].content, /Analysis features: grouping=enabled, cleanup=disabled/);
+    assert.doesNotMatch(body.messages[0].content, /top-level cleanup/);
+    const payload = JSON.parse(body.messages[1].content.slice(body.messages[1].content.indexOf("{")));
+    assert.equal(payload.analysisFeatures.grouping, true);
+    assert.equal(payload.analysisFeatures.cleanup, false);
+    assert.equal(payload.cleanupInstructions, undefined);
+    assert.equal(payload.activityFields, undefined);
+    assert.equal(payload.activity, undefined);
+    return {
+      ok: true,
+      async json() {
+        return {
+          choices: [
+            {
+              message: {
+                content: JSON.stringify({
+                  groups: [
+                    {
+                      key: "docs",
+                      title: "Docs",
+                      color: "blue",
+                      confidence: 0.9,
+                      ids: [10, 11],
+                      reason: "Documentation tabs."
+                    }
+                  ],
+                  review: [],
+                  cleanup: {
+                    summary: "Should be ignored when disabled.",
+                    candidates: [{ id: 10, priority: "high", reason: "Ignored.", evidence: ["ignored"] }]
+                  }
+                })
+              }
+            }
+          ]
+        };
+      }
+    };
+  };
+
+  const plan = await createGatewayPlan(
+    inventory,
+    {
+      ...DEFAULT_SETTINGS,
+      plannerProvider: PLANNER_PROVIDERS.GATEWAY,
+      gatewayBaseUrl: "http://localhost:8317/v1",
+      gatewayApiKey: "gateway-test-key",
+      languageMode: "en-US",
+      analyzeCleanup: false
+    },
+    fetchImpl,
+    { activityOverview: { openTabSignals: [{ tabId: 10, currentGroupTitle: "Old docs" }] } }
+  );
+
+  assert.equal(plan.groups.length, 1);
+  assert.equal(plan.cleanup, undefined);
+});
+
+test("AI gateway planner supports cleanup-only analysis without creating groups", async () => {
+  const activityOverview = {
+    openTabSignals: [
+      {
+        tabId: 10,
+        windowId: 1,
+        index: 0,
+        ageMs: 21 * 24 * 60 * 60 * 1000,
+        idleMs: 13 * 24 * 60 * 60 * 1000,
+        activeCount: 1,
+        currentGroupTitle: "Old docs"
+      }
+    ]
+  };
+  const fetchImpl = async (_url, options) => {
+    const body = JSON.parse(options.body);
+    assert.match(body.messages[0].content, /Analysis features: grouping=disabled, cleanup=enabled/);
+    assert.match(body.messages[0].content, /return groups as an empty array and put every eligible tab id in review/);
+    const payload = JSON.parse(body.messages[1].content.slice(body.messages[1].content.indexOf("{")));
+    assert.equal(payload.analysisFeatures.grouping, false);
+    assert.equal(payload.analysisFeatures.cleanup, true);
+    assert.equal(rowToObject(payload.activityFields, payload.activity[0]).currentGroup, "Old docs");
+    return {
+      ok: true,
+      async json() {
+        return {
+          choices: [
+            {
+              message: {
+                content: JSON.stringify({
+                  groups: [],
+                  review: [
+                    { id: 10, reason: "Grouping disabled." },
+                    { id: 11, reason: "Grouping disabled." }
+                  ],
+                  cleanup: {
+                    summary: "Review old docs first.",
+                    candidates: [{ id: 10, priority: "high", reason: "Old task leftover.", evidence: ["21 days old"] }]
+                  }
+                })
+              }
+            }
+          ]
+        };
+      }
+    };
+  };
+
+  const plan = await createGatewayPlan(
+    inventory,
+    {
+      ...DEFAULT_SETTINGS,
+      plannerProvider: PLANNER_PROVIDERS.GATEWAY,
+      gatewayBaseUrl: "http://localhost:8317/v1",
+      gatewayApiKey: "gateway-test-key",
+      languageMode: "en-US",
+      analyzeGrouping: false,
+      analyzeCleanup: true
+    },
+    fetchImpl,
+    { activityOverview }
+  );
+
+  assert.equal(plan.groups.length, 0);
+  assert.deepEqual(
+    plan.reviewTabs.map((ref) => ref.tabId),
+    [10, 11]
+  );
+  assert.equal(plan.cleanup.candidates.length, 1);
+  assert.equal(plan.cleanup.candidates[0].tabId, 10);
 });
 
 test("AI gateway planner sends a custom model name to custom gateways", async () => {

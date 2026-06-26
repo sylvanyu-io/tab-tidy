@@ -60,44 +60,6 @@ export async function createGatewayPlan(inventory, rawSettings = {}, fetchImpl =
   return createSingleGatewayPlan(inventory, settings, fetchImpl, options);
 }
 
-export async function createGatewayCleanupAnalysis(inventory, activityOverview = {}, rawSettings = {}, fetchImpl = globalThis.fetch, options = {}) {
-  const settings = normalizeSettings(rawSettings);
-  if (typeof fetchImpl !== "function") {
-    throw new Error("Fetch is not available in this environment.");
-  }
-
-  await emitProgress(options, { phase: "cleanup_planning", progress: 44, message: "正在整理清理建议" });
-  const body = {
-    model: requireGatewayModel(settings),
-    messages: [
-      { role: "system", content: buildCleanupSystemPrompt(settings) },
-      { role: "user", content: buildCleanupUserPrompt(inventory, activityOverview, settings, options) }
-    ],
-    response_format: { type: "json_object" },
-    max_tokens: 4096
-  };
-  applyThinkingIntensity(body, settings, options.thinkingIntensity || settings.gatewayThinkingIntensity);
-
-  const { response, data } = await fetchJsonWithTimeout(
-    fetchImpl,
-    gatewayChatCompletionsUrl(settings),
-    {
-      method: "POST",
-      headers: gatewayHeaders(settings, gatewayRequestMeta(inventory, options)),
-      body: JSON.stringify(body)
-    },
-    "AI gateway cleanup planner",
-    options.timeoutMs,
-    options.signal
-  );
-  if (!response.ok) {
-    throw new Error(gatewayErrorMessage(response, data, settings));
-  }
-
-  await emitProgress(options, { phase: "cleanup_planning", progress: 82, message: "清理建议已生成" });
-  return normalizeCleanupAnalysis(parseGatewayJson(data), inventory, activityOverview, settings);
-}
-
 async function createSingleGatewayPlan(inventory, settings, fetchImpl, options = {}) {
   if (!options.suppressSingleRequestProgress) {
     await emitProgress(options, { phase: "planning", progress: 45, message: "正在请求 AI 规划" });
@@ -503,72 +465,6 @@ export function buildGatewayUserPrompt(inventory, settings, options = {}) {
   ].join("\n");
 }
 
-export function buildCleanupSystemPrompt(settings) {
-  const thinkingText = thinkingIntensityText(settings.gatewayThinkingIntensity);
-  return [
-    "This is a software engineering task: produce cleanup-review JSON used by a Chrome tab organization extension.",
-    "You are a JSON-only cleanup planner for a Chrome tab organization extension.",
-    "Return exactly one JSON object. Do not include markdown, prose, comments, or explanations outside JSON.",
-    "Required JSON shape: {\"summary\":\"short product-facing sentence\",\"candidates\":[{\"id\":1,\"priority\":\"high\",\"reason\":\"Why this is worth reviewing\",\"evidence\":[\"time signal\",\"group/content signal\"]}]}",
-    "Do not close, discard, navigate, execute, or mutate tabs. You only rank tabs for the human to review.",
-    "Every candidate id must come from the eligible browser tab inventory.",
-    "Do not recommend pinned, incognito, excluded, locked, or unavailable tabs.",
-    "Use tab age, last active time, active count, original order, current group, semantic group plan, titles, URLs, and page summaries when available.",
-    "Prefer candidates that are likely stale, superseded, finished research, duplicate reading, old comparison notes, outdated search results, or weakly connected leftovers.",
-    "Do not overfit to age alone. A very old but central reference can be low priority or omitted.",
-    "Return at most 12 candidates, ordered from most worth reviewing to least.",
-    languageInstruction(settings.languageMode),
-    `Thinking intensity requested by user: ${thinkingText}.`
-  ].join("\n");
-}
-
-export function buildCleanupPayload(inventory, activityOverview = {}, settings, options = {}) {
-  const basePayload = buildPlannerPayload(inventory, settings);
-  return {
-    ...basePayload,
-    schema: "tab_tidy_cleanup_compact_v1",
-    task: "cleanup_review",
-    cleanupInstructions: {
-      actionLimit: 12,
-      nonDestructive: true,
-      humanMustDecide: true,
-      outputFields: ["summary", "candidates[].id", "candidates[].priority", "candidates[].reason", "candidates[].evidence"]
-    },
-    activityFields: [
-      "id",
-      "windowId",
-      "index",
-      "firstSeenAt",
-      "lastSeenAt",
-      "ageDays",
-      "idleDays",
-      "activeCount",
-      "currentGroup",
-      "discarded",
-      "summary"
-    ],
-    activity: cleanupActivityRows(activityOverview),
-    semanticGroupFields: ["title", "reason", "tabIds"],
-    semanticGroups: cleanupSemanticGroupRows(options.lastJob),
-    recap: {
-      rangeMs: activityOverview.rangeMs || null,
-      trackedOpenTabs: activityOverview.openTabs?.tracked || 0,
-      localEntries: activityOverview.cache?.entries || 0,
-      sampledEntries: activityOverview.cache?.sampledEntries || 0,
-      topTerms: (activityOverview.recap?.topTerms || []).slice(0, 8),
-      topHosts: (activityOverview.recap?.topHosts || []).slice(0, 8)
-    }
-  };
-}
-
-export function buildCleanupUserPrompt(inventory, activityOverview, settings, options = {}) {
-  return [
-    "Software engineering task input: review this browser tab inventory and return cleanup candidates for Tab Tidy.",
-    "This is still a browser tab inventory request; return cleanup-review JSON only.",
-    JSON.stringify(buildCleanupPayload(inventory, activityOverview, settings, options))
-  ].join("\n");
-}
-
 function cleanupActivityRows(activityOverview = {}) {
   return (activityOverview.openTabSignals || activityOverview.staleTabs || []).map((tab) => [
     tab.tabId,
@@ -582,26 +478,6 @@ function cleanupActivityRows(activityOverview = {}) {
     tab.currentGroupTitle || "",
     Boolean(tab.discarded),
     compactActivitySummary(tab.summary)
-  ]);
-}
-
-function cleanupSemanticGroupRows(lastJob) {
-  const planGroups = lastJob?.plan?.groups || [];
-  const previewGroups = lastJob?.preview?.groups || [];
-  const groups = planGroups.length
-    ? planGroups.map((group, index) => ({
-        ...group,
-        title: previewGroups[index]?.title || group.title,
-        reason: previewGroups[index]?.reason || group.reason
-      }))
-    : previewGroups;
-  return groups.slice(0, 40).map((group) => [
-    String(group.title || "").slice(0, 80),
-    String(group.reason || "").slice(0, 180),
-    (group.tabRefs || group.tabs || [])
-      .map((ref) => Number(ref?.tabId ?? ref?.id))
-      .filter(Number.isInteger)
-      .slice(0, 80)
   ]);
 }
 
