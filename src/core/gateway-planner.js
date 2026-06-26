@@ -15,7 +15,7 @@ import { fetchJsonWithTimeout } from "./fetch-timeout.js";
 import { ACTION_PLAN_JSON_SCHEMA } from "./plan-schema.js";
 import { CHROME_GROUP_COLORS } from "./plan-validator.js";
 
-const HIERARCHICAL_MIN_TABS = 100;
+const HIERARCHICAL_MIN_TABS = 50;
 const REFINE_BUCKET_MIN_TABS = 50;
 const REFINE_MAX_TABS_PER_REQUEST = 80;
 const REFINE_CONFIDENCE_BELOW = 0.78;

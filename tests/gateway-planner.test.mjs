@@ -1087,6 +1087,133 @@ test("AI gateway planner uses coarse then refine planning for large inventories"
   );
 });
 
+test("AI gateway planner auto-selects hierarchical planning at 50 tabs", async () => {
+  const plannerTabs = Array.from({ length: 50 }, (_, index) => ({
+    tabId: 10_000 + index,
+    windowId: 1,
+    index,
+    sequenceIndex: index,
+    title: `Threshold tab ${index}`,
+    hostname: "example.com"
+  }));
+  const thresholdInventory = { ...inventory, plannerTabs, tabs: plannerTabs, pageSamples: [] };
+  const requests = [];
+
+  const fetchImpl = async (_url, options) => {
+    requests.push(JSON.parse(options.body));
+    return {
+      ok: true,
+      async json() {
+        return {
+          choices: [
+            {
+              message: {
+                content: JSON.stringify({
+                  buckets: [
+                    {
+                      bucketKey: "first-half",
+                      title: "First Half",
+                      color: "blue",
+                      confidence: 0.95,
+                      tabIds: plannerTabs.slice(0, 25).map((tab) => tab.tabId),
+                      reason: "First half."
+                    },
+                    {
+                      bucketKey: "second-half",
+                      title: "Second Half",
+                      color: "green",
+                      confidence: 0.95,
+                      tabIds: plannerTabs.slice(25).map((tab) => tab.tabId),
+                      reason: "Second half."
+                    }
+                  ],
+                  reviewTabIds: []
+                })
+              }
+            }
+          ]
+        };
+      }
+    };
+  };
+
+  const settings = { ...DEFAULT_SETTINGS, plannerProvider: PLANNER_PROVIDERS.GATEWAY, gatewayApiKey: "gateway-test-key" };
+  const plan = await createGatewayPlan(thresholdInventory, settings, fetchImpl);
+  const validation = validatePlan(plan, thresholdInventory, settings);
+
+  assert.equal(requests.length, 1);
+  assert.match(requests[0].messages[0].content, /fast first-pass/);
+  assert.equal(validation.ok, true, validation.errors.join(" "));
+  assert.deepEqual(
+    plan.groups.map((group) => group.tabRefs.length),
+    [25, 25]
+  );
+});
+
+test("AI gateway planner keeps sub-50-tab sessions on the single full-detail path", async () => {
+  const plannerTabs = Array.from({ length: 49 }, (_, index) => ({
+    tabId: 20_000 + index,
+    windowId: 1,
+    index,
+    sequenceIndex: index,
+    title: `Small session tab ${index}`,
+    hostname: "example.com"
+  }));
+  const smallInventory = { ...inventory, plannerTabs, tabs: plannerTabs, pageSamples: [] };
+  const requests = [];
+
+  const fetchImpl = async (_url, options) => {
+    requests.push(JSON.parse(options.body));
+    return {
+      ok: true,
+      async json() {
+        return {
+          choices: [
+            {
+              message: {
+                content: JSON.stringify({
+                  groups: [
+                    {
+                      key: "small-session-a",
+                      title: "Small Session A",
+                      color: "blue",
+                      confidence: 0.95,
+                      ids: plannerTabs.slice(0, 25).map((tab) => tab.tabId),
+                      reason: "First small-session chunk."
+                    },
+                    {
+                      key: "small-session-b",
+                      title: "Small Session B",
+                      color: "green",
+                      confidence: 0.95,
+                      ids: plannerTabs.slice(25).map((tab) => tab.tabId),
+                      reason: "Second small-session chunk."
+                    }
+                  ],
+                  review: []
+                })
+              }
+            }
+          ]
+        };
+      }
+    };
+  };
+
+  const settings = { ...DEFAULT_SETTINGS, plannerProvider: PLANNER_PROVIDERS.GATEWAY, gatewayApiKey: "gateway-test-key" };
+  const plan = await createGatewayPlan(smallInventory, settings, fetchImpl);
+  const validation = validatePlan(plan, smallInventory, settings);
+
+  assert.equal(requests.length, 1);
+  assert.doesNotMatch(requests[0].messages[0].content, /fast first-pass/);
+  assert.match(requests[0].messages[0].content, /JSON-only planner/);
+  assert.equal(validation.ok, true, validation.errors.join(" "));
+  assert.deepEqual(
+    plan.groups.map((group) => group.tabRefs.length),
+    [25, 24]
+  );
+});
+
 test("AI gateway planner splits oversized coarse buckets before refinement", async () => {
   const plannerTabs = [10, 11, 12, 13, 14].map((tabId) => ({
     tabId,
