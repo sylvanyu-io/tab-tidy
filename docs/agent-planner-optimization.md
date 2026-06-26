@@ -58,6 +58,10 @@ Use an adaptive orchestrator-worker plan:
 
 Default should not be `gpt-5.5` high for every step.
 
+Detailed comparison record:
+
+- `docs/benchmarks/planner-model-routing.md`
+
 Public leaderboard signal checked on 2026-06-26:
 
 - Artificial Analysis ranks `gpt-5.5` high and medium close enough that medium is
