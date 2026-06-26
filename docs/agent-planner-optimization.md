@@ -60,8 +60,13 @@ Default should not be `gpt-5.5` high for every step.
 
 Detailed comparison record:
 
+- `docs/agent-harness-research.md`
 - `docs/benchmarks/planner-model-routing.md`
+- `docs/benchmarks/gateway-model-availability-2026-06-26.md`
+- `docs/benchmarks/planner-model-matrix-2026-06-26.md`
 - `docs/benchmarks/gateway-planner-before-after-parallel.md`
+- `docs/benchmarks/adaptive-refine-experiment.md`
+- `docs/benchmarks/planner-quality-analysis.md`
 
 Public leaderboard signal checked on 2026-06-26:
 
