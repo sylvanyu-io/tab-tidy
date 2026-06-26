@@ -19,6 +19,10 @@ const HIERARCHICAL_MIN_TABS = 50;
 const REFINE_BUCKET_MIN_TABS = 50;
 const REFINE_MAX_TABS_PER_REQUEST = 80;
 const REFINE_CONFIDENCE_BELOW = 0.78;
+const REFINE_TITLE_CLUSTER_MIN_TABS = 12;
+const REFINE_TITLE_CLUSTER_MIN_CLUSTERS = 3;
+const REFINE_TITLE_CLUSTER_MIN_CLUSTER_SIZE = 2;
+const REFINE_TITLE_CLUSTER_DOMINANCE_ABOVE = 0.75;
 const REFINE_DEFAULT_CONCURRENCY = 3;
 const REFINE_MAX_CONCURRENCY = 5;
 const COARSE_MAX_BUCKETS = 24;
@@ -795,13 +799,15 @@ function normalizeCoarsePlan(plan, inventory, settings) {
       .map(toPlainTabRef);
     if (!tabRefs.length) continue;
 
+    const titleClusterSignal = titleClusterRefinementSignal(tabRefs, tabById, settings);
     buckets.push({
       groupKey: slugify(bucket.bucketKey || bucket.groupKey || bucket.key || bucket.title || bucket.name || `bucket-${index + 1}`),
       title: String(bucket.title || bucket.name || localizedText(settings.languageMode, `粗分主题 ${index + 1}`, `Bucket ${index + 1}`)).slice(0, 40),
       color: CHROME_GROUP_COLORS.includes(bucket.color) ? bucket.color : CHROME_GROUP_COLORS[index % CHROME_GROUP_COLORS.length],
       confidence: clampConfidence(bucket.confidence),
       tabRefs,
-      reason: String(bucket.reason || bucket.rationale || "Coarse semantic bucket.").slice(0, 280)
+      reason: String(bucket.reason || bucket.rationale || "Coarse semantic bucket.").slice(0, 280),
+      refineSignal: titleClusterSignal.shouldRefine ? titleClusterSignal.reason : ""
     });
   }
 
@@ -829,6 +835,55 @@ function normalizeCoarsePlan(plan, inventory, settings) {
   return { buckets: orderGroupsByOriginalPosition(buckets, inventory), reviewTabs: sortRefsByOriginalOrder(reviewTabs, inventory) };
 }
 
+function titleClusterRefinementSignal(tabRefs, tabById, settings) {
+  if (settings.promptPreset === PROMPT_PRESETS.MEDIA_TYPE) return { shouldRefine: false, reason: "" };
+  if ((tabRefs || []).length < REFINE_TITLE_CLUSTER_MIN_TABS) return { shouldRefine: false, reason: "" };
+
+  const clusters = new Map();
+  for (const ref of tabRefs || []) {
+    const stem = titleClusterStem(tabById.get(ref.tabId)?.title);
+    if (!stem) continue;
+    clusters.set(stem, (clusters.get(stem) || 0) + 1);
+  }
+
+  const repeatedClusters = [...clusters.entries()]
+    .filter(([, count]) => count >= REFINE_TITLE_CLUSTER_MIN_CLUSTER_SIZE)
+    .sort((left, right) => right[1] - left[1]);
+  if (repeatedClusters.length < REFINE_TITLE_CLUSTER_MIN_CLUSTERS) return { shouldRefine: false, reason: "" };
+
+  const largest = repeatedClusters[0]?.[1] || 0;
+  const total = tabRefs.length;
+  if (largest / total > REFINE_TITLE_CLUSTER_DOMINANCE_ABOVE) return { shouldRefine: false, reason: "" };
+
+  const labels = repeatedClusters
+    .slice(0, 4)
+    .map(([stem, count]) => `${stem} (${count})`)
+    .join(", ");
+  return {
+    shouldRefine: true,
+    reason: `Repeated title patterns suggest mixed subtopics: ${labels}.`
+  };
+}
+
+function titleClusterStem(title) {
+  const cleaned = String(title || "")
+    .replace(/\b\d{2,}\b/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  if (!cleaned) return "";
+
+  const [prefix] = cleaned.split(/\s+(?:[-–—|:：]\s+)|\s+[·•]\s+/);
+  const normalized = String(prefix || cleaned)
+    .toLowerCase()
+    .replace(/https?:\/\/\S+/g, " ")
+    .replace(/[^a-z0-9\u4e00-\u9fff]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 64);
+  if (normalized.length < 6) return "";
+  return normalized;
+}
+
 function refinementPromptLines(settings) {
   if (settings.promptPreset === PROMPT_PRESETS.MEDIA_TYPE) {
     return [
@@ -853,7 +908,7 @@ function shouldUseHierarchicalPlanner(inventory, options = {}) {
 function shouldRefineBucket(bucket, settings, options = {}) {
   const minTabs = options.refineBucketMinTabs || Math.min(settings.maxTabsPerGroup, REFINE_BUCKET_MIN_TABS);
   const confidenceBelow = options.refineConfidenceBelow ?? REFINE_CONFIDENCE_BELOW;
-  return bucket.tabRefs.length >= minTabs || bucket.confidence < confidenceBelow;
+  return bucket.tabRefs.length >= minTabs || bucket.confidence < confidenceBelow || Boolean(bucket.refineSignal);
 }
 
 function countRefinementRequests(coarse, settings, options = {}) {
@@ -884,7 +939,7 @@ function refinementTasksForBucket(bucket, settings, options = {}) {
         groupKey: split ? `${bucket.groupKey}-part-${index + 1}` : bucket.groupKey,
         title: bucketTitle,
         tabRefs,
-        reason: split ? `${bucket.reason} Split from an oversized coarse bucket.` : bucket.reason
+        reason: [bucket.reason, bucket.refineSignal, split ? "Split from an oversized coarse bucket." : ""].filter(Boolean).join(" ")
       },
       messageStart: localizedText(settings.languageMode, `正在精分「${bucketTitle}」`, `Refining "${bucketTitle}"`),
       messageDone: localizedText(settings.languageMode, `已精分「${bucketTitle}」`, `Refined "${bucketTitle}"`)

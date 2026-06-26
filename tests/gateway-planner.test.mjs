@@ -1047,7 +1047,6 @@ test("AI gateway planner uses coarse then refine planning for large inventories"
       reviewTabs: [{ tabId: 14, windowId: 1, reason: "Generic title." }]
     }
   ];
-
   const fetchImpl = async (_url, options) => {
     const body = JSON.parse(options.body);
     requests.push(body);
@@ -1084,6 +1083,130 @@ test("AI gateway planner uses coarse then refine planning for large inventories"
       (left, right) => left - right
     ),
     [10, 11, 12, 13, 14]
+  );
+});
+
+test("AI gateway planner refines mid-sized buckets with repeated mixed title patterns", async () => {
+  const stems = ["Chrome extension APIs", "Frontend implementation", "Product UI design"];
+  const plannerTabs = Array.from({ length: 15 }, (_, index) => ({
+    tabId: 30_000 + index,
+    windowId: 1,
+    index,
+    sequenceIndex: index,
+    title: `${stems[index % stems.length]} - reference ${index}`,
+    hostname: ["developer.chrome.com", "react.dev", "figma.com"][index % stems.length]
+  }));
+  const mixedInventory = { ...inventory, plannerTabs, tabs: plannerTabs, pageSamples: [] };
+  const requests = [];
+  const colors = ["blue", "green", "yellow"];
+  const responses = [
+    {
+      buckets: [
+        {
+          bucketKey: "extension-build",
+          title: "Extension Build",
+          color: "blue",
+          confidence: 0.95,
+          tabIds: plannerTabs.map((tab) => tab.tabId),
+          reason: "High-confidence broad build bucket."
+        }
+      ],
+      reviewTabIds: []
+    },
+    {
+      groups: stems.map((stem, index) => ({
+        key: stem.toLowerCase().replaceAll(" ", "-"),
+        title: stem,
+        color: colors[index % colors.length],
+        confidence: 0.9,
+        ids: plannerTabs.filter((_, tabIndex) => tabIndex % stems.length === index).map((tab) => tab.tabId),
+        reason: `${stem} tabs.`
+      })),
+      review: []
+    }
+  ];
+
+  const fetchImpl = async (_url, options) => {
+    requests.push(JSON.parse(options.body));
+    const responsePayload = responses[requests.length - 1];
+    return {
+      ok: true,
+      async json() {
+        return { choices: [{ message: { content: JSON.stringify(responsePayload) } }] };
+      }
+    };
+  };
+
+  const settings = { ...DEFAULT_SETTINGS, plannerProvider: PLANNER_PROVIDERS.GATEWAY, gatewayApiKey: "gateway-test-key" };
+  const plan = await createGatewayPlan(mixedInventory, settings, fetchImpl, { hierarchical: true });
+  const validation = validatePlan(plan, mixedInventory, settings);
+
+  assert.equal(requests.length, 2);
+  assert.match(requests[1].messages[1].content, /Chrome extension APIs|Frontend implementation|Product UI design/i);
+  assert.equal(validation.ok, true, validation.errors.join(" "));
+  assert.deepEqual(
+    plan.groups.map((group) => group.tabRefs.length),
+    [5, 5, 5]
+  );
+});
+
+test("AI gateway media-type mode does not refine repeated title patterns by topic", async () => {
+  const stems = ["React docs", "Chrome docs", "Cloudflare docs"];
+  const plannerTabs = Array.from({ length: 15 }, (_, index) => ({
+    tabId: 31_000 + index,
+    windowId: 1,
+    index,
+    sequenceIndex: index,
+    title: `${stems[index % stems.length]} - guide ${index}`,
+    hostname: ["react.dev", "developer.chrome.com", "developers.cloudflare.com"][index % stems.length]
+  }));
+  const mediaInventory = { ...inventory, plannerTabs, tabs: plannerTabs, pageSamples: [] };
+  const requests = [];
+
+  const fetchImpl = async (_url, options) => {
+    requests.push(JSON.parse(options.body));
+    return {
+      ok: true,
+      async json() {
+        return {
+          choices: [
+            {
+              message: {
+                content: JSON.stringify({
+                  buckets: [
+                    {
+                      bucketKey: "documentation",
+                      title: "Documentation",
+                      color: "blue",
+                      confidence: 0.95,
+                      tabIds: plannerTabs.map((tab) => tab.tabId),
+                      reason: "All pages are documentation."
+                    }
+                  ],
+                  reviewTabIds: []
+                })
+              }
+            }
+          ]
+        };
+      }
+    };
+  };
+
+  const settings = {
+    ...DEFAULT_SETTINGS,
+    plannerProvider: PLANNER_PROVIDERS.GATEWAY,
+    gatewayApiKey: "gateway-test-key",
+    promptPreset: PROMPT_PRESETS.MEDIA_TYPE
+  };
+  const plan = await createGatewayPlan(mediaInventory, settings, fetchImpl, { hierarchical: true });
+  const validation = validatePlan(plan, mediaInventory, settings);
+
+  assert.equal(requests.length, 1);
+  assert.equal(validation.ok, true, validation.errors.join(" "));
+  assert.deepEqual(
+    plan.groups.map((group) => group.tabRefs.length),
+    [15]
   );
 });
 
