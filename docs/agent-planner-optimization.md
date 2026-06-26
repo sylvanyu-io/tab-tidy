@@ -70,6 +70,8 @@ Detailed comparison record:
 - `docs/benchmarks/planner-fixture-coverage.md`
 - `docs/benchmarks/page-summary-payload-fix.md`
 - `docs/benchmarks/page-summary-signals-experiment.md`
+- `docs/benchmarks/media-type-preset-axis-experiment.md`
+- `docs/benchmarks/small-session-hierarchical-threshold-2026-06-26.md`
 
 Public leaderboard signal checked on 2026-06-26:
 
@@ -87,6 +89,9 @@ Recommended runtime defaults:
 - Refinement workers: selected GPT-family planner model with medium thinking by
   default, even when the visible user setting is high. If the user selects low,
   keep low.
+- Automatic routing: use the hierarchical coarse/refine path from 50 tabs
+  upward. Keep sub-50-tab sessions on the single full-detail path until there is
+  evidence that 20-30 tab sessions improve under hierarchy.
 - `gpt-5.4-mini`: expose as an optional preset for cost/speed-sensitive runs.
 - `claude-sonnet-4-6`: keep available as a manual choice and reserve future
   automatic use for small repair/polish slices, not full inventories.
