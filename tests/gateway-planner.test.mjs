@@ -61,6 +61,17 @@ test("planner prompt exposes grouping granularity without losing ordering constr
   assert.match(detailedPrompt, /precise task boundaries/);
 });
 
+test("balanced grouping prompt avoids over-merging distinct topics", () => {
+  const prompt = buildPlannerSystemPrompt({
+    ...DEFAULT_SETTINGS,
+    groupingGranularity: GROUPING_GRANULARITIES.BALANCED
+  });
+
+  assert.match(prompt, /Grouping granularity: balanced/);
+  assert.match(prompt, /do not merge clearly different tasks/);
+  assert.match(prompt, /without collapsing distinct subjects/);
+});
+
 test("AI gateway planner posts a chat-completions JSON request", async () => {
   const expectedPlan = {
     schemaVersion: 1,
@@ -237,10 +248,12 @@ test("AI gateway planner returns cleanup candidates in the same full-detail plan
 
   assert.equal(plan.groups.length, 1);
   assert.equal(plan.cleanup.summary, "Review old docs first.");
-  assert.equal(plan.cleanup.candidates.length, 1);
+  assert.equal(plan.cleanup.candidates.length, 2);
   assert.equal(plan.cleanup.candidates[0].tabId, 10);
   assert.equal(plan.cleanup.candidates[0].ageMs, 18 * 24 * 60 * 60 * 1000);
   assert.deepEqual(plan.cleanup.candidates[0].evidence, ["18 days old", "low activity"]);
+  assert.equal(plan.cleanup.candidates[1].tabId, 11);
+  assert.equal(plan.cleanup.candidates[1].priority, "low");
 });
 
 test("AI gateway planner keeps a ranked cleanup checklist beyond the old 12-item cap", async () => {
@@ -311,6 +324,71 @@ test("AI gateway planner keeps a ranked cleanup checklist beyond the old 12-item
   assert.deepEqual(
     plan.cleanup.candidates.slice(0, 3).map((candidate) => candidate.priority),
     ["high", "high", "high"]
+  );
+});
+
+test("AI gateway planner fills cleanup checklist when the model returns too few candidates", async () => {
+  const plannerTabs = Array.from({ length: 4 }, (_, index) => ({
+    tabId: 41_000 + index,
+    windowId: 1,
+    index,
+    sequenceIndex: index,
+    title: `Manual review tab ${index + 1}`,
+    hostname: `example${index}.com`
+  }));
+  const cleanupInventory = { ...inventory, plannerTabs, tabs: plannerTabs, pageSamples: [] };
+  const fetchImpl = async () => ({
+    ok: true,
+    async json() {
+      return {
+        choices: [
+          {
+            message: {
+              content: JSON.stringify({
+                groups: [
+                  {
+                    key: "all-tabs",
+                    title: "All Tabs",
+                    color: "blue",
+                    confidence: 0.9,
+                    ids: plannerTabs.map((tab) => tab.tabId),
+                    reason: "One compact group."
+                  }
+                ],
+                review: [],
+                cleanup: {
+                  summary: "Nothing urgent.",
+                  candidates: []
+                }
+              })
+            }
+          }
+        ]
+      };
+    }
+  });
+
+  const plan = await createGatewayPlan(
+    cleanupInventory,
+    {
+      ...DEFAULT_SETTINGS,
+      plannerProvider: PLANNER_PROVIDERS.GATEWAY,
+      gatewayBaseUrl: "http://localhost:8317/v1",
+      gatewayApiKey: "gateway-test-key",
+      languageMode: "en-US"
+    },
+    fetchImpl
+  );
+
+  assert.equal(plan.cleanup.candidates.length, 4);
+  assert.deepEqual(
+    plan.cleanup.candidates.map((candidate) => candidate.priority),
+    ["low", "low", "low", "low"]
+  );
+  assert.match(plan.cleanup.candidates[0].reason, /review it near the end/);
+  assert.deepEqual(
+    plan.cleanup.candidates.map((candidate) => candidate.tabId),
+    plannerTabs.map((tab) => tab.tabId)
   );
 });
 
@@ -443,8 +521,10 @@ test("AI gateway planner supports cleanup-only analysis without creating groups"
     plan.reviewTabs.map((ref) => ref.tabId),
     [10, 11]
   );
-  assert.equal(plan.cleanup.candidates.length, 1);
+  assert.equal(plan.cleanup.candidates.length, 2);
   assert.equal(plan.cleanup.candidates[0].tabId, 10);
+  assert.equal(plan.cleanup.candidates[1].tabId, 11);
+  assert.equal(plan.cleanup.candidates[1].priority, "low");
 });
 
 test("AI gateway planner sends a custom model name to custom gateways", async () => {
@@ -1559,10 +1639,12 @@ test("AI gateway planner routes 50-tab product sessions through hierarchical wor
     plan.groups.map((group) => group.tabRefs.length),
     [25, 25]
   );
+  assert.equal(plan.cleanup.candidates.length, 50);
   assert.deepEqual(
-    plan.cleanup.candidates.map((candidate) => candidate.tabId),
+    plan.cleanup.candidates.slice(0, 2).map((candidate) => candidate.tabId),
     [10_049, 10_000]
   );
+  assert.equal(plan.cleanup.candidates[2].priority, "low");
 });
 
 test("AI gateway planner splits sub-50 cleanup ranking to the auxiliary model", async () => {
@@ -1661,10 +1743,9 @@ test("AI gateway planner splits sub-50 cleanup ranking to the auxiliary model", 
     plan.groups.map((group) => group.tabRefs.length),
     [18, 15]
   );
-  assert.deepEqual(
-    plan.cleanup.candidates.map((candidate) => candidate.tabId),
-    [30_032]
-  );
+  assert.equal(plan.cleanup.candidates.length, 33);
+  assert.equal(plan.cleanup.candidates[0].tabId, 30_032);
+  assert.equal(plan.cleanup.candidates[1].priority, "low");
 });
 
 test("AI gateway planner keeps sub-50-tab sessions on the single full-detail path", async () => {

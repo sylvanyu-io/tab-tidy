@@ -375,7 +375,7 @@ function groupSizeInstruction(settings) {
   if (settings.groupingGranularity === GROUPING_GRANULARITIES.DETAILED) {
     return "Use detailed groups when subtopics or task runs are clearly distinct. Small groups are acceptable when they preserve a real user task. Never exceed maxTabsPerGroup.";
   }
-  return "Prefer practical medium-sized groups. Avoid singleton or 2-tab groups when they can be merged into a nearby related task without losing meaning. Split only when topics are clearly different or maxTabsPerGroup would be exceeded.";
+  return "Prefer practical medium-sized groups, but do not merge clearly different tasks, artifact types, or research topics just to reduce group count. Merge tiny adjacent fragments only when they share the same user intent. Never exceed maxTabsPerGroup.";
 }
 
 function groupingGranularityInstruction(settings) {
@@ -388,7 +388,7 @@ function groupingGranularityInstruction(settings) {
   if (settings.groupingGranularity === GROUPING_GRANULARITIES.DETAILED) {
     return "Grouping granularity: detailed. Optimize for precise task boundaries while still avoiding domain-only groups.";
   }
-  return "Grouping granularity: balanced. Prefer a small set of useful topic/task groups over many narrow fragments.";
+  return "Grouping granularity: balanced. Prefer a moderate set of useful topic/task groups; reduce noisy fragments without collapsing distinct subjects into broad workbench buckets.";
 }
 
 function coarseClassificationAxisInstruction(settings) {
@@ -602,6 +602,7 @@ function normalizeCleanupAnalysis(parsed, inventory, activityOverview = {}, sett
     });
     if (candidates.length >= limit) break;
   }
+  appendCleanupReviewFallbacks(candidates, { inventory, activityById, seen, settings, limit });
 
   return {
     schema: "tab_tidy_cleanup_v1",
@@ -615,6 +616,59 @@ function normalizeCleanupAnalysis(parsed, inventory, activityOverview = {}, sett
     ).slice(0, 220),
     candidates
   };
+}
+
+function appendCleanupReviewFallbacks(candidates, { inventory, activityById, seen, settings, limit }) {
+  const tabOrder = buildTabOrder(inventory);
+  const tabs = [...(inventory.plannerTabs || [])].sort((left, right) => tabOrder(left.tabId) - tabOrder(right.tabId));
+  for (const tab of tabs) {
+    if (candidates.length >= limit) break;
+    if (seen.has(tab.tabId) || tab.pinned) continue;
+    const activity = activityById.get(tab.tabId) || {};
+    seen.add(tab.tabId);
+    candidates.push({
+      tabId: tab.tabId,
+      windowId: tab.windowId,
+      index: tab.index,
+      sequenceIndex: tab.sequenceIndex,
+      title: tab.title || activity.title || "",
+      hostname: tab.hostname || activity.hostname || "",
+      sanitizedUrl: tab.sanitizedUrl || activity.sanitizedUrl || "",
+      currentGroupTitle: activity.currentGroupTitle || tab.groupTitle || "",
+      currentGroupColor: activity.currentGroupColor || tab.groupColor || "",
+      ageMs: Number(activity.ageMs || 0),
+      idleMs: Number(activity.idleMs || 0),
+      activeCount: Number(activity.activeCount || 0),
+      discarded: Boolean(activity.discarded || tab.discarded),
+      pinned: Boolean(tab.pinned),
+      priority: "low",
+      reason: localizedText(
+        settings.languageMode,
+        "AI 没有标成高风险，适合最后快速扫一遍。",
+        "AI did not flag this as high risk; review it near the end."
+      ),
+      evidence: cleanupFallbackEvidence(tab, activity, settings),
+      summary: activity.summary || null
+    });
+  }
+}
+
+function cleanupFallbackEvidence(tab, activity = {}, settings = {}) {
+  const evidence = [];
+  if (Number(activity.ageMs || 0) > 0) {
+    evidence.push(localizedText(settings.languageMode, `已打开 ${daysFromMs(activity.ageMs)} 天`, `Open for ${daysFromMs(activity.ageMs)} days`));
+  }
+  if (Number(activity.idleMs || 0) > 0) {
+    evidence.push(localizedText(settings.languageMode, `闲置 ${daysFromMs(activity.idleMs)} 天`, `Idle for ${daysFromMs(activity.idleMs)} days`));
+  }
+  if (tab.discarded || activity.discarded) {
+    evidence.push(localizedText(settings.languageMode, "当前处于休眠状态", "Currently sleeping"));
+  }
+  if (tab.groupTitle || activity.currentGroupTitle) {
+    evidence.push(localizedText(settings.languageMode, `当前分组：${tab.groupTitle || activity.currentGroupTitle}`, `Current group: ${tab.groupTitle || activity.currentGroupTitle}`));
+  }
+  if (!evidence.length && tab.hostname) evidence.push(tab.hostname);
+  return evidence.slice(0, 2);
 }
 
 function cleanupCandidateLimit(inventory = {}) {

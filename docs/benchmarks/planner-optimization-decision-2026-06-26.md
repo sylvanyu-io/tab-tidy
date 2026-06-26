@@ -16,7 +16,7 @@
 
 | 样本 | 旧路线 | 新路线 | 耗时变化 | 主模型用量变化 | 清理清单 |
 | --- | --- | --- | ---: | ---: | ---: |
-| 33 tabs, 带页面摘要 | single full-detail, `gpt-5.5 high` 一次完成分组+清理 | split cleanup: `gpt-5.5 high` 分组 + spark low 清理 | 69.6s -> 50.2s | `gpt-5.5` 9801 tokens -> 7972 tokens | 15 -> 33 |
+| 33 tabs, 带页面摘要 | single full-detail, `gpt-5.5 high` 一次完成分组+清理 | split cleanup: `gpt-5.5 high` 分组 + spark low 清理，运行时补齐低优先级复查项 | 69.6s -> 41.3s | `gpt-5.5` 9801 tokens -> 7649 tokens | 15 -> 33 |
 | 50 tabs | spark 粗分 + `gpt-5.5` 精分 + spark cleanup | spark 粗分 + spark cleanup，未触发不必要精分 | 24.3s -> 11.8s | `gpt-5.5` 1512 tokens -> 0 | 50 -> 50 |
 | 120 tabs | spark cleanup medium | spark cleanup low | 59.7s -> 36.6s | 主模型 0 -> 0 | 84 -> 84 |
 | 300 tabs | spark cleanup medium | spark cleanup low | 190.1s -> 69.9s | `gpt-5.5` 2152 tokens -> 2168 tokens | 200 -> 191 |
@@ -24,12 +24,25 @@
 ## 原始数据
 
 - 33 tabs single baseline: `docs/benchmarks/data/planner-scale-2026-06-26T20-27-14-111Z-pid91961.json`
-- 33 tabs split cleanup compact: `docs/benchmarks/data/planner-scale-2026-06-26T20-45-18-572Z-pid25926.json`
+- 33 tabs split cleanup final: `docs/benchmarks/data/planner-scale-2026-06-26T21-07-15-117Z-pid65535.json`
 - 50 tabs before compact cleanup input: `docs/benchmarks/data/planner-scale-2026-06-26T20-37-11-655Z-pid10910.json`
 - 50 tabs cleanup low: `docs/benchmarks/data/planner-scale-2026-06-26T20-54-51-676Z-pid40765.json`
 - 120/300 tabs cleanup medium: `docs/benchmarks/data/planner-scale-2026-06-26T20-47-29-928Z-pid29866.json`
 - 120/300 tabs cleanup low: `docs/benchmarks/data/planner-scale-2026-06-26T20-52-24-931Z-pid36868.json`
 - Worker spark planner rejection before deploy: `docs/benchmarks/data/planner-scale-2026-06-26T20-28-51-975Z-pid94449.json`
+- Quality comparison: `docs/benchmarks/planner-optimization-decision-2026-06-26-quality.md`
+
+## 准确度检查
+
+`docs/benchmarks/planner-optimization-decision-2026-06-26-quality.md` 使用 synthetic fixture truth 做 pairwise quality 分析。关键结果：
+
+| 样本 | Topic Precision | Topic Recall | Topic F1 | Family F1 |
+| --- | ---: | ---: | ---: | ---: |
+| 33 tabs baseline | 100.0% | 97.5% | 98.7% | 53.4% |
+| 33 tabs final | 100.0% | 97.5% | 98.7% | 53.4% |
+| 50 tabs final | 100.0% | 96.1% | 98.0% | 56.2% |
+| 120 tabs final | 96.4% | 97.0% | 96.7% | 58.5% |
+| 300 tabs final | 94.9% | 90.5% | 92.6% | 56.6% |
 
 ## 已修正的问题
 
@@ -37,6 +50,8 @@
 - 50 个以上的粗分请求曾经没有带压缩后的 `pageSampleSignals`，在页面摘要开启时会损失摘要信息。现在粗分和 cleanup 都使用压缩摘要信号。
 - cleanup 请求曾经重复携带完整 `pageSample` 行。现在只给 cleanup 请求发送精简 tab 行和压缩摘要信号，减少重复输入。
 - cleanup 子请求曾经使用 medium 思考强度。实测对大清单非常慢，改为 low 后 300 tabs 从 190.1s 降到 69.9s。
+- balanced 分组提示曾经过度合并 distinct topics，导致 33 tabs 的 fine-grained Topic F1 下降到 58.6%。现在 balanced 明确禁止为了减少组数而合并不同任务/资料类型/研究主题，最终 33 tabs Topic F1 回到 98.7%。
+- cleanup 模型有时会返回空候选。现在运行时保留 AI 的高/中优先级候选，并按原始顺序补齐低优先级复查项，确保清理面板有足够完整的手动清理清单。
 
 ## 保留风险
 
