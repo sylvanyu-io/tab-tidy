@@ -16,6 +16,7 @@ import { ACTION_PLAN_JSON_SCHEMA } from "./plan-schema.js";
 import { CHROME_GROUP_COLORS } from "./plan-validator.js";
 
 const REFINE_BUCKET_MIN_TABS = 50;
+const HIERARCHICAL_MIN_TABS = 50;
 const REFINE_MAX_TABS_PER_REQUEST = 80;
 const REFINE_CONFIDENCE_BELOW = 0.78;
 const REFINE_TITLE_CLUSTER_MIN_TABS = 12;
@@ -107,6 +108,8 @@ async function createHierarchicalGatewayPlan(inventory, settings, fetchImpl, opt
   });
   const finalGroups = [];
   const finalReviewTabs = [];
+  const cleanupCandidates = [];
+  const cleanupSeen = new Set();
   const seen = new Set();
   const refinementTasks = [];
   const refinementTotal = countRefinementRequests(coarse, settings, options);
@@ -160,6 +163,7 @@ async function createHierarchicalGatewayPlan(inventory, settings, fetchImpl, opt
 
   for (const refined of refinedResults) {
     mergePlanParts(refined.groups, refined.reviewTabs, { finalGroups, finalReviewTabs, seen, settings });
+    mergeCleanupPart(refined.cleanup, { cleanupCandidates, cleanupSeen });
   }
 
   for (const tab of inventory.plannerTabs || []) {
@@ -174,7 +178,13 @@ async function createHierarchicalGatewayPlan(inventory, settings, fetchImpl, opt
   }
 
   await emitProgress(options, { phase: "building_plan", progress: 86, message: "正在合并精分结果" });
-  return buildActionPlan(finalGroups, finalReviewTabs, inventory, settings);
+  return buildActionPlan(
+    finalGroups,
+    finalReviewTabs,
+    inventory,
+    settings,
+    settings.analyzeCleanup ? buildMergedCleanup(cleanupCandidates, inventory, settings) : null
+  );
 }
 
 export function gatewayChatCompletionsUrl(settings) {
@@ -616,18 +626,37 @@ async function refineBucket(bucket, inventory, settings, fetchImpl, options = {}
       refinementConcurrency(options),
       (part) => refineBucket(part, inventory, settings, fetchImpl, options)
     );
-    return refined.reduce(
+    const merged = refined.reduce(
       (parts, part) => {
         parts.groups.push(...part.groups);
         parts.reviewTabs.push(...part.reviewTabs);
+        mergeCleanupPart(part.cleanup, {
+          cleanupCandidates: parts.cleanupCandidates,
+          cleanupSeen: parts.cleanupSeen
+        });
         return parts;
       },
-      { groups: [], reviewTabs: [] }
+      { groups: [], reviewTabs: [], cleanupCandidates: [], cleanupSeen: new Set() }
     );
+    return {
+      groups: merged.groups,
+      reviewTabs: merged.reviewTabs,
+      cleanup: settings.analyzeCleanup
+        ? {
+            schema: "tab_tidy_cleanup_v1",
+            summary: "",
+            candidates: merged.cleanupCandidates
+          }
+        : null
+    };
   }
 
   const subInventory = subsetInventory(inventory, bucket.tabRefs);
-  if (!(subInventory.plannerTabs || []).length) return { groups: [], reviewTabs: [] };
+  if (!(subInventory.plannerTabs || []).length) return { groups: [], reviewTabs: [], cleanup: null };
+  const subsetOptions = {
+    ...options,
+    activityOverview: subsetActivityOverview(options.activityOverview || {}, subInventory)
+  };
 
   const refineSettings = {
     ...settings,
@@ -645,7 +674,7 @@ async function refineBucket(bucket, inventory, settings, fetchImpl, options = {}
 
   try {
     const plan = await createSingleGatewayPlan(subInventory, refineSettings, fetchImpl, {
-      ...options,
+      ...subsetOptions,
       thinkingIntensity: refinementThinkingIntensity(settings, options),
       suppressSingleRequestProgress: true
     });
@@ -654,19 +683,22 @@ async function refineBucket(bucket, inventory, settings, fetchImpl, options = {}
         ...group,
         groupKey: `${bucket.groupKey}-${group.groupKey || slugify(group.title)}`.slice(0, 64)
       })),
-      reviewTabs: plan.reviewTabs || []
+      reviewTabs: plan.reviewTabs || [],
+      cleanup: plan.cleanup || null
     };
   } catch (error) {
     if (bucket.confidence >= settings.minConfidenceToApply) {
       return {
         groups: fallbackGroupsForBucket(bucket, settings, error),
-        reviewTabs: []
+        reviewTabs: [],
+        cleanup: null
       };
     }
 
     return {
       groups: [],
-      reviewTabs: bucket.tabRefs.map((ref) => ({ ...ref, reason: `Refinement unavailable for uncertain bucket: ${error.message}` }))
+      reviewTabs: bucket.tabRefs.map((ref) => ({ ...ref, reason: `Refinement unavailable for uncertain bucket: ${error.message}` })),
+      cleanup: null
     };
   }
 }
@@ -693,7 +725,7 @@ function buildCoarseSystemPrompt(settings, options = {}) {
 }
 
 function buildCoarseUserPrompt(inventory, settings) {
-  const payload = buildPlannerPayload(inventory, settings);
+  const payload = buildPlannerPayload(inventory, { ...settings, analyzeCleanup: false });
   return [
     "Software engineering task input: create broad semantic buckets for these browser tabs.",
     "Return compact coarse-bucket JSON only.",
@@ -834,11 +866,13 @@ function refinementPromptLines(settings) {
 function shouldUseHierarchicalPlanner(inventory, settings, options = {}) {
   if (options.hierarchical === false) return false;
   if (options.hierarchical === true) return true;
-  if (settings?.analyzeCleanup || !settings?.analyzeGrouping) return false;
-  return false;
+  if (!settings?.analyzeGrouping) return false;
+  const minTabs = options.hierarchicalMinTabs || HIERARCHICAL_MIN_TABS;
+  return (inventory.plannerTabs || []).length >= minTabs;
 }
 
 function shouldRefineBucket(bucket, settings, options = {}) {
+  if (settings.analyzeCleanup) return true;
   const minTabs = options.refineBucketMinTabs || Math.min(settings.maxTabsPerGroup, REFINE_BUCKET_MIN_TABS);
   const confidenceBelow = options.refineConfidenceBelow ?? REFINE_CONFIDENCE_BELOW;
   return bucket.tabRefs.length >= minTabs || bucket.confidence < confidenceBelow || Boolean(bucket.refineSignal);
@@ -1001,12 +1035,45 @@ function mergePlanParts(groups, reviewTabs, state) {
   }
 }
 
-function buildActionPlan(groups, reviewTabs, inventory, settings) {
+function mergeCleanupPart(cleanup, state) {
+  if (!cleanup || typeof cleanup !== "object") return;
+  for (const candidate of cleanup.candidates || []) {
+    const tabId = Number(candidate?.tabId ?? candidate?.id);
+    if (!Number.isInteger(tabId) || state.cleanupSeen.has(tabId)) continue;
+    state.cleanupSeen.add(tabId);
+    state.cleanupCandidates.push(candidate);
+  }
+}
+
+function buildMergedCleanup(candidates, inventory, settings) {
+  const tabOrder = buildTabOrder(inventory);
+  const priorityRank = { high: 0, medium: 1, low: 2 };
+  const sortedCandidates = [...(candidates || [])]
+    .sort((left, right) => {
+      const leftRank = priorityRank[left.priority] ?? priorityRank.medium;
+      const rightRank = priorityRank[right.priority] ?? priorityRank.medium;
+      return leftRank - rightRank || tabOrder(left.tabId) - tabOrder(right.tabId);
+    })
+    .slice(0, 12);
+  return {
+    schema: "tab_tidy_cleanup_v1",
+    summary: sortedCandidates.length
+      ? localizedText(
+          settings.languageMode,
+          `AI 找到 ${sortedCandidates.length} 个建议先检查的标签页。`,
+          `AI found ${sortedCandidates.length} tabs worth reviewing first.`
+        )
+      : localizedText(settings.languageMode, "这次没有发现明显需要优先清理的标签页。", "No obvious cleanup candidates found this time."),
+    candidates: sortedCandidates
+  };
+}
+
+function buildActionPlan(groups, reviewTabs, inventory, settings, cleanup = null) {
   const orderedGroups = orderGroupsByOriginalPosition(
     uniquifyGroupKeys(groups, settings).map((group) => ({ ...group, tabRefs: sortRefsByOriginalOrder(group.tabRefs || [], inventory) })),
     inventory
   );
-  return {
+  const plan = {
     schemaVersion: 1,
     mode: settings.organizeMode,
     scope:
@@ -1025,6 +1092,27 @@ function buildActionPlan(groups, reviewTabs, inventory, settings) {
     })),
     groups: orderedGroups,
     reviewTabs: sortRefsByOriginalOrder(reviewTabs, inventory)
+  };
+  if (cleanup) {
+    plan.cleanup = cleanup;
+  }
+  return plan;
+}
+
+function subsetActivityOverview(activityOverview = {}, inventory = {}) {
+  const ids = new Set((inventory.plannerTabs || []).map((tab) => tab.tabId));
+  const filterRows = (rows = []) => rows.filter((tab) => ids.has(Number(tab?.tabId)));
+  const openTabSignals = filterRows(activityOverview.openTabSignals || []);
+  const staleTabs = filterRows(activityOverview.staleTabs || []);
+  return {
+    ...activityOverview,
+    openTabs: {
+      ...(activityOverview.openTabs || {}),
+      tracked: openTabSignals.length,
+      total: openTabSignals.length
+    },
+    openTabSignals,
+    staleTabs
   };
 }
 

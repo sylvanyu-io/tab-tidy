@@ -1185,7 +1185,8 @@ test("AI gateway planner uses coarse then refine planning for large inventories"
     ...DEFAULT_SETTINGS,
     plannerProvider: PLANNER_PROVIDERS.GATEWAY,
     gatewayApiKey: "gateway-test-key",
-    languageMode: "en-US"
+    languageMode: "en-US",
+    analyzeCleanup: false
   };
   const plan = await createGatewayPlan(largeInventory, settings, fetchImpl, {
     hierarchical: true,
@@ -1319,7 +1320,8 @@ test("AI gateway media-type mode does not refine repeated title patterns by topi
     ...DEFAULT_SETTINGS,
     plannerProvider: PLANNER_PROVIDERS.GATEWAY,
     gatewayApiKey: "gateway-test-key",
-    promptPreset: PROMPT_PRESETS.MEDIA_TYPE
+    promptPreset: PROMPT_PRESETS.MEDIA_TYPE,
+    analyzeCleanup: false
   };
   const plan = await createGatewayPlan(mediaInventory, settings, fetchImpl, { hierarchical: true });
   const validation = validatePlan(plan, mediaInventory, settings);
@@ -1332,7 +1334,7 @@ test("AI gateway media-type mode does not refine repeated title patterns by topi
   );
 });
 
-test("AI gateway planner keeps 50-tab product sessions on the single full-detail path", async () => {
+test("AI gateway planner routes 50-tab product sessions through hierarchical workers with cleanup", async () => {
   const plannerTabs = Array.from({ length: 50 }, (_, index) => ({
     tabId: 10_000 + index,
     windowId: 1,
@@ -1343,9 +1345,78 @@ test("AI gateway planner keeps 50-tab product sessions on the single full-detail
   }));
   const thresholdInventory = { ...inventory, plannerTabs, tabs: plannerTabs, pageSamples: [] };
   const requests = [];
+  const activityOverview = {
+    openTabSignals: [
+      {
+        tabId: 10_000,
+        windowId: 1,
+        index: 0,
+        ageMs: 16 * 24 * 60 * 60 * 1000,
+        idleMs: 12 * 24 * 60 * 60 * 1000,
+        activeCount: 1,
+        currentGroupTitle: "Old research"
+      },
+      {
+        tabId: 10_049,
+        windowId: 1,
+        index: 49,
+        ageMs: 30 * 24 * 60 * 60 * 1000,
+        idleMs: 20 * 24 * 60 * 60 * 1000,
+        activeCount: 0,
+        currentGroupTitle: "Dormant tail"
+      }
+    ]
+  };
 
   const fetchImpl = async (_url, options) => {
-    requests.push(JSON.parse(options.body));
+    const body = JSON.parse(options.body);
+    requests.push(body);
+    const isCoarse = /fast first-pass/.test(body.messages[0].content);
+    if (isCoarse) {
+      const payload = JSON.parse(body.messages[1].content.slice(body.messages[1].content.indexOf("{")));
+      assert.equal(payload.settings.analyzeCleanup, false);
+      assert.equal(payload.cleanupInstructions, undefined);
+      return {
+        ok: true,
+        async json() {
+          return {
+            choices: [
+              {
+                message: {
+                  content: JSON.stringify({
+                    buckets: [
+                      {
+                        bucketKey: "first-half",
+                        title: "First Half",
+                        color: "blue",
+                        confidence: 0.95,
+                        tabIds: plannerTabs.slice(0, 25).map((tab) => tab.tabId),
+                        reason: "First half."
+                      },
+                      {
+                        bucketKey: "second-half",
+                        title: "Second Half",
+                        color: "green",
+                        confidence: 0.95,
+                        tabIds: plannerTabs.slice(25).map((tab) => tab.tabId),
+                        reason: "Second half."
+                      }
+                    ],
+                    reviewTabIds: []
+                  })
+                }
+              }
+            ]
+          };
+        }
+      };
+    }
+
+    const payload = JSON.parse(body.messages[1].content.slice(body.messages[1].content.indexOf("{")));
+    const tabIds = payload.tabs.map((row) => row[0]);
+    assert.match(body.messages[0].content, /Analysis features: grouping=enabled, cleanup=enabled/);
+    assert.equal(payload.analysisFeatures.cleanup, true);
+    assert.equal((payload.activity || []).every((row) => tabIds.includes(row[0])), true);
     return {
       ok: true,
       async json() {
@@ -1356,26 +1427,20 @@ test("AI gateway planner keeps 50-tab product sessions on the single full-detail
                 content: JSON.stringify({
                   groups: [
                     {
-                      key: "first-half",
-                      title: "First Half",
+                      key: `bucket-${tabIds[0]}`,
+                      title: `Bucket ${tabIds[0]}`,
                       color: "blue",
                       confidence: 0.95,
-                      ids: plannerTabs.slice(0, 25).map((tab) => tab.tabId),
-                      reason: "First half."
-                    },
-                    {
-                      key: "second-half",
-                      title: "Second Half",
-                      color: "green",
-                      confidence: 0.95,
-                      ids: plannerTabs.slice(25).map((tab) => tab.tabId),
-                      reason: "Second half."
+                      ids: tabIds,
+                      reason: "Refined bucket."
                     }
                   ],
                   review: [],
                   cleanup: {
-                    summary: "No cleanup candidates.",
-                    candidates: []
+                    summary: "Bucket cleanup candidates.",
+                    candidates: tabIds.includes(10_000)
+                      ? [{ id: 10_000, priority: "medium", reason: "Old first-half tab.", evidence: ["16 days old"] }]
+                      : [{ id: 10_049, priority: "high", reason: "Dormant tail tab.", evidence: ["30 days old"] }]
                   }
                 })
               }
@@ -1387,16 +1452,20 @@ test("AI gateway planner keeps 50-tab product sessions on the single full-detail
   };
 
   const settings = { ...DEFAULT_SETTINGS, plannerProvider: PLANNER_PROVIDERS.GATEWAY, gatewayApiKey: "gateway-test-key" };
-  const plan = await createGatewayPlan(thresholdInventory, settings, fetchImpl);
+  const plan = await createGatewayPlan(thresholdInventory, settings, fetchImpl, { activityOverview });
   const validation = validatePlan(plan, thresholdInventory, settings);
 
-  assert.equal(requests.length, 1);
-  assert.doesNotMatch(requests[0].messages[0].content, /fast first-pass/);
-  assert.equal(requests[0].messages[1].content.includes('"cleanup":true'), true);
+  assert.equal(requests.length, 3);
+  assert.match(requests[0].messages[0].content, /fast first-pass/);
+  assert.equal(requests.slice(1).every((request) => request.messages[1].content.includes('"cleanup":true')), true);
   assert.equal(validation.ok, true, validation.errors.join(" "));
   assert.deepEqual(
     plan.groups.map((group) => group.tabRefs.length),
     [25, 25]
+  );
+  assert.deepEqual(
+    plan.cleanup.candidates.map((candidate) => candidate.tabId),
+    [10_049, 10_000]
   );
 });
 
