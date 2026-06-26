@@ -25,23 +25,24 @@
       </header>
 
       <div class="scroll-region">
-        <details class="activity-panel">
-          <summary>清理助手</summary>
-          <div class="activity-inner">
-            <div class="activity-copy">
-              <strong>先找出可能不再需要的标签页</strong>
-              <small>按时间、分组和页面内容给出建议，你来决定关不关。</small>
-            </div>
-            <div class="activity-range" role="group" aria-label="清理建议时间范围">
-              <button type="button" data-activity-range="86400000">1 天</button>
-              <button type="button" data-activity-range="604800000">7 天</button>
-              <button type="button" data-activity-range="2592000000">30 天</button>
-            </div>
-            <div id="activityResult" class="activity-result empty">还没有清理建议。</div>
-          </div>
-        </details>
-
         <section class="launch-panel">
+          <div class="analysis-switches">
+            <label class="switch-row compact-switch">
+              <span>
+                <strong>生成分组建议</strong>
+                <small>按主题和任务整理标签页</small>
+              </span>
+              <input id="analyzeGrouping" type="checkbox" />
+            </label>
+            <label class="switch-row compact-switch">
+              <span>
+                <strong>找出可清理标签页</strong>
+                <small>AI 标出可能过期、重复或已完成的页面</small>
+              </span>
+              <input id="analyzeCleanup" type="checkbox" />
+            </label>
+          </div>
+
           <div class="control-group">
             <div class="control-label">
               <span>范围</span>

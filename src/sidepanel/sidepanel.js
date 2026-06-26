@@ -58,6 +58,10 @@ const UI_COPY = Object.freeze({
     "scope.nativeLabel": "整理范围",
     "scope.optionCurrent": "只整理当前窗口",
     "scope.optionAll": "合并并整理所有窗口",
+    "analysis.grouping.title": "生成分组建议",
+    "analysis.grouping.subtitle": "按主题和任务整理标签页",
+    "analysis.cleanup.title": "找出可清理标签页",
+    "analysis.cleanup.subtitle": "AI 标出可能过期、重复或已完成的页面",
     "sampling.title": "需要时补读页面摘要",
     "sampling.subtitle": "读取少量网页文字，帮助 AI 判断主题",
     "sampling.tooltip": "会把标题、描述、标题层级和页面上的正文或讨论摘录发送给 AI 用于整理；不会读取密码、表单内容、Cookie、本地存储或完整 HTML。休眠标签页不会被唤醒。",
@@ -66,25 +70,6 @@ const UI_COPY = Object.freeze({
     "continuous.subtitle": "本机保存短摘要，之后整理和回顾更准",
     "continuous.tooltip": "开启后浏览器会请求网页读取权限；之后会在后台给打开过的、未休眠、非无痕页面保存短摘要。整理时，相关摘要会发送给 AI 辅助归类；不会主动唤醒标签页。",
     "continuous.aria": "持续摘要说明",
-    "activity.summary": "清理助手",
-    "activity.title": "先找出可能不再需要的标签页",
-    "activity.subtitle": "按时间、分组和页面内容给出建议，你来决定关不关。",
-    "activity.rangeAria": "清理建议时间范围",
-    "activity.day": "1 天",
-    "activity.week": "7 天",
-    "activity.month": "30 天",
-    "activity.empty": "还没有清理建议。",
-    "activity.loading": "正在判断哪些标签页值得回头看",
-    "activity.none": "还没有足够记录。打开一段时间后，这里会更准。",
-    "activity.coverage": "已看过 {total} 个打开的标签页，整理出 {stale} 个可以先检查的页面。",
-    "activity.focus": "近期线索",
-    "activity.sites": "常见站点",
-    "activity.recent": "最近页面",
-    "activity.stale": "建议先检查",
-    "activity.staleHint": "这些只是建议；Tab Tidy 不会替你关闭标签页。",
-    "activity.noStale": "暂时没有明显该清理的标签页。",
-    "activity.focusTab": "去看看",
-    "activity.focusTabAria": "定位标签页：{title}",
     "activity.focused": "已定位标签页",
     "activity.focusFailed": "标签页可能已经关闭，请刷新清理建议。",
     "activity.firstSeen": "首次见到 {age}",
@@ -92,11 +77,19 @@ const UI_COPY = Object.freeze({
     "activity.seenCount": "记录 {count} 次",
     "activity.group": "分组：{group}",
     "activity.noGroup": "未分组",
-    "activity.summaryClue": "线索：{text}",
-    "activity.aiReason": "为什么：{text}",
     "activity.priority.high": "优先看",
     "activity.priority.medium": "可以看",
     "activity.priority.low": "低优先级",
+    "cleanup.preview.title": "建议先检查",
+    "cleanup.preview.subtitle": "这些标签页可能已经过期、重复或属于已完成任务；是否关闭由你决定。",
+    "cleanup.preview.empty": "这次没有发现明显需要清理的标签页。",
+    "cleanup.selectAll": "全选",
+    "cleanup.closeSelected": "关闭选中",
+    "cleanup.closeOne": "关闭",
+    "cleanup.focus": "定位",
+    "cleanup.closed": "已关闭 {count} 个标签页，方案已同步更新",
+    "cleanup.noneSelected": "先选择要关闭的标签页。",
+    "cleanup.selectedCount": "已选 {count} 个",
     "customPrompt.label": "自定义要求",
     "customPrompt.placeholder": "例如：找工作、AI 论文、当前项目分开；拿不准的先放到待分类。",
     "advanced.summary": "更多选项",
@@ -231,6 +224,10 @@ const UI_COPY = Object.freeze({
     "scope.nativeLabel": "Organization scope",
     "scope.optionCurrent": "Organize current window only",
     "scope.optionAll": "Merge and organize all windows",
+    "analysis.grouping.title": "Suggest tab groups",
+    "analysis.grouping.subtitle": "Organize tabs by topic and task",
+    "analysis.cleanup.title": "Find cleanup candidates",
+    "analysis.cleanup.subtitle": "AI flags tabs that may be old, duplicate, or done",
     "sampling.title": "Read page summaries when useful",
     "sampling.subtitle": "Reads a little page text so AI can judge topics",
     "sampling.tooltip": "Sends titles, descriptions, headings, and visible article or discussion excerpts to AI for organization. It will not read passwords, form values, cookies, local storage, or full HTML. Sleeping tabs are not awakened.",
@@ -239,25 +236,6 @@ const UI_COPY = Object.freeze({
     "continuous.subtitle": "Saves short local summaries for better future runs",
     "continuous.tooltip": "Chrome will ask for page-reading access. After that, Tab Tidy saves short summaries for opened, awake, non-incognito pages in the background. Related summaries are sent to AI during organization. It will not wake sleeping tabs.",
     "continuous.aria": "Accumulated summary details",
-    "activity.summary": "Cleanup helper",
-    "activity.title": "Find tabs you may no longer need",
-    "activity.subtitle": "Uses time, groups, and page clues. You decide what to close.",
-    "activity.rangeAria": "Cleanup suggestion range",
-    "activity.day": "1 day",
-    "activity.week": "7 days",
-    "activity.month": "30 days",
-    "activity.empty": "No cleanup suggestions yet.",
-    "activity.loading": "Finding tabs worth a second look",
-    "activity.none": "Not enough local records yet. This gets better after Tab Tidy has observed more tabs.",
-    "activity.coverage": "Checked {total} open tabs and found {stale} pages worth reviewing first.",
-    "activity.focus": "Recent clues",
-    "activity.sites": "Common sites",
-    "activity.recent": "Recent pages",
-    "activity.stale": "Start here",
-    "activity.staleHint": "Suggestions only. Tab Tidy will never close tabs for you.",
-    "activity.noStale": "No obvious cleanup suggestions right now.",
-    "activity.focusTab": "Open",
-    "activity.focusTabAria": "Find tab: {title}",
     "activity.focused": "Tab focused",
     "activity.focusFailed": "The tab may already be closed. Refresh suggestions.",
     "activity.firstSeen": "First seen {age}",
@@ -265,11 +243,19 @@ const UI_COPY = Object.freeze({
     "activity.seenCount": "Seen {count} times",
     "activity.group": "Group: {group}",
     "activity.noGroup": "Ungrouped",
-    "activity.summaryClue": "Clue: {text}",
-    "activity.aiReason": "Why: {text}",
     "activity.priority.high": "High",
     "activity.priority.medium": "Medium",
     "activity.priority.low": "Low",
+    "cleanup.preview.title": "Review first",
+    "cleanup.preview.subtitle": "These tabs may be stale, duplicate, or from completed work. You decide what to close.",
+    "cleanup.preview.empty": "No obvious cleanup candidates in this run.",
+    "cleanup.selectAll": "Select all",
+    "cleanup.closeSelected": "Close selected",
+    "cleanup.closeOne": "Close",
+    "cleanup.focus": "Find",
+    "cleanup.closed": "Closed {count} tabs and updated the plan",
+    "cleanup.noneSelected": "Select tabs to close first.",
+    "cleanup.selectedCount": "{count} selected",
     "customPrompt.label": "Custom instructions",
     "customPrompt.placeholder": "Example: keep job search, AI papers, and current projects separate; put uncertain pages in review.",
     "advanced.summary": "More options",
@@ -376,6 +362,8 @@ const fields = {
   includeIncognitoTabs: document.querySelector("#includeIncognitoTabs"),
   collapseGroupsAfterApply: document.querySelector("#collapseGroupsAfterApply"),
   continuousPageSummaries: document.querySelector("#continuousPageSummaries"),
+  analyzeGrouping: document.querySelector("#analyzeGrouping"),
+  analyzeCleanup: document.querySelector("#analyzeCleanup"),
   minConfidenceToApply: document.querySelector("#minConfidenceToApply"),
   maxTabsPerGroup: document.querySelector("#maxTabsPerGroup"),
   ackSampling: document.querySelector("#ackSampling")
@@ -423,9 +411,7 @@ const nodes = {
   previewRoot: document.querySelector("#previewRoot"),
   detailsRoot: document.querySelector("#detailsRoot"),
   detailsText: document.querySelector("#detailsText"),
-  gatewayCustomModelField: document.querySelector("#gatewayCustomModelField"),
-  activityPanel: document.querySelector(".activity-panel"),
-  activityResult: document.querySelector("#activityResult")
+  gatewayCustomModelField: document.querySelector("#gatewayCustomModelField")
 };
 
 let uiLanguage = readStoredUiLanguage() || browserUiLanguage();
@@ -517,9 +503,6 @@ function bindEvents() {
   nodes.applyBtn.addEventListener("click", applyLastPlan);
   nodes.undoBtn.addEventListener("click", undoLastApply);
   nodes.uiLanguageToggle?.addEventListener("click", toggleUiLanguage);
-  document.querySelectorAll("[data-activity-range]").forEach((button) => {
-    button.addEventListener("click", () => loadActivityOverview(Number(button.dataset.activityRange)));
-  });
 }
 
 function t(key, params = {}) {
@@ -559,6 +542,8 @@ function applyUiLanguage() {
   setAttribute("#organizeMode", "aria-label", t("scope.nativeLabel"));
   setOptionText("#organizeMode", "current_window", t("scope.optionCurrent"));
   setOptionText("#organizeMode", "consolidate_one_window", t("scope.optionAll"));
+  setSwitchText("#analyzeGrouping", "analysis.grouping.title", "analysis.grouping.subtitle");
+  setSwitchText("#analyzeCleanup", "analysis.cleanup.title", "analysis.cleanup.subtitle");
 
   setSwitchText("#ackSampling", "sampling.title", "sampling.subtitle");
   setSwitchText("#continuousPageSummaries", "continuous.title", "continuous.subtitle");
@@ -566,15 +551,6 @@ function applyUiLanguage() {
   setTooltip("#continuousPageSummaries", "continuous.tooltip");
   setAttribute("#samplingRisk", "aria-label", t("sampling.aria"));
   setAttribute("#continuousSummaryRisk", "aria-label", t("continuous.aria"));
-  setText(".activity-panel > summary", t("activity.summary"));
-  setText(".activity-copy strong", t("activity.title"));
-  setText(".activity-copy small", t("activity.subtitle"));
-  setAttribute(".activity-range", "aria-label", t("activity.rangeAria"));
-  setText('[data-activity-range="86400000"]', t("activity.day"));
-  setText('[data-activity-range="604800000"]', t("activity.week"));
-  setText('[data-activity-range="2592000000"]', t("activity.month"));
-  if (nodes.activityResult?.classList.contains("empty")) nodes.activityResult.textContent = t("activity.empty");
-
   setText('label[for="customPrompt"]', t("customPrompt.label"));
   setAttribute("#customPrompt", "placeholder", t("customPrompt.placeholder"));
   setText(".advanced-settings > summary", t("advanced.summary"));
@@ -767,6 +743,8 @@ function readSettings(options = {}) {
     includeIncognitoTabs: fields.includeIncognitoTabs.checked,
     collapseGroupsAfterApply: fields.collapseGroupsAfterApply.checked,
     continuousPageSummaries,
+    analyzeGrouping: fields.analyzeGrouping.checked,
+    analyzeCleanup: fields.analyzeCleanup.checked,
     minConfidenceToApply: fields.minConfidenceToApply.value,
     maxTabsPerGroup: fields.maxTabsPerGroup.value
   };
@@ -1040,6 +1018,8 @@ function renderPreview(job) {
   const reviewTabsCount = preview.reviewTabsCount || 0;
   const reviewGroupWillBeCreated = Boolean(preview.reviewGroupWillBeCreated && reviewTabsCount);
   const visibleGroupCount = groups.length + (reviewGroupWillBeCreated ? 1 : 0);
+  const cleanup = preview.cleanup || null;
+  const hasCleanupContent = Boolean(cleanup && (cleanup.candidateCount || cleanup.summary));
   const groupedTabsCount = Number.isFinite(Number(preview.groupedTabsCount))
     ? Number(preview.groupedTabsCount)
     : groups.reduce((sum, group) => sum + (Number(group.tabCount) || 0), 0);
@@ -1051,7 +1031,7 @@ function renderPreview(job) {
       : groupedTabsCount + reviewTabsCount
   };
 
-  if (!groups.length && !reviewTabsCount && !preview.lockedGroupsCount) {
+  if (!groups.length && !reviewTabsCount && !preview.lockedGroupsCount && !hasCleanupContent) {
     nodes.previewRoot.className = "empty";
     nodes.previewRoot.textContent = t("status.noTabs");
     nodes.previewCount.textContent = t("preview.emptyCount");
@@ -1060,11 +1040,14 @@ function renderPreview(job) {
 
   nodes.previewRoot.className = "preview-list";
   nodes.previewCount.textContent = localizedText(uiLanguage, `${visibleGroupCount} 组`, formatCount(visibleGroupCount, "group"));
-  nodes.previewRoot.replaceChildren(
-    previewSummary(summaryPreview, groups.length, reviewTabsCount, reviewGroupWillBeCreated, resultLanguageMode),
-    ...groups.map((group, index) => groupRow(group, swatchForIndex(index), uiLanguage)),
-    ...(reviewGroupWillBeCreated ? [reviewGroupRow(reviewTabsCount, resultLanguageMode, preview)] : [])
-  );
+  const groupNodes = preview.analysisFeatures?.grouping === false
+    ? []
+    : [
+        previewSummary(summaryPreview, groups.length, reviewTabsCount, reviewGroupWillBeCreated, resultLanguageMode),
+        ...groups.map((group, index) => groupRow(group, swatchForIndex(index), uiLanguage)),
+        ...(reviewGroupWillBeCreated ? [reviewGroupRow(reviewTabsCount, resultLanguageMode, preview)] : [])
+      ];
+  nodes.previewRoot.replaceChildren(...groupNodes, cleanupPreviewSection(cleanup));
 }
 
 function orderPreviewGroups(groups) {
@@ -1188,6 +1171,10 @@ function formatCount(count, noun) {
   return `${numeric} ${noun}${numeric === 1 ? "" : "s"}`;
 }
 
+function uniqueNumbers(values) {
+  return [...new Set((values || []).map((value) => Number(value)).filter(Number.isInteger))];
+}
+
 function reviewGroupRow(tabCount, resultLanguageMode, preview) {
   return groupRow(
     {
@@ -1198,6 +1185,161 @@ function reviewGroupRow(tabCount, resultLanguageMode, preview) {
     "var(--muted)",
     uiLanguage
   );
+}
+
+function cleanupPreviewSection(cleanup) {
+  const section = document.createElement("section");
+  section.className = "cleanup-preview";
+  const header = document.createElement("div");
+  header.className = "cleanup-preview-header";
+  const copy = document.createElement("div");
+  const title = document.createElement("strong");
+  title.textContent = t("cleanup.preview.title");
+  const subtitle = document.createElement("small");
+  subtitle.textContent = cleanup?.summary || t("cleanup.preview.subtitle");
+  copy.append(title, subtitle);
+
+  const actions = document.createElement("div");
+  actions.className = "cleanup-preview-actions";
+  const selectAll = document.createElement("button");
+  selectAll.type = "button";
+  selectAll.textContent = t("cleanup.selectAll");
+  const closeSelected = document.createElement("button");
+  closeSelected.type = "button";
+  closeSelected.textContent = t("cleanup.closeSelected");
+  closeSelected.disabled = true;
+  actions.append(selectAll, closeSelected);
+  header.append(copy, actions);
+
+  const candidates = cleanup?.candidates || [];
+  const list = document.createElement("div");
+  list.className = "cleanup-preview-list";
+  if (!candidates.length) {
+    const empty = document.createElement("p");
+    empty.className = "empty";
+    empty.textContent = t("cleanup.preview.empty");
+    section.append(header, empty);
+    return section;
+  }
+
+  for (const candidate of candidates) {
+    list.append(cleanupPreviewRow(candidate));
+  }
+
+  const selectedLabel = document.createElement("small");
+  selectedLabel.className = "cleanup-selected-count";
+  selectedLabel.textContent = t("cleanup.selectedCount", { count: 0 });
+
+  const updateSelectedState = () => {
+    const count = selectedCleanupTabIds(section).length;
+    closeSelected.disabled = count === 0;
+    selectedLabel.textContent = t("cleanup.selectedCount", { count });
+  };
+  selectAll.addEventListener("click", () => {
+    const boxes = [...section.querySelectorAll(".cleanup-select")];
+    const shouldCheck = boxes.some((box) => !box.checked);
+    boxes.forEach((box) => {
+      box.checked = shouldCheck;
+    });
+    updateSelectedState();
+  });
+  closeSelected.addEventListener("click", () => closeCleanupTabs(selectedCleanupTabIds(section)));
+  section.addEventListener("change", (event) => {
+    if (event.target?.classList?.contains("cleanup-select")) updateSelectedState();
+  });
+
+  section.append(header, selectedLabel, list);
+  return section;
+}
+
+function cleanupPreviewRow(candidate) {
+  const row = document.createElement("article");
+  row.className = "cleanup-preview-row";
+  row.dataset.tabId = String(candidate.tabId);
+
+  const checkbox = document.createElement("input");
+  checkbox.type = "checkbox";
+  checkbox.className = "cleanup-select";
+  checkbox.value = String(candidate.tabId);
+  checkbox.setAttribute("aria-label", candidate.title || candidate.hostname || t("cleanup.preview.title"));
+
+  const body = document.createElement("div");
+  body.className = "cleanup-preview-body";
+  const title = document.createElement("strong");
+  title.textContent = candidate.title || candidate.hostname || "Untitled";
+  const meta = document.createElement("small");
+  meta.textContent = cleanupCandidateMeta(candidate);
+  body.append(title, meta);
+
+  if (candidate.reason) {
+    const reason = document.createElement("p");
+    reason.textContent = candidate.reason;
+    body.append(reason);
+  }
+
+  const chips = document.createElement("div");
+  chips.className = "cleanup-candidate-meta cleanup-evidence";
+  chips.append(cleanupPriorityChip(candidate.priority));
+  for (const item of cleanupEvidenceForPreview(candidate)) {
+    chips.append(cleanupMetaChip(item));
+  }
+  body.append(chips);
+
+  const actions = document.createElement("div");
+  actions.className = "cleanup-row-actions";
+  const focus = document.createElement("button");
+  focus.type = "button";
+  focus.textContent = t("cleanup.focus");
+  focus.addEventListener("click", () => focusActivityTab(candidate));
+  const close = document.createElement("button");
+  close.type = "button";
+  close.textContent = t("cleanup.closeOne");
+  close.addEventListener("click", () => closeCleanupTabs([candidate.tabId]));
+  actions.append(focus, close);
+
+  row.append(checkbox, body, actions);
+  return row;
+}
+
+function selectedCleanupTabIds(root) {
+  return [...root.querySelectorAll(".cleanup-select:checked")]
+    .map((input) => Number(input.value))
+    .filter(Number.isInteger);
+}
+
+function cleanupCandidateMeta(candidate) {
+  return [
+    candidate.hostname,
+    candidate.currentGroupTitle ? t("activity.group", { group: candidate.currentGroupTitle }) : "",
+    candidate.ageMs ? t("activity.firstSeen", { age: formatAgo(candidate.ageMs) }) : "",
+    candidate.idleMs ? t("activity.lastActive", { age: formatAgo(candidate.idleMs) }) : ""
+  ].filter(Boolean).join(" · ");
+}
+
+function cleanupEvidenceForPreview(candidate) {
+  const evidence = Array.isArray(candidate.evidence) ? [...candidate.evidence] : [];
+  if (candidate.activeCount) evidence.unshift(t("activity.seenCount", { count: candidate.activeCount }));
+  return evidence.slice(0, 4);
+}
+
+async function closeCleanupTabs(tabIds) {
+  const ids = uniqueNumbers(tabIds);
+  if (!ids.length) {
+    setStatusKey("cleanup.noneSelected", {}, true);
+    return;
+  }
+  setBusy(true, t("status.organizing"));
+  try {
+    const result = await sendMessage(scopedWindowMessage({ type: "tabs:closeCleanupCandidates", tabIds: ids, languageMode: uiLanguage }));
+    lastPreview = result.preview;
+    lastCanApply = Boolean(result.validation?.ok);
+    renderPreview({ preview: lastPreview, validation: result.validation, settings: { languageMode: currentResultLanguageMode() } });
+    setStatusKey("cleanup.closed", { count: result.closedTabIds?.length || 0 });
+  } catch (error) {
+    setStatus(friendlyErrorMessage(error), true);
+  } finally {
+    setBusy(false);
+  }
 }
 
 function swatchForIndex(index) {
@@ -1226,169 +1368,6 @@ function renderError(error) {
   syncActionState();
 }
 
-async function loadActivityOverview(rangeMs) {
-  if (!nodes.activityResult) return;
-  nodes.activityResult.className = "activity-result";
-  nodes.activityResult.textContent = t("activity.loading");
-  setBusy(true, t("activity.loading"), { progress: 12 });
-  try {
-    const settings = readSettings({ effectiveForAnalysis: true });
-    settings.languageMode = effectiveResultLanguageMode(settings.languageMode);
-    validateGatewaySettingsForAnalyze(settings);
-    updateLocalProgress(t("status.checkingPermissions"), 18);
-    await ensurePlannerHostPermission(settings);
-    if (settings.pageContextMode !== "off" && settings.pageSamplingConsentMode !== "not_acknowledged") {
-      updateLocalProgress(t("status.checkingPageSummaryPermissions"), 24);
-      await ensurePageSamplingPermissions(settings, { requestMissing: false });
-      settings.hostPermissionRequestMode = "never";
-    }
-    updateLocalProgress(t("activity.loading"), 36);
-    const result = await sendMessage({ type: "activity:analyzeCleanup", settings, rangeMs, windowId: panelWindowId });
-    renderActivityOverview(result);
-    setStatusKey("status.default");
-  } catch (error) {
-    nodes.activityResult.className = "activity-result error-panel";
-    const message = friendlyErrorMessage(error);
-    nodes.activityResult.textContent = message;
-    setStatus(message, true);
-  } finally {
-    setBusy(false);
-  }
-}
-
-function renderActivityOverview(payload = {}) {
-  const overview = payload.overview || payload;
-  const cleanup = payload.cleanup || null;
-  const recap = overview.recap || {};
-  if (!cleanup && !recap.entries) {
-    nodes.activityResult.className = "activity-result empty";
-    nodes.activityResult.textContent = t("activity.none");
-    return;
-  }
-
-  const candidates = cleanup?.candidates || overview.staleTabs || [];
-  const cleanupSummary = cleanup?.summary ? [activityLine(cleanup.summary, "p")] : [];
-  const wrapper = document.createElement("div");
-  wrapper.className = "activity-result-content";
-  wrapper.append(
-    activityLine(
-      t("activity.coverage", {
-        total: overview.openTabs?.total || 0,
-        tracked: overview.openTabs?.tracked || 0,
-        stale: candidates.length
-      }),
-      "strong"
-    ),
-    ...cleanupSummary,
-    activityStaleSection(candidates),
-    activitySection(t("activity.focus"), (recap.topTerms || []).map((item) => item.value).join(" · ")),
-    activitySection(t("activity.sites"), (recap.topHosts || []).map((item) => item.value).join(" · ")),
-    activityList(t("activity.recent"), (recap.recentPages || []).slice(0, 5).map((page) => `${page.title}${page.hostname ? ` · ${page.hostname}` : ""}`))
-  );
-  nodes.activityResult.className = "activity-result";
-  nodes.activityResult.replaceChildren(wrapper);
-}
-
-function activityLine(text, tagName = "p") {
-  const element = document.createElement(tagName);
-  element.textContent = text;
-  return element;
-}
-
-function activitySection(title, text) {
-  const section = document.createElement("div");
-  section.className = "activity-section";
-  section.append(activityLine(title, "strong"), activityLine(text || "—", "span"));
-  return section;
-}
-
-function activityList(title, items) {
-  const section = document.createElement("div");
-  section.className = "activity-section";
-  const list = document.createElement("ul");
-  for (const item of items.length ? items : ["—"]) {
-    const li = document.createElement("li");
-    li.textContent = item;
-    list.append(li);
-  }
-  section.append(activityLine(title, "strong"), list);
-  return section;
-}
-
-function activityStaleSection(staleTabs) {
-  const section = document.createElement("div");
-  section.className = "activity-section stale-section";
-  const hint = document.createElement("small");
-  hint.textContent = t("activity.staleHint");
-  const list = document.createElement("ul");
-  list.className = "cleanup-candidate-list";
-  const items = staleTabs.slice(0, 12);
-  if (!items.length) {
-    const empty = document.createElement("li");
-    empty.textContent = t("activity.noStale");
-    list.append(empty);
-  } else {
-    for (const tab of items) {
-      list.append(cleanupCandidateRow(tab));
-    }
-  }
-  section.append(activityLine(t("activity.stale"), "strong"), hint, list);
-  return section;
-}
-
-function cleanupCandidateRow(tab) {
-  const row = document.createElement("li");
-  row.className = "cleanup-candidate";
-
-  const body = document.createElement("div");
-  body.className = "cleanup-candidate-body";
-  const title = document.createElement("strong");
-  title.textContent = tab.title || tab.hostname || "Untitled";
-  const host = document.createElement("small");
-  host.textContent = [tab.hostname, tab.currentGroupTitle ? t("activity.group", { group: tab.currentGroupTitle }) : t("activity.noGroup")]
-    .filter(Boolean)
-    .join(" · ");
-  const meta = document.createElement("div");
-  meta.className = "cleanup-candidate-meta";
-  meta.append(cleanupPriorityChip(tab.priority), cleanupMetaChip(t("activity.seenCount", { count: tab.activeCount || 0 })));
-  if (tab.ageMs) meta.append(cleanupMetaChip(t("activity.firstSeen", { age: formatAgo(tab.ageMs) })));
-  if (tab.idleMs) meta.append(cleanupMetaChip(t("activity.lastActive", { age: formatAgo(tab.idleMs) })));
-  body.append(title, host, meta);
-
-  if (tab.reason) {
-    const reasonLine = document.createElement("small");
-    reasonLine.className = "cleanup-candidate-clue";
-    reasonLine.textContent = t("activity.aiReason", { text: tab.reason });
-    body.append(reasonLine);
-  }
-
-  if (Array.isArray(tab.evidence) && tab.evidence.length) {
-    const evidence = document.createElement("div");
-    evidence.className = "cleanup-candidate-meta cleanup-evidence";
-    for (const item of tab.evidence.slice(0, 3)) {
-      evidence.append(cleanupMetaChip(item));
-    }
-    body.append(evidence);
-  }
-
-  const clue = cleanupSummaryClue(tab);
-  if (clue) {
-    const clueLine = document.createElement("small");
-    clueLine.className = "cleanup-candidate-clue";
-    clueLine.textContent = t("activity.summaryClue", { text: clue });
-    body.append(clueLine);
-  }
-
-  const action = document.createElement("button");
-  action.className = "candidate-action";
-  action.type = "button";
-  action.textContent = t("activity.focusTab");
-  action.setAttribute("aria-label", t("activity.focusTabAria", { title: tab.title || tab.hostname || "" }));
-  action.addEventListener("click", () => focusActivityTab(tab));
-  row.append(body, action);
-  return row;
-}
-
 function cleanupMetaChip(text) {
   const chip = document.createElement("span");
   chip.textContent = text;
@@ -1400,13 +1379,6 @@ function cleanupPriorityChip(priority) {
   const chip = cleanupMetaChip(t(`activity.priority.${value}`));
   chip.dataset.priority = value;
   return chip;
-}
-
-function cleanupSummaryClue(tab) {
-  const summary = tab.summary || {};
-  return [summary.metaDescription, ...(summary.headings || []), summary.title]
-    .map((item) => String(item || "").trim())
-    .filter(Boolean)[0]?.slice(0, 120) || "";
 }
 
 async function focusActivityTab(tab) {
@@ -1463,7 +1435,7 @@ function replacerForDetails(key, value) {
 function setBusy(isBusy, label = "", options = {}) {
   nodes.analyzeBtn.disabled = isBusy;
   nodes.undoBtn.disabled = isBusy;
-  nodes.applyBtn.disabled = isBusy || !lastPreview || !lastCanApply;
+  nodes.applyBtn.disabled = isBusy || !canApplyCurrentPreview();
   nodes.cancelBtn.hidden = !(isBusy && options.cancelable);
   nodes.cancelBtn.disabled = false;
   nodes.actions.dataset.busy = isBusy ? "true" : "false";
@@ -1805,10 +1777,14 @@ function syncActionState() {
   nodes.appShell.dataset.flowState = lastPreview || lastError ? "preview" : "setup";
   nodes.actions.dataset.state = lastPreview ? "preview" : lastError ? "error" : "idle";
   nodes.actions.dataset.canUndo = canUndo ? "true" : "false";
-  nodes.applyBtn.hidden = !lastPreview;
+  nodes.applyBtn.hidden = !lastPreview || lastPreview.analysisFeatures?.grouping === false;
   nodes.undoBtn.hidden = !canUndo;
   setButtonLabel(nodes.analyzeBtn, t(lastPreview ? "button.regenerate" : "button.generate"));
-  nodes.applyBtn.dataset.role = lastPreview && lastCanApply ? "primary" : "";
+  nodes.applyBtn.dataset.role = canApplyCurrentPreview() ? "primary" : "";
+}
+
+function canApplyCurrentPreview() {
+  return Boolean(lastPreview && lastCanApply && lastPreview.analysisFeatures?.grouping !== false);
 }
 
 function setButtonLabel(button, text) {
@@ -2115,6 +2091,8 @@ async function mockMessage(message) {
       includePinnedTabs: false,
       includeIncognitoTabs: false,
       collapseGroupsAfterApply: true,
+      analyzeGrouping: true,
+      analyzeCleanup: true,
       minConfidenceToApply: 0.65,
       maxTabsPerGroup: 40,
       languageMode: "auto",
@@ -2150,6 +2128,14 @@ async function mockMessage(message) {
     return mockAnalysisJob();
   }
   if (message.type === "tabs:getLastJob") return mockLastJob || mockAnalysisJob();
+  if (message.type === "tabs:closeCleanupCandidates") {
+    const ids = uniqueNumbers(message.tabIds || []);
+    const job = mockLastJob || mockAnalysisJob();
+    job.preview.cleanup.candidates = (job.preview.cleanup.candidates || []).filter((candidate) => !ids.includes(candidate.tabId));
+    job.preview.cleanup.candidateCount = job.preview.cleanup.candidates.length;
+    mockLastJob = job;
+    return { closedTabIds: ids, skippedTabIds: [], preview: job.preview, validation: job.validation };
+  }
   if (message.type === "tabs:applyLastPlan") return { createdGroupIds: [1, 2] };
   if (message.type === "tabs:undoLastApply") return { restoredTabs: 20 };
   if (message.type === "tabs:getActiveJob") return mockActiveJob;
@@ -2270,6 +2256,41 @@ function mockAnalysisJob() {
           ok: 2,
           permissionRequired: 1,
           blocked: 0
+        },
+        cleanup: {
+          summary: "AI 找到 2 个可能是旧任务遗留的标签页，你可以先检查。",
+          candidateCount: 2,
+          candidates: [
+            {
+              tabId: 31,
+              windowId: 1,
+              title: "Old comparison notes",
+              hostname: "example.com",
+              currentGroupTitle: "Research",
+              ageMs: 16 * 24 * 60 * 60 * 1000,
+              idleMs: 9 * 24 * 60 * 60 * 1000,
+              activeCount: 1,
+              priority: "high",
+              reason: "上一轮对比调研留下的页面，近期没有再打开。",
+              evidence: ["旧任务线索", "近期未活跃"]
+            },
+            {
+              tabId: 32,
+              windowId: 1,
+              title: "Previous research",
+              hostname: "example.org",
+              ageMs: 22 * 24 * 60 * 60 * 1000,
+              idleMs: 18 * 24 * 60 * 60 * 1000,
+              activeCount: 0,
+              priority: "medium",
+              reason: "标题显示是旧研究资料，且没有归属到当前分组。",
+              evidence: ["未分组", "长期未活跃"]
+            }
+          ]
+        },
+        analysisFeatures: {
+          grouping: true,
+          cleanup: true
         },
         warnings: []
       }

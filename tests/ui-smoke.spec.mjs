@@ -121,6 +121,10 @@ test("control surface renders settings and mock preview", async ({ page }) => {
   await expect(page.locator("#samplingRisk")).toBeVisible();
   await expect(page.locator("#samplingRisk svg")).toBeVisible();
   await expect(page.locator("#samplingRisk")).toHaveAttribute("data-tooltip", /不会读取密码/);
+  await expect(page.locator("#analyzeGrouping")).toBeChecked();
+  await expect(page.locator("#analyzeCleanup")).toBeChecked();
+  await expect(page.getByText("生成分组建议")).toBeVisible();
+  await expect(page.getByText("找出可清理标签页")).toBeVisible();
   await expect(page.getByText("会读取页面文字摘要")).toHaveCount(0);
   await expect(page.getByText("会在后台保存短摘要")).toHaveCount(0);
   await expect(page.getByText("整理偏好")).toHaveCount(0);
@@ -211,7 +215,9 @@ test("control surface renders settings and mock preview", async ({ page }) => {
   ).toBeVisible();
   await expect(page.locator(".preview").getByText("已补充部分页面线索，并结合标题、网址和原始顺序整理。")).toBeVisible();
   await expect(page.locator(".preview").getByText("另有 1 个固定、无痕或受限标签页未参与整理。")).toBeVisible();
-  await expect(page.locator(".activity-panel")).toBeVisible();
+  await expect(page.locator(".activity-panel")).toHaveCount(0);
+  await expect(page.locator(".cleanup-preview").getByText("建议先检查", { exact: true })).toBeVisible();
+  await expect(page.locator(".cleanup-preview").getByText("Old comparison notes")).toBeVisible();
   await expect(page.getByText("待确认")).toHaveCount(0);
   await expect(page.locator(".preview-stats")).toHaveCount(0);
   await expect(page.locator(".stat-chip")).toHaveCount(0);
@@ -243,34 +249,24 @@ test("control surface renders settings and mock preview", async ({ page }) => {
   await expect(page.getByRole("button", { name: "撤销" })).toBeVisible();
 });
 
-test("cleanup candidates use AI analysis without starting organization", async ({ page }) => {
+test("cleanup candidates are returned with the generated plan and can be closed manually", async ({ page }) => {
   await page.goto(`${baseUrl}/src/sidepanel/index.html`);
 
-  await expect
-    .poll(() =>
-      page.evaluate(() => {
-        const activity = document.querySelector(".activity-panel")?.getBoundingClientRect();
-        const launch = document.querySelector(".launch-panel")?.getBoundingClientRect();
-        return Boolean(activity && launch && activity.top < launch.top);
-      })
-    )
-    .toBe(true);
-  await page.getByText("清理助手", { exact: true }).click();
-  await page.getByRole("button", { name: "7 天" }).click();
+  await expect(page.locator(".activity-panel")).toHaveCount(0);
+  await page.getByRole("button", { name: "生成方案" }).click();
 
-  await expect(page.getByText("已看过 24 个打开的标签页，整理出 2 个可以先检查的页面。")).toBeVisible();
-  await expect(page.getByText("这 2 个标签页看起来更像旧任务遗留，可以先从它们开始。")).toBeVisible();
-  await expect(page.getByText("近期线索")).toBeVisible();
-  await expect(page.getByText("建议先检查")).toBeVisible();
-  await expect(page.getByText(/Old comparison notes/)).toBeVisible();
-  await expect(page.getByText("分组：Research")).toBeVisible();
-  await expect(page.getByText("为什么：它像是上一轮对比调研留下的页面，时间较久且近期没有再打开。")).toBeVisible();
-  await expect(page.getByText("线索：Comparison notes for an earlier investigation")).toBeVisible();
-  await expect(page.locator("#previewSection")).toBeHidden();
-  await expect(page.locator("#statusText")).toHaveText("AI 标签页整理");
+  await expect(page.locator("#previewSection")).toBeVisible();
+  await expect(page.locator(".cleanup-preview").getByText("建议先检查", { exact: true })).toBeVisible();
+  await expect(page.locator(".cleanup-preview").getByText(/Old comparison notes/)).toBeVisible();
+  await expect(page.locator(".cleanup-preview").getByText("分组：Research", { exact: false })).toBeVisible();
+  await expect(page.locator(".cleanup-preview").getByText("上一轮对比调研留下的页面", { exact: false })).toBeVisible();
 
-  await page.getByRole("button", { name: /定位标签页：Old comparison notes/ }).click();
-  await expect(page.locator("#statusText")).toHaveText("已定位标签页");
+  await page.locator(".cleanup-preview").getByRole("button", { name: "全选" }).click();
+  await expect(page.locator(".cleanup-selected-count")).toHaveText("已选 2 个");
+  await page.locator(".cleanup-preview").getByRole("button", { name: "关闭选中" }).click();
+  await expect(page.locator(".cleanup-preview").getByText("Old comparison notes")).toHaveCount(0);
+  await expect(page.locator(".cleanup-preview").getByText("Previous research")).toHaveCount(0);
+  await expect(page.locator("#statusText")).toHaveText("已关闭 2 个标签页，方案已同步更新");
 });
 
 test("auto-selects English UI and can manually switch back", async ({ page }) => {
