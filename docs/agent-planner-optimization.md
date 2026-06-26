@@ -68,6 +68,7 @@ Detailed comparison record:
 - `docs/benchmarks/adaptive-refine-experiment.md`
 - `docs/benchmarks/planner-quality-analysis.md`
 - `docs/benchmarks/planner-fixture-coverage.md`
+- `docs/benchmarks/page-summary-payload-fix.md`
 
 Public leaderboard signal checked on 2026-06-26:
 

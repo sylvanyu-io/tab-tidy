@@ -57,13 +57,14 @@ Run:
 - Raw data: `docs/benchmarks/data/planner-scale-2026-06-26T07-07-15-167Z.json`
 - Latency report: `docs/benchmarks/planner-fixture-coverage-smoke.md`
 - Quality report: `docs/benchmarks/planner-fixture-coverage-smoke-quality.md`
+- Correction: the `low_signal_samples` row in this first smoke had empty sample fields because the fixture did not match production page-sample shape. See `docs/benchmarks/page-summary-payload-fix.md`.
 
 Results:
 
 | Scenario | Tabs | Model | Strategy | Time | Topic F1 | Family F1 | Read |
 | --- | ---: | --- | --- | ---: | ---: | ---: | --- |
 | `domain_traps` | 24 | `gpt-5.4` | single full-detail | 89.8s | 85.7% | 51.4% | The planner avoided pure domain grouping but merged design/frontend. |
-| `low_signal_samples` | 24 | `gpt-5.4` | single full-detail | 97.3s | 54.5% | 17.2% | Page summaries were present, but the planner still formed broad mixed groups and left 6 tabs for review. |
+| `low_signal_samples` | 24 | `gpt-5.4` | single full-detail | 97.3s | 54.5% | 17.2% | Invalid as page-summary evidence; sample content was empty due fixture bug. |
 
 ## Decision
 
@@ -73,6 +74,6 @@ Evidence:
 
 - The run proves the new scenario harness works end to end against the real product gateway.
 - The two 24-tab requests were slow enough that one-off latency observations are not stable enough for a model switch.
-- The low-signal page-summary scenario is a quality regression target: summaries exist, but the current prompt/input shape does not make the model use them finely enough.
+- The low-signal page-summary scenario needs corrected payload evidence before any planner decision.
 
-Next optimization should target page-summary weighting and prompt clarity before reducing refinement or lowering model strength.
+Next optimization should target page-summary payload quality and compare before/after metrics before reducing refinement or lowering model strength.
