@@ -36,9 +36,11 @@ const settings = {
   existingGroupMode: EXISTING_GROUP_MODES.DISSOLVE,
   reviewGroupMode: REVIEW_GROUP_MODES.CREATE,
   promptPreset: benchmarkPromptPreset,
+  groupingGranularity: process.env.GROUPING_GRANULARITY || DEFAULT_SETTINGS.groupingGranularity,
   gatewayBaseUrl: process.env.GATEWAY_BASE_URL || "",
   gatewayApiKey: process.env.GATEWAY_API_KEY || "",
   gatewayModel: process.env.GATEWAY_MODEL || DEFAULT_SETTINGS.gatewayModel,
+  gatewayAuxiliaryModel: process.env.GATEWAY_AUXILIARY_MODEL || DEFAULT_SETTINGS.gatewayAuxiliaryModel,
   gatewayThinkingIntensity: process.env.GATEWAY_THINKING_INTENSITY || THINKING_INTENSITIES.HIGH,
   customPrompt:
     "Benchmark run. Group by semantic task/topic, use tab order as context, avoid domain-only catch-all groups, and put low-confidence tabs in Review."
@@ -111,6 +113,7 @@ async function runStrategy({ inventory, tabCount, scenario, strategy }) {
   const elapsedMs = Math.round(performance.now() - started);
   const fetchRecords = requests.filter((request) => request.type === "fetch");
   const requestFailures = summarizeRequestFailures(fetchRecords);
+  const usageSummary = summarizeRequestUsage(fetchRecords);
   return {
     runId,
     startedAt,
@@ -128,6 +131,10 @@ async function runStrategy({ inventory, tabCount, scenario, strategy }) {
     elapsedMs,
     elapsedSeconds: Number((elapsedMs / 1000).toFixed(1)),
     requestCount: fetchRecords.length,
+    requestBytes: usageSummary.requestBytes,
+    responseBytes: usageSummary.responseBytes,
+    tokenUsage: usageSummary.tokenUsage,
+    modelUsage: usageSummary.modelUsage,
     requestFailureCount: requestFailures.length,
     requestFailures,
     plannerRoute: inferPlannerRoute(requests),
@@ -164,6 +171,7 @@ function measuredFetch(records) {
       record.ok = response.ok;
       record.responseBytes = Buffer.byteLength(responseText, "utf8");
       record.response = parseJsonOrText(responseText);
+      record.usage = extractUsage(record.response);
 
       return new Response(responseText, {
         status: response.status,
@@ -203,8 +211,10 @@ async function writeOutputs({ partial }) {
       node: process.version,
       gatewayBaseUrl: settings.gatewayBaseUrl || "built-in default",
       gatewayModel: settings.gatewayModel,
+      gatewayAuxiliaryModel: settings.gatewayAuxiliaryModel,
       gatewayThinkingIntensity: settings.gatewayThinkingIntensity,
       promptPreset: settings.promptPreset,
+      groupingGranularity: settings.groupingGranularity,
       plannerOptionOverrides: benchmarkPlannerOptions,
       requestTimeoutMs: Number(process.env.BENCHMARK_TIMEOUT_MS || DEFAULT_BENCHMARK_TIMEOUT_MS),
       strategyTimeoutMs: Number(process.env.BENCHMARK_STRATEGY_TIMEOUT_MS || DEFAULT_STRATEGY_TIMEOUT_MS),
@@ -238,8 +248,10 @@ function renderReport(payload) {
     "",
     `- Gateway: ${payload.environment.gatewayBaseUrl}`,
     `- Model: ${payload.environment.gatewayModel}`,
+    `- Auxiliary model: ${payload.environment.gatewayAuxiliaryModel}`,
     `- Thinking intensity: ${payload.environment.gatewayThinkingIntensity}`,
     `- Prompt preset: ${payload.environment.promptPreset}`,
+    `- Grouping granularity: ${payload.environment.groupingGranularity}`,
     payload.strategyFilter ? `- Strategy filter: ${payload.strategyFilter}` : "- Strategy filter: none",
     payload.scenarioFilter ? `- Scenario filter: ${payload.scenarioFilter}` : "- Scenario filter: task_bursts",
     `- Planner option overrides: ${formatPlannerOptionOverrides(payload.environment.plannerOptionOverrides || {})}`,
@@ -252,8 +264,8 @@ function renderReport(payload) {
     "",
     "## Results",
     "",
-    "| Scenario | Tabs | Strategy | Route | Status | Time | Requests | Failed Requests | Groups | Grouped Tabs | Review Tabs | Validation |",
-    "| --- | ---: | --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | --- |"
+    "| Scenario | Tabs | Strategy | Route | Status | Time | Requests | Tokens | I/O bytes | Groups | Grouped Tabs | Review Tabs | Validation |",
+    "| --- | ---: | --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- |"
   ];
 
   for (const result of completed) {
@@ -266,7 +278,8 @@ function renderReport(payload) {
         resultStatus(result),
         formatSeconds(result.elapsedMs),
         result.requestCount,
-        result.requestFailureCount || 0,
+        formatTokenUsage(result.tokenUsage),
+        formatBytes(result.requestBytes + result.responseBytes),
         result.preview?.groups?.length ?? "-",
         result.preview?.groupedTabsCount ?? "-",
         result.preview?.reviewTabsCount ?? "-",
@@ -359,7 +372,11 @@ function inferPlannerRoute(records) {
   const firstFetch = records.find((request) => request.type === "fetch");
   const systemPrompt = String(firstFetch?.request?.messages?.[0]?.content || "");
   if (/fast first-pass/i.test(systemPrompt)) return "hierarchical";
-  if (/JSON-only planner/i.test(systemPrompt)) return "single_full_detail";
+  if (/JSON-only planner/i.test(systemPrompt)) {
+    return records.some((request) => /cleanup ranking planner/i.test(String(request.request?.messages?.[0]?.content || "")))
+      ? "split_cleanup"
+      : "single_full_detail";
+  }
   return firstFetch ? "unknown" : "";
 }
 
@@ -375,6 +392,62 @@ function summarizeRequestFailures(records) {
         message: String(error.message || record.error?.message || "").slice(0, 240)
       };
     });
+}
+
+function summarizeRequestUsage(records) {
+  const tokenUsage = { promptTokens: 0, completionTokens: 0, totalTokens: 0, present: false };
+  const modelUsage = {};
+  let requestBytes = 0;
+  let responseBytes = 0;
+  for (const record of records || []) {
+    requestBytes += Number(record.requestBytes || 0);
+    responseBytes += Number(record.responseBytes || 0);
+    const model = record.request?.model || "unknown";
+    const usage = normalizeUsage(record.usage);
+    if (!modelUsage[model]) {
+      modelUsage[model] = { requests: 0, requestBytes: 0, responseBytes: 0, promptTokens: 0, completionTokens: 0, totalTokens: 0 };
+    }
+    modelUsage[model].requests += 1;
+    modelUsage[model].requestBytes += Number(record.requestBytes || 0);
+    modelUsage[model].responseBytes += Number(record.responseBytes || 0);
+    if (usage.present) {
+      tokenUsage.present = true;
+      tokenUsage.promptTokens += usage.promptTokens;
+      tokenUsage.completionTokens += usage.completionTokens;
+      tokenUsage.totalTokens += usage.totalTokens;
+      modelUsage[model].promptTokens += usage.promptTokens;
+      modelUsage[model].completionTokens += usage.completionTokens;
+      modelUsage[model].totalTokens += usage.totalTokens;
+    }
+  }
+  return { requestBytes, responseBytes, tokenUsage, modelUsage };
+}
+
+function extractUsage(response) {
+  if (!response || typeof response !== "object") return null;
+  return response.usage || response.data?.usage || response.result?.usage || null;
+}
+
+function normalizeUsage(usage) {
+  if (!usage || typeof usage !== "object") {
+    return { present: false, promptTokens: 0, completionTokens: 0, totalTokens: 0 };
+  }
+  const promptTokens = Number(usage.prompt_tokens ?? usage.input_tokens ?? usage.promptTokens ?? 0) || 0;
+  const completionTokens = Number(usage.completion_tokens ?? usage.output_tokens ?? usage.completionTokens ?? 0) || 0;
+  const totalTokens = Number(usage.total_tokens ?? usage.totalTokens ?? promptTokens + completionTokens) || promptTokens + completionTokens;
+  return { present: true, promptTokens, completionTokens, totalTokens };
+}
+
+function formatTokenUsage(usage = {}) {
+  if (!usage.present) return "-";
+  return String(usage.totalTokens || 0);
+}
+
+function formatBytes(value) {
+  const bytes = Number(value || 0);
+  if (bytes >= 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  if (bytes >= 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${bytes} B`;
 }
 
 function resultStatus(result) {
