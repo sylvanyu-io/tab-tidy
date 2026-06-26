@@ -72,6 +72,7 @@ test("AI gateway planner posts a chat-completions JSON request", async () => {
     assert.match(body.messages[0].content, /JSON-only planner/);
     assert.match(body.messages[0].content, /compact output/);
     assert.match(body.messages[0].content, /sequenceIndex and index/);
+    assert.match(body.messages[0].content, /pageSampleSignals/);
     assert.match(body.messages[0].content, /Write every user-facing string in English/);
     assert.match(body.messages[1].content, /Structured output docs/);
     assert.match(body.messages[1].content, /Software engineering task input/);
@@ -104,6 +105,10 @@ test("AI gateway planner posts a chat-completions JSON request", async () => {
     assert.equal(firstSample.status, "ok");
     assert.equal(firstSample.contentKind, "");
     assert.equal(firstSample.visibleText, "JSON schema output");
+    assert.deepEqual(payload.pageSampleSignalFields, ["id", "contentKind", "title", "headings", "summary"]);
+    assert.equal(payload.pageSampleSignals.length, 1);
+    assert.equal(payload.pageSampleSignals[0][0], 10);
+    assert.match(payload.pageSampleSignals[0][4], /JSON schema output/);
     assert.equal(rowToObject(payload.pageSampleResultFields, payload.pageSampleResults[0]).status, "ok");
     return {
       ok: true,

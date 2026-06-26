@@ -38,6 +38,7 @@ const TAB_FIELDS = Object.freeze([
   "pageSample"
 ]);
 const PAGE_SAMPLE_FIELDS = Object.freeze(["status", "title", "metaDescription", "language", "contentKind", "headings", "visibleText", "reason"]);
+const PAGE_SAMPLE_SIGNAL_FIELDS = Object.freeze(["id", "contentKind", "title", "headings", "summary"]);
 const EXCLUDED_FIELDS = Object.freeze(["id", "windowId", "reason"]);
 const LOCKED_GROUP_FIELDS = Object.freeze(["id", "windowId", "title", "color", "collapsed", "tabIds"]);
 const PAGE_SAMPLE_RESULT_FIELDS = Object.freeze(["id", "windowId", "status", "origin", "reason"]);
@@ -318,6 +319,7 @@ export function buildPlannerSystemPrompt(settings) {
     "Return compact output: groups[].ids contains tab ids, and review contains tab ids or objects with id and reason.",
     `Allowed group colors: ${CHROME_GROUP_COLORS.join(", ")}.`,
     "Classify tabs by semantic topic, task, or intent. Prefer useful cross-domain groups over domain-only grouping.",
+    "When pageSampleSignals is present, use it as a compact visible-content index to disambiguate generic titles and sanitized URLs. Keep grouping fine-grained; do not merge broad workflows just because sampled pages are all readable.",
     "Do not close, discard, navigate, or execute tabs. You only produce grouping intent.",
     "Every eligible tab must appear exactly once in either groups[].ids or review.",
     "Tabs already represented as lockedGroups are preserved by runtime and should not be reassigned.",
@@ -343,6 +345,7 @@ function reviewModeInstruction(settings) {
 
 export function buildPlannerPayload(inventory, settings) {
   const pageSamplesByTabId = new Map((inventory.pageSamples || []).map((result) => [result.tabId, result]));
+  const pageSampleSignals = buildPageSampleSignals(inventory, pageSamplesByTabId);
   return {
     schema: "tab_tidy_compact_v1",
     settings: {
@@ -383,6 +386,8 @@ export function buildPlannerPayload(inventory, settings) {
       formatPageSample(pageSamplesByTabId.get(tab.tabId))
     ]),
     pageSampleFields: PAGE_SAMPLE_FIELDS,
+    pageSampleSignalFields: PAGE_SAMPLE_SIGNAL_FIELDS,
+    pageSampleSignals,
     excludedFields: EXCLUDED_FIELDS,
     excluded: (inventory.excludedTabs || []).map((tab) => [tab.tabId, tab.windowId, tab.exclusionReason]),
     lockedGroupFields: LOCKED_GROUP_FIELDS,
@@ -1031,6 +1036,37 @@ function formatPageSample(result) {
     sample.visibleText || "",
     ""
   ];
+}
+
+function buildPageSampleSignals(inventory, pageSamplesByTabId) {
+  const rows = [];
+  for (const tab of inventory.plannerTabs || []) {
+    const result = pageSamplesByTabId.get(tab.tabId);
+    if (!result || result.status !== "ok") continue;
+    const sample = result.sample || {};
+    const summary = compactSampleSummary(sample);
+    if (!sample.title && !sample.metaDescription && !sample.visibleText && !summary) continue;
+    rows.push([
+      tab.tabId,
+      String(sample.contentKind || "").slice(0, 32),
+      String(sample.title || "").slice(0, 120),
+      Array.isArray(sample.headings) ? sample.headings.map((heading) => String(heading || "").slice(0, 80)).filter(Boolean).slice(0, 4) : [],
+      summary
+    ]);
+  }
+  return rows;
+}
+
+function compactSampleSummary(sample = {}) {
+  const pieces = [];
+  for (const value of [sample.metaDescription, sample.visibleText]) {
+    const text = String(value || "").trim().replace(/\s+/g, " ");
+    if (!text) continue;
+    if (pieces.some((piece) => piece.includes(text) || text.includes(piece))) continue;
+    pieces.push(text);
+  }
+  const text = pieces.join(" ");
+  return text.replace(/\s+/g, " ").slice(0, 360);
 }
 
 export function parsePlanFromResponse(data) {
