@@ -2,7 +2,7 @@
 
 Generated: 2026-06-26
 
-This note records the accepted `pageSampleSignals` payload experiment. The goal was to improve low-signal page classification without shipping the rejected "page samples are strongest" prompt from `docs/benchmarks/page-summary-payload-fix.md`.
+This note records the accepted `pageSampleSignals` payload experiment. The goal was to improve low-signal page classification without shipping the rejected "page samples are strongest" prompt from `docs/benchmarks/archive/2026-06-26/page-summary-payload-fix.md`.
 
 ## Change
 

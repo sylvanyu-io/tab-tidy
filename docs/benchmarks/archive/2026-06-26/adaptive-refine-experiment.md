@@ -20,18 +20,18 @@ the default planner behavior.
 Before the experiment:
 
 - `docs/benchmarks/data/planner-scale-2026-06-26T05-59-23-988Z.json`
-- `docs/benchmarks/gateway-planner-small-scale-before-adaptive-refine.md`
+- `docs/benchmarks/archive/2026-06-26/gateway-planner-small-scale-before-adaptive-refine.md`
 
 After the experiment:
 
 - `docs/benchmarks/data/planner-scale-2026-06-26T06-08-59-938Z.json`
-- `docs/benchmarks/gateway-planner-small-scale-after-adaptive-refine.md`
+- `docs/benchmarks/archive/2026-06-26/gateway-planner-small-scale-after-adaptive-refine.md`
 - `docs/benchmarks/data/planner-scale-2026-06-26T06-12-33-835Z.json`
-- `docs/benchmarks/gateway-planner-scale-after-adaptive-refine.md`
+- `docs/benchmarks/archive/2026-06-26/gateway-planner-scale-after-adaptive-refine.md`
 
 Quality analysis:
 
-- `docs/benchmarks/planner-quality-analysis.md`
+- `docs/benchmarks/archive/2026-06-26/planner-quality-analysis.md`
 
 ## Before/After Summary
 

@@ -26,8 +26,8 @@ Code path:
 
 Evidence trail:
 
-- `docs/combined-grouping-cleanup-planner-2026-06-26.md`
-- `docs/agent-planner-optimization.md`
+- `docs/06-grouping-cleanup-planner.md`
+- `docs/07-planner-optimization.md`
 - `tests/gateway-planner.test.mjs`, previous test name:
   `AI gateway planner keeps 50-tab product sessions on the single full-detail path`
 
@@ -90,9 +90,9 @@ not claim a fresh live latency win yet.
 
 Relevant prior measurement documents:
 
-- `docs/benchmarks/small-session-hierarchical-threshold-2026-06-26.md`
-- `docs/benchmarks/gateway-planner-before-after-parallel.md`
-- `docs/benchmarks/adaptive-refine-experiment.md`
+- `docs/benchmarks/archive/2026-06-26/small-session-hierarchical-threshold-2026-06-26.md`
+- `docs/benchmarks/archive/2026-06-26/gateway-planner-before-after-parallel.md`
+- `docs/benchmarks/archive/2026-06-26/adaptive-refine-experiment.md`
 
 Next measurable comparison should run with grouping and cleanup both enabled:
 

@@ -14,12 +14,31 @@
 
 ## 前后对比
 
+下面只比较每个样本自己的旧路线和新路线。不同样本之间不是同条件横向比较：
+
+- `33 tabs, 带页面摘要` 是 `low_signal_samples`，标题/URL 信号弱，页面摘要参与判断，最终仍需要 `gpt-5.5 high` 做分组。
+- `50/120/300 tabs` 是 `task_bursts` metadata-only 规模测试，标题、URL 和原始顺序信号更强，当前路线主要使用 `gpt-5.3-codex-spark low`。
+
+因此 `33 tabs` 比 `50 tabs` 慢不是规模曲线反常，而是场景难度、页面摘要 payload、模型选择和输出任务不同。
+
 | 样本 | 旧路线 | 新路线 | 耗时变化 | 主模型用量变化 | 清理清单 |
 | --- | --- | --- | ---: | ---: | ---: |
 | 33 tabs, 带页面摘要 | single full-detail, `gpt-5.5 high` 一次完成分组+清理 | split cleanup: `gpt-5.5 high` 分组 + spark low 清理，运行时补齐低优先级复查项 | 69.6s -> 41.3s | `gpt-5.5` 9801 tokens -> 7649 tokens | 15 -> 33 |
 | 50 tabs | spark 粗分 + `gpt-5.5` 精分 + spark cleanup | spark 粗分 + spark cleanup，未触发不必要精分 | 24.3s -> 11.8s | `gpt-5.5` 1512 tokens -> 0 | 50 -> 50 |
 | 120 tabs | spark cleanup medium | spark cleanup low | 59.7s -> 36.6s | 主模型 0 -> 0 | 84 -> 84 |
 | 300 tabs | spark cleanup medium | spark cleanup low | 190.1s -> 69.9s | `gpt-5.5` 2152 tokens -> 2168 tokens | 200 -> 191 |
+
+## 33 tabs 为什么比 50 tabs 慢
+
+| 项 | 33 tabs final | 50 tabs final |
+| --- | --- | --- |
+| 场景 | `low_signal_samples`，带页面摘要 | `task_bursts`，metadata-only |
+| 路线 | `split_cleanup` | `hierarchical` |
+| 第 1 次请求 | `gpt-5.5 high`，34.9s | `gpt-5.3-codex-spark low`，5.2s |
+| 第 2 次请求 | `gpt-5.3-codex-spark low`，6.4s | `gpt-5.3-codex-spark low`，6.6s |
+| 总耗时 | 41.3s | 11.8s |
+
+主要差异是第一刀：33 tabs 的主分组请求用了 `gpt-5.5 high`，50 tabs 的粗分请求用了 spark low。当前记录应解读为“各自旧路线到新路线的优化效果”，不能解读为“33 tabs 一定比 50 tabs 慢”。
 
 ## 原始数据
 
@@ -30,11 +49,12 @@
 - 120/300 tabs cleanup medium: `docs/benchmarks/data/planner-scale-2026-06-26T20-47-29-928Z-pid29866.json`
 - 120/300 tabs cleanup low: `docs/benchmarks/data/planner-scale-2026-06-26T20-52-24-931Z-pid36868.json`
 - Worker spark planner rejection before deploy: `docs/benchmarks/data/planner-scale-2026-06-26T20-28-51-975Z-pid94449.json`
-- Quality comparison: `docs/benchmarks/planner-optimization-decision-2026-06-26-quality.md`
+- Quality comparison: `docs/benchmarks/02-current-planner-quality.md`
+- Benchmark index: `docs/benchmarks/README.md`
 
 ## 准确度检查
 
-`docs/benchmarks/planner-optimization-decision-2026-06-26-quality.md` 使用 synthetic fixture truth 做 pairwise quality 分析。关键结果：
+`docs/benchmarks/02-current-planner-quality.md` 使用 synthetic fixture truth 做 pairwise quality 分析。关键结果：
 
 | 样本 | Topic Precision | Topic Recall | Topic F1 | Family F1 |
 | --- | ---: | ---: | ---: | ---: |

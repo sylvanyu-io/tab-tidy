@@ -25,18 +25,18 @@ Baseline, before the change:
 
 - `docs/benchmarks/data/planner-scale-2026-06-26T02-58-49-708Z.json`
 - `docs/benchmarks/data/planner-scale-2026-06-26T03-20-51-401Z.json`
-- summary: `docs/benchmarks/gateway-planner-scale.md`
+- summary: `docs/benchmarks/archive/2026-06-26/gateway-planner-scale.md`
 
 After the change:
 
 - `docs/benchmarks/data/planner-scale-2026-06-26T05-03-27-199Z.json`
-- summary: `docs/benchmarks/gateway-planner-scale-after-parallel.md`
+- summary: `docs/benchmarks/archive/2026-06-26/gateway-planner-scale-after-parallel.md`
 
 Benchmark command for the after run:
 
 ```bash
 BENCHMARK_STRATEGIES=hierarchical \
-BENCHMARK_REPORT_PATH=docs/benchmarks/gateway-planner-scale-after-parallel.md \
+BENCHMARK_REPORT_PATH=docs/benchmarks/archive/2026-06-26/gateway-planner-scale-after-parallel.md \
 BENCHMARK_TAB_COUNTS=120,300,400 \
 npm run benchmark:planner-scale
 ```

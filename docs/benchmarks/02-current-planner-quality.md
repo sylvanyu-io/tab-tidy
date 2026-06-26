@@ -4,6 +4,8 @@ Generated: 2026-06-26T21:08:23.892Z
 
 This report evaluates synthetic benchmark outputs against explicit fixture truth when available, with URL-path inference kept only for older benchmark files. Review tabs are treated as singleton clusters, so coverage and recall drop when the planner leaves tabs for manual confirmation.
 
+Read these rows as within-scenario quality checks, not as a latency ranking by tab count. The 33-tab run uses a low-signal page-summary fixture and a heavier first request; the 50/120/300-tab rows use metadata-only task-burst fixtures and a cheaper route.
+
 ## Inputs
 
 - `docs/benchmarks/data/planner-scale-2026-06-26T20-27-14-111Z-pid91961.json` (planner-scale-2026-06-26T20-27-14-111Z-pid91961, partial: false)

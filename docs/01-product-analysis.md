@@ -30,7 +30,7 @@ Important implication: native Chrome tab groups belong to one window, so the pro
 
 Default to current-window mode. Consolidate-to-one-window should be available behind a clear switch with preview, explicit confirmation, and undo.
 
-See [multi-window-feasibility.md](multi-window-feasibility.md) for the API-level feasibility check and consolidation algorithm.
+See [05-multi-window-feasibility.md](05-multi-window-feasibility.md) for the API-level feasibility check and consolidation algorithm.
 
 ## Recommended Architecture
 
@@ -57,9 +57,9 @@ native side panel UI
 - LLM adapter: chat-completions-compatible gateway first, later add Chrome built-in AI or a local native-messaging bridge.
 - Planner validator: rejects invalid tab IDs, duplicate assignments, over-broad groups, or actions touching incognito/private tabs unless explicitly enabled.
 
-See [agent-contract.md](agent-contract.md) for the planner tools, prompt switches, custom prompt rules, and non-negotiable execution limits.
+See [02-agent-contract.md](02-agent-contract.md) for the planner tools, prompt switches, custom prompt rules, and non-negotiable execution limits.
 
-See [permissions-research.md](permissions-research.md) for the page sampling and LLM provider permission strategy.
+See [04-permissions-privacy.md](04-permissions-privacy.md) for the page sampling and LLM provider permission strategy.
 
 ## Data To Give The LLM
 

@@ -55,9 +55,9 @@ node scripts/analyze-planner-benchmark-quality.mjs \
 Run:
 
 - Raw data: `docs/benchmarks/data/planner-scale-2026-06-26T07-07-15-167Z.json`
-- Latency report: `docs/benchmarks/planner-fixture-coverage-smoke.md`
-- Quality report: `docs/benchmarks/planner-fixture-coverage-smoke-quality.md`
-- Correction: the `low_signal_samples` row in this first smoke had empty sample fields because the fixture did not match production page-sample shape. See `docs/benchmarks/page-summary-payload-fix.md`.
+- Latency report: `docs/benchmarks/archive/2026-06-26/planner-fixture-coverage-smoke.md`
+- Quality report: `docs/benchmarks/archive/2026-06-26/planner-fixture-coverage-smoke-quality.md`
+- Correction: the `low_signal_samples` row in this first smoke had empty sample fields because the fixture did not match production page-sample shape. See `docs/benchmarks/archive/2026-06-26/page-summary-payload-fix.md`.
 
 Results:
 

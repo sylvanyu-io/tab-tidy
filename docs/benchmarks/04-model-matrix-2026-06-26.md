@@ -17,19 +17,19 @@ Baseline `gpt-5.5` high:
 Alternative runs:
 
 - `docs/benchmarks/data/planner-scale-2026-06-26T06-31-09-684Z.json`
-- `docs/benchmarks/gateway-planner-model-matrix-gpt-5.4-mini-medium.md`
+- `docs/benchmarks/archive/2026-06-26/gateway-planner-model-matrix-gpt-5.4-mini-medium.md`
 - `docs/benchmarks/data/planner-scale-2026-06-26T06-32-02-652Z.json`
-- `docs/benchmarks/gateway-planner-model-matrix-gpt-5.4-medium.md`
+- `docs/benchmarks/archive/2026-06-26/gateway-planner-model-matrix-gpt-5.4-medium.md`
 - `docs/benchmarks/data/planner-scale-2026-06-26T06-32-53-023Z.json`
-- `docs/benchmarks/gateway-planner-model-matrix-gpt-5.5-medium.md`
+- `docs/benchmarks/archive/2026-06-26/gateway-planner-model-matrix-gpt-5.5-medium.md`
 - `docs/benchmarks/data/planner-scale-2026-06-26T06-45-15-751Z.json`
-- `docs/benchmarks/gateway-planner-model-matrix-gpt-5.4-mini-medium-post-worker-deploy.md`
+- `docs/benchmarks/archive/2026-06-26/gateway-planner-model-matrix-gpt-5.4-mini-medium-post-worker-deploy.md`
 - `docs/benchmarks/data/planner-scale-2026-06-26T06-47-42-153Z.json`
-- `docs/benchmarks/gateway-planner-model-matrix-gpt-5.4-medium-post-worker-deploy.md`
+- `docs/benchmarks/archive/2026-06-26/gateway-planner-model-matrix-gpt-5.4-medium-post-worker-deploy.md`
 
 Quality rollup:
 
-- `docs/benchmarks/planner-quality-analysis.md`
+- `docs/benchmarks/archive/2026-06-26/planner-quality-analysis.md`
 
 ## Results
 

@@ -173,9 +173,6 @@ Chrome 执行器 + 回退快照
 
 ## 设计文档
 
-- [Agent contract](docs/agent-contract.md)
-- [Evaluation harness](docs/harness.md)
-- [Multi-window feasibility](docs/multi-window-feasibility.md)
-- [Permissions research](docs/permissions-research.md)
-- [Release readiness](docs/release-readiness.md)
+- [文档索引](docs/README.md)
+- [基准与决策记录](docs/benchmarks/README.md)
 - [Gateway Worker](worker/README.md)

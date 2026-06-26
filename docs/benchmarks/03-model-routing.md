@@ -28,11 +28,11 @@ Raw data is stored in:
 
 Summary report:
 
-- `docs/benchmarks/gateway-planner-scale.md`
+- `docs/benchmarks/archive/2026-06-26/gateway-planner-scale.md`
 
 Before/after result after the parallel-refinement change:
 
-- `docs/benchmarks/gateway-planner-before-after-parallel.md`
+- `docs/benchmarks/archive/2026-06-26/gateway-planner-before-after-parallel.md`
 
 Measured with synthetic metadata-only inventories through the live gateway:
 

@@ -79,19 +79,13 @@ Default should not be `gpt-5.5` high for every step.
 
 Detailed comparison record:
 
-- `docs/agent-harness-research.md`
-- `docs/benchmarks/planner-model-routing.md`
-- `docs/benchmarks/gateway-model-availability-2026-06-26.md`
-- `docs/benchmarks/planner-model-matrix-2026-06-26.md`
-- `docs/benchmarks/gateway-planner-before-after-parallel.md`
-- `docs/benchmarks/adaptive-refine-experiment.md`
-- `docs/benchmarks/planner-quality-analysis.md`
-- `docs/benchmarks/planner-fixture-coverage.md`
-- `docs/benchmarks/page-summary-payload-fix.md`
-- `docs/benchmarks/page-summary-signals-experiment.md`
-- `docs/benchmarks/media-type-preset-axis-experiment.md`
-- `docs/benchmarks/small-session-hierarchical-threshold-2026-06-26.md`
-- `docs/benchmarks/combined-adaptive-planner-correction-2026-06-26.md`
+- `docs/benchmarks/README.md`
+- `docs/benchmarks/01-current-planner-decision.md`
+- `docs/benchmarks/02-current-planner-quality.md`
+- `docs/benchmarks/03-model-routing.md`
+- `docs/benchmarks/04-model-matrix-2026-06-26.md`
+- `docs/benchmarks/05-gateway-model-availability-2026-06-26.md`
+- Superseded run reports: `docs/benchmarks/archive/2026-06-26/`
 
 Public leaderboard signal checked on 2026-06-26:
 
@@ -186,6 +180,6 @@ The final browser mutation must still be driven only by local validated data.
    - parallel hierarchical;
    - model/thinking matrix.
    Scenario coverage is now available through `BENCHMARK_SCENARIOS`; see
-   `docs/benchmarks/planner-fixture-coverage.md`.
+   `docs/benchmarks/README.md` for the current index and archive location.
 5. Make benchmark reports append or aggregate instead of overwriting the previous
    report.

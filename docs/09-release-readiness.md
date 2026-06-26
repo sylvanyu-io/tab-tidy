@@ -157,5 +157,5 @@ Page sampling:
 
 ## Evidence Links
 
-- Chrome APIs: `docs/permissions-research.md` and
-  `docs/multi-window-feasibility.md`.
+- Chrome APIs: `docs/04-permissions-privacy.md` and
+  `docs/05-multi-window-feasibility.md`.

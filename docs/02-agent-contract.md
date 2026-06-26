@@ -75,7 +75,7 @@ Recommended settings:
 
 `consolidate_topic_windows` is a later mode, not part of the MVP contract.
 
-The implementation details for cross-window consolidation are captured in [multi-window-feasibility.md](multi-window-feasibility.md).
+The implementation details for cross-window consolidation are captured in [05-multi-window-feasibility.md](05-multi-window-feasibility.md).
 
 ### Existing Group Mode
 
@@ -99,7 +99,7 @@ The implementation details for cross-window consolidation are captured in [multi
 
 `all_granted_origins`: sample all eligible tabs whose origins have host permission. With a host permission request mode, missing visible origins are requested before analysis starts; denied origins fall back to metadata-only.
 
-See [permissions-research.md](permissions-research.md) for the Chrome permission model behind these modes.
+See [04-permissions-privacy.md](04-permissions-privacy.md) for the Chrome permission model behind these modes.
 
 Any mode other than `off` requires a visible risk warning before the first sample is collected. The main one-shot "page summary" opt-in should move from `off` to `all_granted_origins` and request visible-site permission so the agent can read as many eligible pages as the user allows. The long-term summary memory opt-in may request broad optional host access after explicit user activation.
 

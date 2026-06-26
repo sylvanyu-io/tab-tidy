@@ -41,8 +41,8 @@ semantic recall.
 
 Evidence files:
 
-- `docs/benchmarks/planner-refine-min12-task-bursts-gpt-5.4-medium-quality.md`
-- `docs/benchmarks/planner-refine-min12-media-type-gpt-5.4-medium-quality.md`
+- `docs/benchmarks/archive/2026-06-26/planner-refine-min12-task-bursts-gpt-5.4-medium-quality.md`
+- `docs/benchmarks/archive/2026-06-26/planner-refine-min12-media-type-gpt-5.4-medium-quality.md`
 - `docs/benchmarks/data/planner-scale-2026-06-26T09-30-04-592Z-pid10717.json`
 - `docs/benchmarks/data/planner-scale-2026-06-26T09-30-04-592Z-pid10702.json`
 
@@ -122,7 +122,7 @@ BENCHMARK_STRATEGIES=hierarchical \
 BENCHMARK_PROMPT_PRESET=conservative \
 GATEWAY_MODEL=gpt-5.4 \
 GATEWAY_THINKING_INTENSITY=medium \
-BENCHMARK_REPORT_PATH=docs/benchmarks/planner-title-signal-task-bursts-gpt-5.4-medium-smoke.md \
+BENCHMARK_REPORT_PATH=docs/benchmarks/archive/2026-06-26/planner-title-signal-task-bursts-gpt-5.4-medium-smoke.md \
 npm run benchmark:planner-scale
 ```
 

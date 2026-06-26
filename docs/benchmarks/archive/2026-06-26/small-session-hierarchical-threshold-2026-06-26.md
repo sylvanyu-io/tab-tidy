@@ -36,7 +36,7 @@ validation, preview, and undo.
 Raw data:
 
 - `docs/benchmarks/data/planner-scale-2026-06-26T05-59-23-988Z.json`
-- quality rollup in `docs/benchmarks/adaptive-refine-experiment.md`
+- quality rollup in `docs/benchmarks/archive/2026-06-26/adaptive-refine-experiment.md`
 
 | Tabs | Strategy | Time | Coverage | Pair F1 / Topic F1 | Result |
 | ---: | --- | ---: | ---: | ---: | --- |
@@ -56,7 +56,7 @@ below does not adopt that skipped-refinement behavior.
 Raw data:
 
 - `docs/benchmarks/data/planner-scale-2026-06-26T08-30-08-901Z.json`
-- `docs/benchmarks/planner-small-current-gpt-5.4-medium-quality.md`
+- `docs/benchmarks/archive/2026-06-26/planner-small-current-gpt-5.4-medium-quality.md`
 
 | Scenario | Tabs | Strategy | Time | Coverage | Topic F1 | Decision signal |
 | --- | ---: | --- | ---: | ---: | ---: | --- |
@@ -74,7 +74,7 @@ media-type product mode.
 Raw data:
 
 - `docs/benchmarks/data/planner-scale-2026-06-26T08-42-24-205Z.json`
-- `docs/benchmarks/planner-small-media-type-gpt-5.4-medium-quality.md`
+- `docs/benchmarks/archive/2026-06-26/planner-small-media-type-gpt-5.4-medium-quality.md`
 
 | Tabs | Strategy | Time | Coverage | Topic F1 | Decision signal |
 | ---: | --- | ---: | ---: | ---: | --- |
@@ -88,9 +88,9 @@ Raw data:
 Raw data:
 
 - `docs/benchmarks/data/planner-scale-2026-06-26T08-35-28-104Z.json`
-- `docs/benchmarks/planner-small-current-gpt-5.4-mini-medium-quality.md`
+- `docs/benchmarks/archive/2026-06-26/planner-small-current-gpt-5.4-mini-medium-quality.md`
 - `docs/benchmarks/data/planner-scale-2026-06-26T08-44-23-601Z.json`
-- `docs/benchmarks/planner-small-media-type-gpt-5.4-mini-medium-quality.md`
+- `docs/benchmarks/archive/2026-06-26/planner-small-media-type-gpt-5.4-mini-medium-quality.md`
 
 | Scenario | Tabs | Strategy | Time | Coverage | Topic F1 | Decision signal |
 | --- | ---: | --- | ---: | ---: | ---: | --- |
@@ -115,8 +115,8 @@ Raw data:
 
 Quality reports:
 
-- `docs/benchmarks/planner-threshold-task-bursts-gpt-5.4-medium-quality.md`
-- `docs/benchmarks/planner-threshold-media-type-gpt-5.4-medium-quality.md`
+- `docs/benchmarks/archive/2026-06-26/planner-threshold-task-bursts-gpt-5.4-medium-quality.md`
+- `docs/benchmarks/archive/2026-06-26/planner-threshold-media-type-gpt-5.4-medium-quality.md`
 
 The first parallel threshold run exposed a benchmark harness bug: two processes
 that started in the same millisecond generated the same raw-data filename. That
@@ -182,8 +182,8 @@ Raw data:
 
 Quality reports:
 
-- `docs/benchmarks/planner-auto-task-bursts-gpt-5.4-medium-quality.md`
-- `docs/benchmarks/planner-auto-media-type-gpt-5.4-medium-quality.md`
+- `docs/benchmarks/archive/2026-06-26/planner-auto-task-bursts-gpt-5.4-medium-quality.md`
+- `docs/benchmarks/archive/2026-06-26/planner-auto-media-type-gpt-5.4-medium-quality.md`
 
 | Scenario | Prompt preset | Tabs | Auto route | Time | Coverage | Topic F1 |
 | --- | --- | ---: | --- | ---: | ---: | ---: |

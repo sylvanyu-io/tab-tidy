@@ -25,7 +25,7 @@ const benchmarkPromptPreset = parseBenchmarkPromptPreset(process.env.BENCHMARK_P
 const runId = buildBenchmarkRunId();
 const dataDir = resolve("docs/benchmarks/data");
 const dataPath = resolve(dataDir, `${runId}.json`);
-const reportPath = resolve(process.env.BENCHMARK_REPORT_PATH || "docs/benchmarks/gateway-planner-scale.md");
+const reportPath = resolve(process.env.BENCHMARK_REPORT_PATH || "docs/benchmarks/archive/generated/gateway-planner-scale.md");
 const benchmarkPlannerOptions = parsePlannerOptionOverrides();
 
 const settings = {

@@ -88,7 +88,7 @@ extension needs predictable latency, simple state, and transparent rollback.
 
 Skipping refinement for small uncertain leftovers was tested and rejected:
 
-- `docs/benchmarks/adaptive-refine-experiment.md`
+- `docs/benchmarks/archive/2026-06-26/adaptive-refine-experiment.md`
 
 It improved latency in some small runs, but reduced pairwise quality. Since
 semantic grouping quality is the product premise, the default planner should not
