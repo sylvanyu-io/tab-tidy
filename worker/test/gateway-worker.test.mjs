@@ -58,8 +58,24 @@ test("worker derives planner models from the configured allowlist", async () => 
     }),
     env
   );
-  assert.equal(sparkPlanner.status, 400);
-  assert.equal((await sparkPlanner.json()).error.code, "spark_shape_required");
+  assert.equal(sparkPlanner.status, 200);
+});
+
+test("worker keeps the spark progress-copy cap while allowing spark planner shapes", async () => {
+  const env = envWithKv();
+
+  const oversizedProgressCopy = await handle(chatRequest(validProgressCopyBody({ max_tokens: 1500 })), env);
+  assert.equal(oversizedProgressCopy.status, 400);
+  assert.equal((await oversizedProgressCopy.json()).error.code, "spark_token_cap_exceeded");
+
+  const sparkPlanner = await handle(
+    chatRequest({
+      ...validBody({ model: "gpt-5.3-codex-spark" }),
+      max_tokens: 4096
+    }),
+    env
+  );
+  assert.equal(sparkPlanner.status, 200);
 });
 
 test("worker only accepts Tab Tidy request shapes", async () => {

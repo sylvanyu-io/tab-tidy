@@ -129,8 +129,13 @@ function validateChatRequest(body, env, limits) {
     return { ok: false, code: "max_tokens_exceeded", message: `max_tokens must be <= ${limits.maxTokens}.` };
   }
   if (body.model === PROGRESS_COPY_MODEL) {
-    const sparkValidation = validateProgressCopyRequest(body);
-    if (!sparkValidation.ok) return sparkValidation;
+    if (isProgressCopyRequest(body)) {
+      const sparkValidation = validateProgressCopyRequest(body);
+      if (!sparkValidation.ok) return sparkValidation;
+    } else {
+      const plannerValidation = validatePlannerRequest(body, modelAllowlist, { includeProgressModel: true });
+      if (!plannerValidation.ok) return plannerValidation;
+    }
   } else {
     const plannerValidation = validatePlannerRequest(body, modelAllowlist);
     if (!plannerValidation.ok) return plannerValidation;
@@ -160,8 +165,10 @@ function validateTopLevelFields(body) {
   return { ok: true };
 }
 
-function validatePlannerRequest(body, modelAllowlist) {
-  const plannerModels = new Set(modelAllowlist.filter((model) => model !== PROGRESS_COPY_MODEL));
+function validatePlannerRequest(body, modelAllowlist, options = {}) {
+  const plannerModels = new Set(
+    modelAllowlist.filter((model) => options.includeProgressModel || model !== PROGRESS_COPY_MODEL)
+  );
   if (!plannerModels.has(body.model)) {
     return { ok: false, code: "planner_model_not_allowed", message: "This model is not available for Tab Tidy planning." };
   }
@@ -184,6 +191,11 @@ function validatePlannerRequest(body, modelAllowlist) {
     return { ok: false, code: "planner_payload_required", message: "Planner payload must include compact Tab Tidy tab fields." };
   }
   return { ok: true };
+}
+
+function isProgressCopyRequest(body) {
+  const systemText = messageText(body?.messages?.[0]);
+  return /AI browser-tab organization extension|loading captions/i.test(systemText);
 }
 
 function validateProgressCopyRequest(body) {
