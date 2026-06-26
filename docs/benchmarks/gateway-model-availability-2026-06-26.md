@@ -209,3 +209,79 @@ Conclusion:
 - Claude planner calls route successfully, but these models often wrap JSON in
   markdown fences. The extension parser now also tolerates a compatible gateway
   returning a raw fenced JSON body instead of an OpenAI-compatible JSON envelope.
+
+## Follow-up: Local Tunnel Recheck After Model Report
+
+Date: 2026-06-26
+
+The user clarified that the gateway is deployed locally and exposed through a
+Cloudflare Tunnel, so the latest diagnosis repeated the full path instead of
+checking only the extension:
+
+```text
+extension -> cliproxy.sylvanyu.io Worker -> cliproxy-origin.sylvanyu.io tunnel -> 127.0.0.1:18317 -> 127.0.0.1:8317
+```
+
+Current health:
+
+| Layer | Result |
+| --- | --- |
+| local main `127.0.0.1:8317/healthz` | 200 |
+| local API-only proxy `127.0.0.1:18317/healthz` | 200 |
+| origin tunnel `cliproxy-origin.sylvanyu.io/healthz` | 200 |
+| product Worker `cliproxy.sylvanyu.io/healthz` | 200 |
+| product Worker Tab Tidy smoke, `gpt-5.5` | 200 |
+
+Current `/v1/models` with upstream auth:
+
+| Entry point | Status | Matched tested models |
+| --- | --- | --- |
+| local proxy `127.0.0.1:18317` | 200 | 20 |
+| origin tunnel `cliproxy-origin.sylvanyu.io` | 200 | 20 |
+| product Worker `/v1/models` | 404 | not exposed by design |
+
+Matched local/origin models included the Tab Tidy text presets, progress-copy
+model, review model, and image models:
+
+- `gpt-5.5`, `gpt-5.4`, `gpt-5.4-mini`;
+- `claude-opus-4-8`, `claude-sonnet-4-6`;
+- `gpt-5.3-codex-spark`, `codex-auto-review`;
+- `gpt-image-1.5`, `gpt-image-2`.
+
+Product Worker probe with the five extension text presets:
+
+| Model | Public Worker status | Local proxy status | Product parse result |
+| --- | --- | --- | --- |
+| `gpt-5.5` | 200 | 200 | parsed plan |
+| `gpt-5.4` | 200 | 200 | parsed plan |
+| `gpt-5.4-mini` | 200 | 200 | parsed plan |
+| `claude-opus-4-8` | 200 | 200 | parsed plan |
+| `claude-sonnet-4-6` | 200 | 200 | parsed plan |
+
+Boundary checks:
+
+| Model | Product Worker result | Reason |
+| --- | --- | --- |
+| `codex-auto-review` | 200 | allowed as a text chat model; upstream currently routed the probe to `gpt-5.4` |
+| `gpt-5.3-codex-spark` with planner shape | 400 `spark_shape_required` | reserved for progress-copy prompts |
+| `gpt-image-1.5` | 400 `model_not_allowed` | image endpoint/model is not exposed through the Tab Tidy planner Worker |
+| `gpt-image-2` | 400 `model_not_allowed` | image endpoint/model is not exposed through the Tab Tidy planner Worker |
+| `gpt-5.34` | 400 `model_not_allowed` | not a verified local/origin model |
+
+Cloudflare Tunnel logs still showed intermittent QUIC stream resets and
+automatic reconnects. That explains earlier transient `530` / `1033` style
+failures: those are origin-tunnel reachability failures, not model-allowlist
+failures. At the time of this recheck the tunnel had reconnected and all health
+checks passed.
+
+Conclusion:
+
+- The current local CLIProxyAPI service can see the requested text models.
+- The current product Worker can route the five extension preset text models.
+- If Chrome still reports `model_not_allowed` for those presets, suspect a stale
+  deployed Worker version first.
+- If Chrome still reports raw `Unexpected token` from fenced Claude output,
+  suspect a stale loaded extension/service worker first; the current source and
+  current `dist` package include fenced-JSON tolerance.
+- Image models are available upstream but intentionally unavailable through the
+  Tab Tidy planner gateway.
