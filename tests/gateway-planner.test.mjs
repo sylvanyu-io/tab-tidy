@@ -523,6 +523,43 @@ test("AI gateway planner adapts common tabIds output and strips markdown fences"
   assert.deepEqual(plan.reviewTabs, []);
 });
 
+test("AI gateway planner accepts raw fenced JSON bodies from compatible gateways", async () => {
+  const fetchImpl = async () => ({
+    ok: true,
+    async text() {
+      return (
+        "```json\n" +
+        JSON.stringify({
+          groups: [
+            {
+              name: "Developer Docs",
+              color: "cyan",
+              tabIds: [10, 11],
+              confidence: 0.9,
+              reason: "Both tabs are developer documentation."
+            }
+          ],
+          review: []
+        }) +
+        "\n```"
+      );
+    }
+  });
+
+  const plan = await createGatewayPlan(
+    inventory,
+    { ...DEFAULT_SETTINGS, plannerProvider: PLANNER_PROVIDERS.GATEWAY, gatewayApiKey: "gateway-test-key" },
+    fetchImpl
+  );
+
+  assert.equal(plan.schemaVersion, 1);
+  assert.equal(plan.groups[0].title, "Developer Docs");
+  assert.deepEqual(plan.groups[0].tabRefs, [
+    { tabId: 10, windowId: 1 },
+    { tabId: 11, windowId: 1 }
+  ]);
+});
+
 test("AI gateway planner hides invalid model output details from product UI", async () => {
   const fetchImpl = async () => ({
     ok: true,

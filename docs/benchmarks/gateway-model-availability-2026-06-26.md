@@ -147,3 +147,65 @@ support, not planner quality. Some Claude CLI-facing models may answer with
 generic assistant text when given only a tiny synthetic prompt. Tab Tidy's actual
 planner still relies on strict product prompts plus local JSON validation and
 retry handling.
+
+## Follow-up: Local Tunnel Model Probe and Claude JSON Fence Handling
+
+Date: 2026-06-26
+
+The public gateway is a local CLIProxyAPI service exposed by Cloudflare Tunnel.
+The product endpoint still has one extra layer:
+
+```text
+extension -> cliproxy.sylvanyu.io Worker -> cliproxy-origin.sylvanyu.io tunnel -> 127.0.0.1:18317 -> 127.0.0.1:8317
+```
+
+Current service health:
+
+| Layer | Check | Result |
+| --- | --- | --- |
+| local main | `127.0.0.1:8317/healthz` | 200 |
+| local API-only proxy | `127.0.0.1:18317/healthz` | 200 |
+| origin tunnel | `cliproxy-origin.sylvanyu.io/healthz` | 200 |
+| product Worker | `cliproxy.sylvanyu.io/healthz` | 200 |
+
+Current `/v1/models` result with upstream auth:
+
+| Entry point | Status | Matched tested models |
+| --- | --- | --- |
+| local main `8317` | 200 | 19 |
+| local proxy `18317` | 200 | 19 |
+| origin tunnel | 200 | 19 |
+| product Worker `/v1/models` | 404 | not exposed by design |
+
+Matched text and image models on the local/origin gateway included:
+
+- `gpt-5.5`, `gpt-5.4`, `gpt-5.4-mini`, `gpt-5.3-codex-spark`,
+  `codex-auto-review`;
+- Claude Opus/Sonnet/Haiku variants currently listed by CLIProxyAPI;
+- `gpt-image-1.5`, `gpt-image-2`.
+
+Product Worker chat smoke with a Tab Tidy planner-shaped request:
+
+| Request | Status | Notes |
+| --- | --- | --- |
+| planner, `gpt-5.5` | 200 | returned OpenAI-compatible JSON envelope |
+| planner, `gpt-5.4` | 200 | returned OpenAI-compatible JSON envelope |
+| planner, `gpt-5.4-mini` | 200 | returned OpenAI-compatible JSON envelope |
+| planner, `claude-sonnet-4-6` | 200 | content was JSON wrapped in a markdown code fence |
+| planner, `claude-opus-4-8` | 200 | content was JSON wrapped in a markdown code fence |
+| planner, `codex-auto-review` | 200 | routed through Worker |
+| planner, `gpt-5.3-codex-spark` | 400 `spark_shape_required` | intentionally progress-copy only |
+| planner, `gpt-image-2` | 400 `model_not_allowed` | intentionally excluded from Tab Tidy planner gateway |
+| progress copy, `gpt-5.3-codex-spark` | 200 | expected progress-copy route |
+
+Conclusion:
+
+- The local CLIProxyAPI service and Cloudflare Tunnel can see the requested
+  models.
+- The product Worker is intentionally not a general OpenAI proxy. It exposes only
+  Tab Tidy chat/planner-shaped requests, plus the bounded progress-copy route.
+- Image models are visible on the origin gateway but are not usable through the
+  product Worker because Tab Tidy does not need image generation.
+- Claude planner calls route successfully, but these models often wrap JSON in
+  markdown fences. The extension parser now also tolerates a compatible gateway
+  returning a raw fenced JSON body instead of an OpenAI-compatible JSON envelope.

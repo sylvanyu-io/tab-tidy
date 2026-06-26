@@ -71,7 +71,10 @@ async function readJsonResponse(response, label) {
         rawText: message
       };
     }
-    throw new Error(`${label} returned invalid JSON: ${message}`);
+    return {
+      output_text: text,
+      rawText: message
+    };
   }
 }
 
