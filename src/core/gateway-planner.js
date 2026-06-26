@@ -1,6 +1,7 @@
 import {
   BUILTIN_GATEWAY_BASE_URL,
   GATEWAY_CUSTOM_MODEL_VALUE,
+  GROUPING_GRANULARITIES,
   ORGANIZE_MODES,
   PROMPT_PRESET_TEXT,
   PROMPT_PRESETS,
@@ -8,6 +9,7 @@ import {
   TARGET_WINDOW_MODES,
   THINKING_INTENSITIES,
   normalizeSettings,
+  resolveGatewayAuxiliaryModel,
   resolveGatewayModel
 } from "../shared/settings.js";
 import { languageInstruction, localizedText, targetWindowTitle } from "../shared/language.js";
@@ -26,6 +28,10 @@ const REFINE_TITLE_CLUSTER_DOMINANCE_ABOVE = 0.75;
 const REFINE_DEFAULT_CONCURRENCY = 3;
 const REFINE_MAX_CONCURRENCY = 5;
 const COARSE_MAX_BUCKETS = 24;
+const GATEWAY_MAX_OUTPUT_TOKENS = 8192;
+const SPLIT_CLEANUP_MIN_TABS = 20;
+const CLEANUP_CANDIDATE_MIN_LIMIT = 20;
+const CLEANUP_CANDIDATE_MAX_LIMIT = 200;
 const WINDOW_FIELDS = Object.freeze(["id", "type", "focused", "incognito", "tabCount"]);
 const TAB_FIELDS = Object.freeze([
   "id",
@@ -56,6 +62,10 @@ export async function createGatewayPlan(inventory, rawSettings = {}, fetchImpl =
 
   if (shouldUseHierarchicalPlanner(inventory, settings, options)) {
     return createHierarchicalGatewayPlan(inventory, settings, fetchImpl, options);
+  }
+
+  if (shouldUseSplitCleanupPlanner(inventory, settings, options)) {
+    return createSingleGatewayPlanWithAuxiliaryCleanup(inventory, settings, fetchImpl, options);
   }
 
   return createSingleGatewayPlan(inventory, settings, fetchImpl, options);
@@ -96,6 +106,16 @@ async function createSingleGatewayPlan(inventory, settings, fetchImpl, options =
     await emitProgress(options, { phase: "planning", progress: 82, message: "正在整理可执行方案" });
   }
   return parsePlanFromGatewayResponse(data, inventory, settings, options);
+}
+
+async function createSingleGatewayPlanWithAuxiliaryCleanup(inventory, settings, fetchImpl, options = {}) {
+  const groupingSettings = { ...settings, analyzeCleanup: false };
+  const plan = await createSingleGatewayPlan(inventory, groupingSettings, fetchImpl, options);
+  await emitProgress(options, { phase: "cleanup_planning", progress: 84, message: "正在排序清理清单" });
+  const cleanup = await createCleanupGatewayAnalysis(inventory, settings, fetchImpl, options, plan.groups, plan.reviewTabs).catch(() =>
+    buildMergedCleanup([], inventory, settings)
+  );
+  return { ...plan, cleanup };
 }
 
 async function createHierarchicalGatewayPlan(inventory, settings, fetchImpl, options = {}) {
@@ -178,13 +198,14 @@ async function createHierarchicalGatewayPlan(inventory, settings, fetchImpl, opt
   }
 
   await emitProgress(options, { phase: "building_plan", progress: 86, message: "正在合并精分结果" });
-  return buildActionPlan(
-    finalGroups,
-    finalReviewTabs,
-    inventory,
-    settings,
-    settings.analyzeCleanup ? buildMergedCleanup(cleanupCandidates, inventory, settings) : null
-  );
+  let cleanup = null;
+  if (settings.analyzeCleanup) {
+    await emitProgress(options, { phase: "cleanup_planning", progress: 88, message: "正在排序清理清单" });
+    cleanup = await createCleanupGatewayAnalysis(inventory, settings, fetchImpl, options, finalGroups, finalReviewTabs).catch(() =>
+      buildMergedCleanup(cleanupCandidates, inventory, settings)
+    );
+  }
+  return buildActionPlan(finalGroups, finalReviewTabs, inventory, settings, cleanup);
 }
 
 export function gatewayChatCompletionsUrl(settings) {
@@ -207,6 +228,10 @@ function requireGatewayModel(settings) {
     );
   }
   return model;
+}
+
+function requireGatewayAuxiliaryModel(settings) {
+  return resolveGatewayAuxiliaryModel(settings) || requireGatewayModel(settings);
 }
 
 function gatewayHeaders(settings, requestMeta = {}) {
@@ -287,6 +312,7 @@ export function buildPlannerSystemPrompt(settings) {
     analysisFeatureInstruction(settings),
     `Allowed group colors: ${CHROME_GROUP_COLORS.join(", ")}.`,
     classificationAxisInstruction(settings),
+    groupingGranularityInstruction(settings),
     pageSampleGroupingInstruction(settings),
     "Do not close, discard, navigate, execute, or mutate tabs. You only produce recommendations.",
     settings.analyzeGrouping
@@ -315,7 +341,7 @@ function analysisFeatureInstruction(settings) {
       "Also return top-level cleanup: {summary:string,candidates:[{id:number,priority:\"high\"|\"medium\"|\"low\",reason:string,evidence:string[]}]}.",
       "Cleanup candidates are review suggestions only. Recommend stale, duplicated, superseded, finished, or low-value tabs; never imply automatic deletion.",
       "Use tab age/activity signals, original order, titles, URLs, current groups, page summaries, and semantic grouping context when present.",
-      "Return at most 20 cleanup candidates, ordered by review value."
+      "Return a ranked cleanup checklist up to cleanupInstructions.actionLimit. Include high, medium, and low priority items when useful; order by review value."
     );
   }
   return lines.join(" ");
@@ -336,21 +362,43 @@ function pageSampleGroupingInstruction(settings) {
   if (settings.promptPreset === PROMPT_PRESETS.MEDIA_TYPE) {
     return "When pageSampleSignals is present, use it to identify page/media type from visible content. Do not use page topic from samples to split tabs that share the same media type in media_type mode.";
   }
-  return "When pageSampleSignals is present, use it as a compact visible-content index to disambiguate generic titles and sanitized URLs. Keep grouping fine-grained; do not merge broad workflows just because sampled pages are all readable.";
+  return "When pageSampleSignals is present, use it as a compact visible-content index to disambiguate generic titles and sanitized URLs. Do not split groups solely because sampled pages expose more subphrases.";
 }
 
 function groupSizeInstruction(settings) {
   if (settings.promptPreset === PROMPT_PRESETS.MEDIA_TYPE) {
     return "Do not create unrelated generic catch-all groups. In media_type mode, a documentation, issue/PR, paper, video, article, dashboard, shopping/finance, search, mail/chat, or local-tool group is an intentional group, not a catch-all; split only when maxTabsPerGroup would be exceeded or the pages are clearly different media types.";
   }
-  return "Do not create large generic catch-all groups. Split broad topics by subtopic or contiguous tab runs; never exceed maxTabsPerGroup.";
+  if (settings.groupingGranularity === GROUPING_GRANULARITIES.COMPACT) {
+    return "Prefer fewer practical groups. Merge adjacent or semantically related small topics. Avoid singleton or 2-tab groups unless the tabs are clearly unrelated to every nearby group. Never exceed maxTabsPerGroup.";
+  }
+  if (settings.groupingGranularity === GROUPING_GRANULARITIES.DETAILED) {
+    return "Use detailed groups when subtopics or task runs are clearly distinct. Small groups are acceptable when they preserve a real user task. Never exceed maxTabsPerGroup.";
+  }
+  return "Prefer practical medium-sized groups. Avoid singleton or 2-tab groups when they can be merged into a nearby related task without losing meaning. Split only when topics are clearly different or maxTabsPerGroup would be exceeded.";
+}
+
+function groupingGranularityInstruction(settings) {
+  if (settings.promptPreset === PROMPT_PRESETS.MEDIA_TYPE) {
+    return "Grouping granularity still applies, but the media/page type axis is primary.";
+  }
+  if (settings.groupingGranularity === GROUPING_GRANULARITIES.COMPACT) {
+    return "Grouping granularity: compact. Optimize for fewer groups a normal user can scan quickly; preserve accuracy by using Review for genuinely ambiguous tabs rather than creating many tiny groups.";
+  }
+  if (settings.groupingGranularity === GROUPING_GRANULARITIES.DETAILED) {
+    return "Grouping granularity: detailed. Optimize for precise task boundaries while still avoiding domain-only groups.";
+  }
+  return "Grouping granularity: balanced. Prefer a small set of useful topic/task groups over many narrow fragments.";
 }
 
 function coarseClassificationAxisInstruction(settings) {
   if (settings.promptPreset === PROMPT_PRESETS.MEDIA_TYPE) {
     return "Use broad media-type buckets first: documentation, issues/PRs, papers, videos, articles/news, dashboards, shopping/finance, search, mail/chat, and local tools. Do not split those buckets by domain or project during the coarse pass.";
   }
-  return "Prefer broad, useful semantic topics over domain-only grouping.";
+  if (settings.groupingGranularity === GROUPING_GRANULARITIES.DETAILED) {
+    return "Prefer useful semantic topics over domain-only grouping; coarse buckets may still be broad because refinement can split true subtopics.";
+  }
+  return "Prefer broad, useful semantic topics over domain-only grouping. Merge related small task fragments during the coarse pass.";
 }
 
 function reviewModeInstruction(settings) {
@@ -377,6 +425,7 @@ export function buildPlannerPayload(inventory, settings, options = {}) {
       urlPrivacyMode: settings.urlPrivacyMode,
       languageMode: settings.languageMode,
       promptPreset: settings.promptPreset,
+      groupingGranularity: settings.groupingGranularity,
       minConfidenceToApply: settings.minConfidenceToApply,
       maxTabsPerGroup: settings.maxTabsPerGroup,
       thinkingIntensity: settings.gatewayThinkingIntensity,
@@ -434,8 +483,9 @@ export function buildPlannerPayload(inventory, settings, options = {}) {
 
   if (settings.analyzeCleanup) {
     const activityOverview = options.activityOverview || {};
+    const actionLimit = cleanupCandidateLimit(inventory);
     payload.cleanupInstructions = {
-      actionLimit: 20,
+      actionLimit,
       nonDestructive: true,
       humanMustDecide: true,
       outputFields: ["summary", "candidates[].id", "candidates[].priority", "candidates[].reason", "candidates[].evidence"]
@@ -518,6 +568,7 @@ function normalizeCleanupAnalysis(parsed, inventory, activityOverview = {}, sett
     ? source.review
     : [];
   const candidates = [];
+  const limit = cleanupCandidateLimit(inventory);
 
   for (const raw of rawCandidates) {
     const id = typeof raw === "number" ? raw : Number(raw?.id ?? raw?.tabId);
@@ -549,7 +600,7 @@ function normalizeCleanupAnalysis(parsed, inventory, activityOverview = {}, sett
       evidence: normalizeCleanupEvidence(raw?.evidence || raw?.signals || raw?.clues),
       summary: activity.summary || null
     });
-    if (candidates.length >= 12) break;
+    if (candidates.length >= limit) break;
   }
 
   return {
@@ -564,6 +615,17 @@ function normalizeCleanupAnalysis(parsed, inventory, activityOverview = {}, sett
     ).slice(0, 220),
     candidates
   };
+}
+
+function cleanupCandidateLimit(inventory = {}) {
+  const count = (inventory.plannerTabs || []).length;
+  if (!count) return CLEANUP_CANDIDATE_MIN_LIMIT;
+  if (count <= 80) return count;
+  return Math.min(count, CLEANUP_CANDIDATE_MAX_LIMIT, Math.max(CLEANUP_CANDIDATE_MIN_LIMIT, Math.ceil(count * 0.7)));
+}
+
+function cleanupPlannerMaxTokens(inventory = {}) {
+  return Math.min(GATEWAY_MAX_OUTPUT_TOKENS, Math.max(4096, cleanupCandidateLimit(inventory) * 70));
 }
 
 function unwrapCleanupAnalysis(value) {
@@ -591,7 +653,7 @@ function daysFromMs(value) {
 
 async function createCoarseGatewayBuckets(inventory, settings, fetchImpl, options = {}) {
   const body = {
-    model: requireGatewayModel(settings),
+    model: requireGatewayAuxiliaryModel(settings),
     messages: [
       { role: "system", content: buildCoarseSystemPrompt(settings, options) },
       { role: "user", content: buildCoarseUserPrompt(inventory, settings) }
@@ -616,6 +678,86 @@ async function createCoarseGatewayBuckets(inventory, settings, fetchImpl, option
     throw new Error(gatewayErrorMessage(response, data, settings));
   }
   return normalizeCoarsePlan(parseGatewayJson(data), inventory, settings);
+}
+
+async function createCleanupGatewayAnalysis(inventory, settings, fetchImpl, options = {}, groups = [], reviewTabs = []) {
+  const body = {
+    model: requireGatewayAuxiliaryModel(settings),
+    messages: [
+      { role: "system", content: buildCleanupSystemPrompt(settings) },
+      { role: "user", content: buildCleanupUserPrompt(inventory, settings, options, groups, reviewTabs) }
+    ],
+    response_format: { type: "json_object" },
+    max_tokens: cleanupPlannerMaxTokens(inventory)
+  };
+  applyThinkingIntensity(body, settings, THINKING_INTENSITIES.LOW);
+  const { response, data } = await fetchJsonWithTimeout(
+    fetchImpl,
+    gatewayChatCompletionsUrl(settings),
+    {
+      method: "POST",
+      headers: gatewayHeaders(settings, gatewayRequestMeta(inventory, options)),
+      body: JSON.stringify(body)
+    },
+    "AI gateway cleanup planner",
+    options.timeoutMs,
+    options.signal
+  );
+  if (!response.ok) {
+    throw new Error(gatewayErrorMessage(response, data, settings));
+  }
+  return normalizeCleanupAnalysis(parseGatewayJson(data), inventory, options.activityOverview || {}, settings);
+}
+
+function buildCleanupSystemPrompt(settings) {
+  return [
+    "You are a JSON-only cleanup ranking planner for a Chrome tab organization extension.",
+    "Return exactly one JSON object. Do not include markdown, prose, comments, or explanations outside JSON.",
+    "Shape: {\"summary\":\"Short summary\",\"candidates\":[{\"id\":1,\"priority\":\"high|medium|low\",\"reason\":\"Why review this tab\",\"evidence\":[\"signal\"]}]}",
+    "This is a manual review checklist, not an automatic close command.",
+    "Use high for likely stale/duplicate/superseded/finished tabs, medium for plausible cleanup items, and low for low-urgency items that still help the user review the tab set.",
+    "Rank as many eligible tabs as useful up to cleanupInstructions.actionLimit. For sessions at or below that limit, include nearly all tabs unless they are clearly current, pinned, or unsafe to suggest.",
+    "Keep each candidate compact: reason should be one short clause, evidence should contain one or two short signals.",
+    "Use original tab order, tab age/activity, current groups, page summaries, and the proposed grouping context.",
+    "Do not recommend closing pinned tabs as high priority unless evidence is very strong.",
+    languageInstruction(settings.languageMode)
+  ].join("\n");
+}
+
+function buildCleanupUserPrompt(inventory, settings, options = {}, groups = [], reviewTabs = []) {
+  const payload = buildPlannerPayload(inventory, { ...settings, analyzeGrouping: false, analyzeCleanup: true }, options);
+  const cleanupTabFields = ["id", "windowId", "index", "sequenceIndex", "title", "hostname", "sanitizedUrl", "discarded", "existingGroup"];
+  return [
+    "Software engineering task input: rank browser tabs for manual cleanup review.",
+    "Return compact cleanup JSON only.",
+    JSON.stringify({
+      schema: "tab_tidy_cleanup_ranking_v1",
+      settings: payload.settings,
+      cleanupInstructions: payload.cleanupInstructions,
+      scope: payload.scope,
+      tabFields: cleanupTabFields,
+      tabs: projectRows(payload.tabFields, payload.tabs, cleanupTabFields),
+      pageSampleSignalFields: payload.pageSampleSignalFields,
+      pageSampleSignals: payload.pageSampleSignals,
+      activityFields: payload.activityFields,
+      activity: payload.activity,
+      recap: payload.recap,
+      proposedGroupFields: ["title", "color", "confidence", "ids", "reason"],
+      proposedGroups: (groups || []).map((group) => [
+        group.title,
+        group.color,
+        group.confidence,
+        (group.tabRefs || []).map((ref) => ref.tabId),
+        group.reason || ""
+      ]),
+      review: (reviewTabs || []).map((ref) => (typeof ref === "number" ? ref : ref.tabId))
+    })
+  ].join("\n");
+}
+
+function projectRows(sourceFields, rows, targetFields) {
+  const indexes = targetFields.map((field) => sourceFields.indexOf(field));
+  return (rows || []).map((row) => indexes.map((index) => (index >= 0 ? row[index] : null)));
 }
 
 async function refineBucket(bucket, inventory, settings, fetchImpl, options = {}) {
@@ -660,6 +802,7 @@ async function refineBucket(bucket, inventory, settings, fetchImpl, options = {}
 
   const refineSettings = {
     ...settings,
+    analyzeCleanup: false,
     customPrompt: [
       settings.customPrompt,
       `Refine this coarse bucket: ${bucket.title}.`,
@@ -737,6 +880,8 @@ function buildCoarseUserPrompt(inventory, settings) {
       tabFields: payload.tabFields,
       tabs: payload.tabs,
       pageSampleFields: payload.pageSampleFields,
+      pageSampleSignalFields: payload.pageSampleSignalFields,
+      pageSampleSignals: payload.pageSampleSignals,
       lockedGroupFields: payload.lockedGroupFields,
       lockedGroups: payload.lockedGroups,
       pageSampleResultFields: payload.pageSampleResultFields,
@@ -871,8 +1016,15 @@ function shouldUseHierarchicalPlanner(inventory, settings, options = {}) {
   return (inventory.plannerTabs || []).length >= minTabs;
 }
 
+function shouldUseSplitCleanupPlanner(inventory, settings, options = {}) {
+  if (options.splitCleanup === false) return false;
+  if (!settings?.analyzeGrouping || !settings?.analyzeCleanup) return false;
+  if (!(inventory.plannerTabs || []).length) return false;
+  if ((inventory.plannerTabs || []).length < SPLIT_CLEANUP_MIN_TABS) return false;
+  return resolveGatewayAuxiliaryModel(settings) !== resolveGatewayModel(settings);
+}
+
 function shouldRefineBucket(bucket, settings, options = {}) {
-  if (settings.analyzeCleanup) return true;
   const minTabs = options.refineBucketMinTabs || Math.min(settings.maxTabsPerGroup, REFINE_BUCKET_MIN_TABS);
   const confidenceBelow = options.refineConfidenceBelow ?? REFINE_CONFIDENCE_BELOW;
   return bucket.tabRefs.length >= minTabs || bucket.confidence < confidenceBelow || Boolean(bucket.refineSignal);
@@ -1048,13 +1200,14 @@ function mergeCleanupPart(cleanup, state) {
 function buildMergedCleanup(candidates, inventory, settings) {
   const tabOrder = buildTabOrder(inventory);
   const priorityRank = { high: 0, medium: 1, low: 2 };
+  const limit = cleanupCandidateLimit(inventory);
   const sortedCandidates = [...(candidates || [])]
     .sort((left, right) => {
       const leftRank = priorityRank[left.priority] ?? priorityRank.medium;
       const rightRank = priorityRank[right.priority] ?? priorityRank.medium;
       return leftRank - rightRank || tabOrder(left.tabId) - tabOrder(right.tabId);
     })
-    .slice(0, 12);
+    .slice(0, limit);
   return {
     schema: "tab_tidy_cleanup_v1",
     summary: sortedCandidates.length
@@ -1146,7 +1299,7 @@ function formatPageSample(result) {
     sample.language || "",
     sample.contentKind || "",
     sample.headings || [],
-    sample.visibleText || "",
+    "",
     ""
   ];
 }
@@ -1179,7 +1332,7 @@ function compactSampleSummary(sample = {}) {
     pieces.push(text);
   }
   const text = pieces.join(" ");
-  return text.replace(/\s+/g, " ").slice(0, 360);
+  return text.replace(/\s+/g, " ").slice(0, 320);
 }
 
 export function parsePlanFromResponse(data) {

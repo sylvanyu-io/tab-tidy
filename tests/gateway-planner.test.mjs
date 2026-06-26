@@ -2,7 +2,13 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { buildPlannerSystemPrompt, createGatewayPlan } from "../src/core/gateway-planner.js";
 import { validatePlan } from "../src/core/plan-validator.js";
-import { DEFAULT_SETTINGS, GATEWAY_CUSTOM_MODEL_VALUE, PLANNER_PROVIDERS, PROMPT_PRESETS } from "../src/shared/settings.js";
+import {
+  DEFAULT_SETTINGS,
+  GATEWAY_CUSTOM_MODEL_VALUE,
+  GROUPING_GRANULARITIES,
+  PLANNER_PROVIDERS,
+  PROMPT_PRESETS
+} from "../src/shared/settings.js";
 
 const inventory = {
   scope: { kind: "current_window", currentWindowId: 1, windowIds: [1] },
@@ -36,6 +42,23 @@ test("planner prompt includes the selected organization preset", () => {
   assert.match(prompt, /intentional group, not a catch-all/);
   assert.match(prompt, /code\/issues\/PRs/);
   assert.match(prompt, /shopping\/finance/);
+});
+
+test("planner prompt exposes grouping granularity without losing ordering constraints", () => {
+  const compactPrompt = buildPlannerSystemPrompt({
+    ...DEFAULT_SETTINGS,
+    groupingGranularity: GROUPING_GRANULARITIES.COMPACT
+  });
+  const detailedPrompt = buildPlannerSystemPrompt({
+    ...DEFAULT_SETTINGS,
+    groupingGranularity: GROUPING_GRANULARITIES.DETAILED
+  });
+
+  assert.match(compactPrompt, /Grouping granularity: compact/);
+  assert.match(compactPrompt, /Avoid singleton or 2-tab groups/);
+  assert.match(compactPrompt, /Use sequenceIndex and index/);
+  assert.match(detailedPrompt, /Grouping granularity: detailed/);
+  assert.match(detailedPrompt, /precise task boundaries/);
 });
 
 test("AI gateway planner posts a chat-completions JSON request", async () => {
@@ -84,6 +107,7 @@ test("AI gateway planner posts a chat-completions JSON request", async () => {
     assert.equal(payload.schema, "tab_tidy_compact_v1");
     assert.equal(payload.settings.languageMode, "en-US");
     assert.equal(payload.settings.promptPreset, "conservative");
+    assert.equal(payload.settings.groupingGranularity, "balanced");
     assert.deepEqual(payload.excludedFields, ["id", "windowId", "reason"]);
     assert.deepEqual(payload.tabFields, [
       "id",
@@ -108,7 +132,7 @@ test("AI gateway planner posts a chat-completions JSON request", async () => {
     const firstSample = rowToObject(payload.pageSampleFields, firstTab.pageSample);
     assert.equal(firstSample.status, "ok");
     assert.equal(firstSample.contentKind, "");
-    assert.equal(firstSample.visibleText, "JSON schema output");
+    assert.equal(firstSample.visibleText, "");
     assert.deepEqual(payload.pageSampleSignalFields, ["id", "contentKind", "title", "headings", "summary"]);
     assert.equal(payload.pageSampleSignals.length, 1);
     assert.equal(payload.pageSampleSignals[0][0], 10);
@@ -217,6 +241,77 @@ test("AI gateway planner returns cleanup candidates in the same full-detail plan
   assert.equal(plan.cleanup.candidates[0].tabId, 10);
   assert.equal(plan.cleanup.candidates[0].ageMs, 18 * 24 * 60 * 60 * 1000);
   assert.deepEqual(plan.cleanup.candidates[0].evidence, ["18 days old", "low activity"]);
+});
+
+test("AI gateway planner keeps a ranked cleanup checklist beyond the old 12-item cap", async () => {
+  const plannerTabs = Array.from({ length: 33 }, (_, index) => ({
+    tabId: 40_000 + index,
+    windowId: 1,
+    index,
+    sequenceIndex: index,
+    title: `Cleanup tab ${index + 1}`,
+    hostname: "example.com"
+  }));
+  const cleanupInventory = { ...inventory, plannerTabs, tabs: plannerTabs, pageSamples: [] };
+  const fetchImpl = async (_url, options) => {
+    const body = JSON.parse(options.body);
+    const payload = JSON.parse(body.messages[1].content.slice(body.messages[1].content.indexOf("{")));
+    assert.equal(payload.cleanupInstructions.actionLimit, 33);
+    return {
+      ok: true,
+      async json() {
+        return {
+          choices: [
+            {
+              message: {
+                content: JSON.stringify({
+                  groups: [
+                    {
+                      key: "all-tabs",
+                      title: "All Tabs",
+                      color: "blue",
+                      confidence: 0.9,
+                      ids: plannerTabs.map((tab) => tab.tabId),
+                      reason: "One compact group."
+                    }
+                  ],
+                  review: [],
+                  cleanup: {
+                    summary: "Ranked checklist.",
+                    candidates: plannerTabs.map((tab, index) => ({
+                      id: tab.tabId,
+                      priority: index < 5 ? "high" : index < 20 ? "medium" : "low",
+                      reason: `Review item ${index + 1}.`,
+                      evidence: ["ranked"]
+                    }))
+                  }
+                })
+              }
+            }
+          ]
+        };
+      }
+    };
+  };
+
+  const plan = await createGatewayPlan(
+    cleanupInventory,
+    {
+      ...DEFAULT_SETTINGS,
+      plannerProvider: PLANNER_PROVIDERS.GATEWAY,
+      gatewayBaseUrl: "http://localhost:8317/v1",
+      gatewayApiKey: "gateway-test-key",
+      languageMode: "en-US"
+    },
+    fetchImpl,
+    { hierarchical: false, splitCleanup: false }
+  );
+
+  assert.equal(plan.cleanup.candidates.length, 33);
+  assert.deepEqual(
+    plan.cleanup.candidates.slice(0, 3).map((candidate) => candidate.priority),
+    ["high", "high", "high"]
+  );
 });
 
 test("AI gateway planner omits cleanup payload when cleanup analysis is disabled", async () => {
@@ -1260,7 +1355,12 @@ test("AI gateway planner refines mid-sized buckets with repeated mixed title pat
     };
   };
 
-  const settings = { ...DEFAULT_SETTINGS, plannerProvider: PLANNER_PROVIDERS.GATEWAY, gatewayApiKey: "gateway-test-key" };
+  const settings = {
+    ...DEFAULT_SETTINGS,
+    plannerProvider: PLANNER_PROVIDERS.GATEWAY,
+    gatewayApiKey: "gateway-test-key",
+    analyzeCleanup: false
+  };
   const plan = await createGatewayPlan(mixedInventory, settings, fetchImpl, { hierarchical: true });
   const validation = validatePlan(plan, mixedInventory, settings);
 
@@ -1413,10 +1513,102 @@ test("AI gateway planner routes 50-tab product sessions through hierarchical wor
     }
 
     const payload = JSON.parse(body.messages[1].content.slice(body.messages[1].content.indexOf("{")));
-    const tabIds = payload.tabs.map((row) => row[0]);
-    assert.match(body.messages[0].content, /Analysis features: grouping=enabled, cleanup=enabled/);
-    assert.equal(payload.analysisFeatures.cleanup, true);
-    assert.equal((payload.activity || []).every((row) => tabIds.includes(row[0])), true);
+    assert.match(body.messages[0].content, /cleanup ranking planner/);
+    assert.equal(payload.schema, "tab_tidy_cleanup_ranking_v1");
+    assert.equal(payload.cleanupInstructions.actionLimit, 50);
+    assert.deepEqual(
+      payload.proposedGroups.map((row) => row[3].length),
+      [25, 25]
+    );
+    return {
+      ok: true,
+      async json() {
+        return {
+          choices: [
+            {
+              message: {
+                content: JSON.stringify({
+                  summary: "Ranked cleanup checklist.",
+                  candidates: [
+                    { id: 10_049, priority: "high", reason: "Dormant tail tab.", evidence: ["30 days old"] },
+                    { id: 10_000, priority: "medium", reason: "Old first-half tab.", evidence: ["16 days old"] }
+                  ]
+                })
+              }
+            }
+          ]
+        };
+      }
+    };
+  };
+
+  const settings = {
+    ...DEFAULT_SETTINGS,
+    plannerProvider: PLANNER_PROVIDERS.GATEWAY,
+    gatewayApiKey: "gateway-test-key"
+  };
+  const plan = await createGatewayPlan(thresholdInventory, settings, fetchImpl, { activityOverview });
+  const validation = validatePlan(plan, thresholdInventory, settings);
+
+  assert.equal(requests.length, 2);
+  assert.equal(requests.every((request) => request.model === "gpt-5.3-codex-spark"), true);
+  assert.match(requests[0].messages[0].content, /fast first-pass/);
+  assert.match(requests[1].messages[0].content, /cleanup ranking planner/);
+  assert.equal(validation.ok, true, validation.errors.join(" "));
+  assert.deepEqual(
+    plan.groups.map((group) => group.tabRefs.length),
+    [25, 25]
+  );
+  assert.deepEqual(
+    plan.cleanup.candidates.map((candidate) => candidate.tabId),
+    [10_049, 10_000]
+  );
+});
+
+test("AI gateway planner splits sub-50 cleanup ranking to the auxiliary model", async () => {
+  const plannerTabs = Array.from({ length: 33 }, (_, index) => ({
+    tabId: 30_000 + index,
+    windowId: 1,
+    index,
+    sequenceIndex: index,
+    title: `Small cleanup tab ${index}`,
+    hostname: "example.com"
+  }));
+  const smallInventory = { ...inventory, plannerTabs, tabs: plannerTabs, pageSamples: [] };
+  const requests = [];
+
+  const fetchImpl = async (_url, options) => {
+    const body = JSON.parse(options.body);
+    requests.push(body);
+    const payload = JSON.parse(body.messages[1].content.slice(body.messages[1].content.indexOf("{")));
+
+    if (/cleanup ranking planner/.test(body.messages[0].content)) {
+      assert.equal(body.model, "gpt-5.3-codex-spark");
+      assert.equal(payload.schema, "tab_tidy_cleanup_ranking_v1");
+      assert.equal(payload.cleanupInstructions.actionLimit, 33);
+      assert.equal(payload.proposedGroups.length, 2);
+      return {
+        ok: true,
+        async json() {
+          return {
+            choices: [
+              {
+                message: {
+                  content: JSON.stringify({
+                    summary: "Review checklist.",
+                    candidates: [{ id: 30_032, priority: "high", reason: "Old tail tab.", evidence: ["end of session"] }]
+                  })
+                }
+              }
+            ]
+          };
+        }
+      };
+    }
+
+    assert.equal(body.model, "gpt-5.5");
+    assert.equal(payload.analysisFeatures.cleanup, false);
+    assert.equal(payload.cleanupInstructions, undefined);
     return {
       ok: true,
       async json() {
@@ -1427,21 +1619,23 @@ test("AI gateway planner routes 50-tab product sessions through hierarchical wor
                 content: JSON.stringify({
                   groups: [
                     {
-                      key: `bucket-${tabIds[0]}`,
-                      title: `Bucket ${tabIds[0]}`,
+                      key: "small-a",
+                      title: "Small A",
                       color: "blue",
                       confidence: 0.95,
-                      ids: tabIds,
-                      reason: "Refined bucket."
+                      ids: plannerTabs.slice(0, 18).map((tab) => tab.tabId),
+                      reason: "First small group."
+                    },
+                    {
+                      key: "small-b",
+                      title: "Small B",
+                      color: "green",
+                      confidence: 0.95,
+                      ids: plannerTabs.slice(18).map((tab) => tab.tabId),
+                      reason: "Second small group."
                     }
                   ],
-                  review: [],
-                  cleanup: {
-                    summary: "Bucket cleanup candidates.",
-                    candidates: tabIds.includes(10_000)
-                      ? [{ id: 10_000, priority: "medium", reason: "Old first-half tab.", evidence: ["16 days old"] }]
-                      : [{ id: 10_049, priority: "high", reason: "Dormant tail tab.", evidence: ["30 days old"] }]
-                  }
+                  review: []
                 })
               }
             }
@@ -1451,21 +1645,25 @@ test("AI gateway planner routes 50-tab product sessions through hierarchical wor
     };
   };
 
-  const settings = { ...DEFAULT_SETTINGS, plannerProvider: PLANNER_PROVIDERS.GATEWAY, gatewayApiKey: "gateway-test-key" };
-  const plan = await createGatewayPlan(thresholdInventory, settings, fetchImpl, { activityOverview });
-  const validation = validatePlan(plan, thresholdInventory, settings);
+  const settings = {
+    ...DEFAULT_SETTINGS,
+    plannerProvider: PLANNER_PROVIDERS.GATEWAY,
+    gatewayApiKey: "gateway-test-key"
+  };
+  const plan = await createGatewayPlan(smallInventory, settings, fetchImpl);
+  const validation = validatePlan(plan, smallInventory, settings);
 
-  assert.equal(requests.length, 3);
-  assert.match(requests[0].messages[0].content, /fast first-pass/);
-  assert.equal(requests.slice(1).every((request) => request.messages[1].content.includes('"cleanup":true')), true);
+  assert.equal(requests.length, 2);
+  assert.match(requests[0].messages[0].content, /JSON-only planner/);
+  assert.match(requests[1].messages[0].content, /cleanup ranking planner/);
   assert.equal(validation.ok, true, validation.errors.join(" "));
   assert.deepEqual(
     plan.groups.map((group) => group.tabRefs.length),
-    [25, 25]
+    [18, 15]
   );
   assert.deepEqual(
     plan.cleanup.candidates.map((candidate) => candidate.tabId),
-    [10_049, 10_000]
+    [30_032]
   );
 });
 
@@ -1519,7 +1717,12 @@ test("AI gateway planner keeps sub-50-tab sessions on the single full-detail pat
     };
   };
 
-  const settings = { ...DEFAULT_SETTINGS, plannerProvider: PLANNER_PROVIDERS.GATEWAY, gatewayApiKey: "gateway-test-key" };
+  const settings = {
+    ...DEFAULT_SETTINGS,
+    plannerProvider: PLANNER_PROVIDERS.GATEWAY,
+    gatewayApiKey: "gateway-test-key",
+    analyzeCleanup: false
+  };
   const plan = await createGatewayPlan(smallInventory, settings, fetchImpl);
   const validation = validatePlan(plan, smallInventory, settings);
 
@@ -1571,7 +1774,12 @@ test("AI gateway planner splits oversized coarse buckets before refinement", asy
       }
     };
   };
-  const settings = { ...DEFAULT_SETTINGS, plannerProvider: PLANNER_PROVIDERS.GATEWAY, gatewayApiKey: "gateway-test-key" };
+  const settings = {
+    ...DEFAULT_SETTINGS,
+    plannerProvider: PLANNER_PROVIDERS.GATEWAY,
+    gatewayApiKey: "gateway-test-key",
+    analyzeCleanup: false
+  };
   const plan = await createGatewayPlan(largeInventory, settings, fetchImpl, {
     hierarchical: true,
     refineBucketMinTabs: 2,
@@ -1637,7 +1845,13 @@ test("AI gateway planner splits high-confidence fallback buckets by original ord
     };
   };
 
-  const settings = { ...DEFAULT_SETTINGS, plannerProvider: PLANNER_PROVIDERS.GATEWAY, gatewayApiKey: "gateway-test-key", maxTabsPerGroup: 2 };
+  const settings = {
+    ...DEFAULT_SETTINGS,
+    plannerProvider: PLANNER_PROVIDERS.GATEWAY,
+    gatewayApiKey: "gateway-test-key",
+    maxTabsPerGroup: 2,
+    analyzeCleanup: false
+  };
   const plan = await createGatewayPlan(largeInventory, settings, fetchImpl, {
     hierarchical: true,
     refineBucketMinTabs: 2,
@@ -1699,6 +1913,7 @@ test("AI gateway planner caps large-job refinement thinking at medium by default
       ...DEFAULT_SETTINGS,
       plannerProvider: PLANNER_PROVIDERS.GATEWAY,
       gatewayApiKey: "gateway-test-key",
+      analyzeCleanup: false,
       gatewayThinkingIntensity: "ultra"
     },
     fetchImpl,
@@ -1756,7 +1971,8 @@ test("AI gateway media-type refinement preserves the media axis", async () => {
       ...DEFAULT_SETTINGS,
       plannerProvider: PLANNER_PROVIDERS.GATEWAY,
       gatewayApiKey: "gateway-test-key",
-      promptPreset: PROMPT_PRESETS.MEDIA_TYPE
+      promptPreset: PROMPT_PRESETS.MEDIA_TYPE,
+      analyzeCleanup: false
     },
     fetchImpl,
     {
@@ -1828,7 +2044,12 @@ test("AI gateway planner runs bucket refinements with bounded concurrency", asyn
     };
   };
 
-  const settings = { ...DEFAULT_SETTINGS, plannerProvider: PLANNER_PROVIDERS.GATEWAY, gatewayApiKey: "gateway-test-key" };
+  const settings = {
+    ...DEFAULT_SETTINGS,
+    plannerProvider: PLANNER_PROVIDERS.GATEWAY,
+    gatewayApiKey: "gateway-test-key",
+    analyzeCleanup: false
+  };
   const plan = await createGatewayPlan(largeInventory, settings, fetchImpl, {
     hierarchical: true,
     refineBucketMinTabs: 2,

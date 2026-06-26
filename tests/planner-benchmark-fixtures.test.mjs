@@ -41,7 +41,7 @@ test("benchmark fixtures store ground truth without sending it to planner payloa
   const payload = buildPlannerPayload(inventory, DEFAULT_SETTINGS);
   const sampleColumn = payload.tabs[0][payload.tabFields.indexOf("pageSample")];
   assert.equal(sampleColumn[payload.pageSampleFields.indexOf("status")], "ok");
-  assert.match(sampleColumn[payload.pageSampleFields.indexOf("visibleText")], /Codex|Chrome extension|Model evaluation/);
+  assert.equal(sampleColumn[payload.pageSampleFields.indexOf("visibleText")], "");
   assert.ok(payload.pageSampleSignals.length > 0);
   assert.match(payload.pageSampleSignals[0][payload.pageSampleSignalFields.indexOf("summary")], /Codex|Chrome extension|Model evaluation/);
 
