@@ -12,6 +12,10 @@ export function buildPreview(plan, inventory, validation, rawSettings = {}) {
 
   return {
     mode: settings.organizeMode,
+    analysisFeatures: {
+      grouping: Boolean(settings.analyzeGrouping),
+      cleanup: Boolean(settings.analyzeCleanup)
+    },
     targetWindow: plan.targetWindow || null,
     requiresConfirmation: settings.organizeMode === ORGANIZE_MODES.CONSOLIDATE_ONE_WINDOW,
     canApply: Boolean(validation?.ok),
@@ -28,6 +32,7 @@ export function buildPreview(plan, inventory, validation, rawSettings = {}) {
     reviewGroupReason: reviewGroupReason(settings.languageMode),
     languageMode: settings.languageMode,
     pageSampling: summarizePageSamples(inventory.pageSamples || []),
+    cleanup: summarizeCleanup(plan.cleanup, settings),
     groups: (plan.groups || []).map((group) => ({
       groupKey: group.groupKey,
       title: group.title,
@@ -45,6 +50,33 @@ export function buildPreview(plan, inventory, validation, rawSettings = {}) {
         ? [`${movedTabsCount} eligible tab(s) will be moved into one target window.`]
         : [])
     ]
+  };
+}
+
+function summarizeCleanup(cleanup, settings) {
+  if (!settings.analyzeCleanup || !cleanup) return null;
+  const candidates = Array.isArray(cleanup.candidates) ? cleanup.candidates : [];
+  return {
+    schema: cleanup.schema || "tab_tidy_cleanup_v1",
+    summary: String(cleanup.summary || "").slice(0, 220),
+    candidateCount: candidates.length,
+    candidates: candidates.slice(0, 20).map((candidate) => ({
+      tabId: candidate.tabId,
+      windowId: candidate.windowId,
+      index: candidate.index,
+      sequenceIndex: candidate.sequenceIndex,
+      title: String(candidate.title || "").slice(0, 160),
+      hostname: String(candidate.hostname || "").slice(0, 120),
+      sanitizedUrl: String(candidate.sanitizedUrl || "").slice(0, 180),
+      currentGroupTitle: String(candidate.currentGroupTitle || "").slice(0, 80),
+      ageMs: Number(candidate.ageMs || 0),
+      idleMs: Number(candidate.idleMs || 0),
+      activeCount: Number(candidate.activeCount || 0),
+      priority: candidate.priority || "medium",
+      reason: String(candidate.reason || "").slice(0, 220),
+      evidence: Array.isArray(candidate.evidence) ? candidate.evidence.slice(0, 4).map((item) => String(item || "").slice(0, 120)) : [],
+      summary: candidate.summary || null
+    }))
   };
 }
 

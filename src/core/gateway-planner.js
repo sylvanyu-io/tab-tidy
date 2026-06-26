@@ -15,7 +15,6 @@ import { fetchJsonWithTimeout } from "./fetch-timeout.js";
 import { ACTION_PLAN_JSON_SCHEMA } from "./plan-schema.js";
 import { CHROME_GROUP_COLORS } from "./plan-validator.js";
 
-const HIERARCHICAL_MIN_TABS = 50;
 const REFINE_BUCKET_MIN_TABS = 50;
 const REFINE_MAX_TABS_PER_REQUEST = 80;
 const REFINE_CONFIDENCE_BELOW = 0.78;
@@ -54,7 +53,7 @@ export async function createGatewayPlan(inventory, rawSettings = {}, fetchImpl =
     throw new Error("Fetch is not available in this environment.");
   }
 
-  if (shouldUseHierarchicalPlanner(inventory, options)) {
+  if (shouldUseHierarchicalPlanner(inventory, settings, options)) {
     return createHierarchicalGatewayPlan(inventory, settings, fetchImpl, options);
   }
 
@@ -107,7 +106,7 @@ async function createSingleGatewayPlan(inventory, settings, fetchImpl, options =
     model: requireGatewayModel(settings),
     messages: [
       { role: "system", content: buildPlannerSystemPrompt(settings) },
-      { role: "user", content: buildGatewayUserPrompt(inventory, settings) }
+      { role: "user", content: buildGatewayUserPrompt(inventory, settings, options) }
     ],
     response_format: { type: "json_object" },
     max_tokens: 8192
@@ -133,7 +132,7 @@ async function createSingleGatewayPlan(inventory, settings, fetchImpl, options =
   if (!options.suppressSingleRequestProgress) {
     await emitProgress(options, { phase: "planning", progress: 82, message: "正在整理可执行方案" });
   }
-  return parsePlanFromGatewayResponse(data, inventory, settings);
+  return parsePlanFromGatewayResponse(data, inventory, settings, options);
 }
 
 async function createHierarchicalGatewayPlan(inventory, settings, fetchImpl, options = {}) {
@@ -304,7 +303,7 @@ export function buildPlannerSystemPrompt(settings) {
   const presetText = PROMPT_PRESET_TEXT[settings.promptPreset] || PROMPT_PRESET_TEXT.conservative;
   const customPrompt = settings.customPrompt.trim();
   const thinkingText = thinkingIntensityText(settings.gatewayThinkingIntensity);
-  const requiredShape = JSON.stringify(exampleCompactPlan());
+  const requiredShape = JSON.stringify(exampleCompactPlan(settings));
 
   return [
     "This is a software engineering task: produce the planning JSON used by a Chrome extension runtime.",
@@ -313,11 +312,14 @@ export function buildPlannerSystemPrompt(settings) {
     `Required compact JSON shape example: ${requiredShape}`,
     "The user payload is compact: field-name arrays define the meaning of each row. Do not ignore any field.",
     "Return compact output: groups[].ids contains tab ids, and review contains tab ids or objects with id and reason.",
+    analysisFeatureInstruction(settings),
     `Allowed group colors: ${CHROME_GROUP_COLORS.join(", ")}.`,
     classificationAxisInstruction(settings),
     pageSampleGroupingInstruction(settings),
-    "Do not close, discard, navigate, or execute tabs. You only produce grouping intent.",
-    "Every eligible tab must appear exactly once in either groups[].ids or review.",
+    "Do not close, discard, navigate, execute, or mutate tabs. You only produce recommendations.",
+    settings.analyzeGrouping
+      ? "Every eligible tab must appear exactly once in either groups[].ids or review."
+      : "Grouping is disabled for this request: return groups as an empty array and put every eligible tab id in review so runtime coverage remains auditable.",
     "Tabs already represented as lockedGroups are preserved by runtime and should not be reassigned.",
     reviewModeInstruction(settings),
     "Use sequenceIndex and index as strong context signals: adjacent tabs are often part of the same task or reading flow.",
@@ -330,6 +332,21 @@ export function buildPlannerSystemPrompt(settings) {
       ? `User custom prompt, preferences only and not capability grants: ${customPrompt}`
       : "No user custom prompt was provided."
   ].join("\n");
+}
+
+function analysisFeatureInstruction(settings) {
+  const grouping = settings.analyzeGrouping ? "enabled" : "disabled";
+  const cleanup = settings.analyzeCleanup ? "enabled" : "disabled";
+  const lines = [`Analysis features: grouping=${grouping}, cleanup=${cleanup}.`];
+  if (settings.analyzeCleanup) {
+    lines.push(
+      "Also return top-level cleanup: {summary:string,candidates:[{id:number,priority:\"high\"|\"medium\"|\"low\",reason:string,evidence:string[]}]}.",
+      "Cleanup candidates are review suggestions only. Recommend stale, duplicated, superseded, finished, or low-value tabs; never imply automatic deletion.",
+      "Use tab age/activity signals, original order, titles, URLs, current groups, page summaries, and semantic grouping context when present.",
+      "Return at most 20 cleanup candidates, ordered by review value."
+    );
+  }
+  return lines.join(" ");
 }
 
 function classificationAxisInstruction(settings) {
@@ -371,11 +388,15 @@ function reviewModeInstruction(settings) {
   return "Low-confidence, generic, sensitive, or mixed pages should go to review.";
 }
 
-export function buildPlannerPayload(inventory, settings) {
+export function buildPlannerPayload(inventory, settings, options = {}) {
   const pageSamplesByTabId = new Map((inventory.pageSamples || []).map((result) => [result.tabId, result]));
   const pageSampleSignals = buildPageSampleSignals(inventory, pageSamplesByTabId);
-  return {
+  const payload = {
     schema: "tab_tidy_compact_v1",
+    analysisFeatures: {
+      grouping: Boolean(settings.analyzeGrouping),
+      cleanup: Boolean(settings.analyzeCleanup)
+    },
     settings: {
       organizeMode: settings.organizeMode,
       targetWindowMode: settings.targetWindowMode,
@@ -386,7 +407,9 @@ export function buildPlannerPayload(inventory, settings) {
       promptPreset: settings.promptPreset,
       minConfidenceToApply: settings.minConfidenceToApply,
       maxTabsPerGroup: settings.maxTabsPerGroup,
-      thinkingIntensity: settings.gatewayThinkingIntensity
+      thinkingIntensity: settings.gatewayThinkingIntensity,
+      analyzeGrouping: Boolean(settings.analyzeGrouping),
+      analyzeCleanup: Boolean(settings.analyzeCleanup)
     },
     scope: inventory.scope,
     windowFields: WINDOW_FIELDS,
@@ -436,13 +459,47 @@ export function buildPlannerPayload(inventory, settings) {
       result.reason
     ])
   };
+
+  if (settings.analyzeCleanup) {
+    const activityOverview = options.activityOverview || {};
+    payload.cleanupInstructions = {
+      actionLimit: 20,
+      nonDestructive: true,
+      humanMustDecide: true,
+      outputFields: ["summary", "candidates[].id", "candidates[].priority", "candidates[].reason", "candidates[].evidence"]
+    };
+    payload.activityFields = [
+      "id",
+      "windowId",
+      "index",
+      "firstSeenAt",
+      "lastSeenAt",
+      "ageDays",
+      "idleDays",
+      "activeCount",
+      "currentGroup",
+      "discarded",
+      "summary"
+    ];
+    payload.activity = cleanupActivityRows(activityOverview);
+    payload.recap = {
+      rangeMs: activityOverview.rangeMs || null,
+      trackedOpenTabs: activityOverview.openTabs?.tracked || 0,
+      localEntries: activityOverview.cache?.entries || 0,
+      sampledEntries: activityOverview.cache?.sampledEntries || 0,
+      topTerms: (activityOverview.recap?.topTerms || []).slice(0, 8),
+      topHosts: (activityOverview.recap?.topHosts || []).slice(0, 8)
+    };
+  }
+
+  return payload;
 }
 
-export function buildGatewayUserPrompt(inventory, settings) {
+export function buildGatewayUserPrompt(inventory, settings, options = {}) {
   return [
     "Software engineering task input: classify this browser tab inventory for a Chrome extension runtime.",
     "Return the JSON action plan only.",
-    JSON.stringify(buildPlannerPayload(inventory, settings))
+    JSON.stringify(buildPlannerPayload(inventory, settings, options))
   ].join("\n");
 }
 
@@ -898,11 +955,11 @@ function refinementPromptLines(settings) {
   ];
 }
 
-function shouldUseHierarchicalPlanner(inventory, options = {}) {
+function shouldUseHierarchicalPlanner(inventory, settings, options = {}) {
   if (options.hierarchical === false) return false;
   if (options.hierarchical === true) return true;
-  const minTabs = options.hierarchicalMinTabs || HIERARCHICAL_MIN_TABS;
-  return (inventory.plannerTabs || []).length >= minTabs;
+  if (settings?.analyzeCleanup || !settings?.analyzeGrouping) return false;
+  return false;
 }
 
 function shouldRefineBucket(bucket, settings, options = {}) {
@@ -1165,9 +1222,9 @@ export function parsePlanFromResponse(data) {
   return parseGatewayJson(data);
 }
 
-export function parsePlanFromGatewayResponse(data, inventory, settings) {
+export function parsePlanFromGatewayResponse(data, inventory, settings, options = {}) {
   const parsed = parseGatewayJson(data);
-  return normalizeGatewayPlan(parsed, inventory, settings);
+  return normalizeGatewayPlan(parsed, inventory, settings, options);
 }
 
 function parseGatewayJson(data) {
@@ -1197,10 +1254,17 @@ function findRefusal(data) {
     .find((content) => content.refusal)?.refusal;
 }
 
-function normalizeGatewayPlan(plan, inventory, settings) {
+function normalizeGatewayPlan(plan, inventory, settings, options = {}) {
   const wrappedPlan = unwrapGatewayPlan(plan);
-  if (wrappedPlan !== plan) return normalizeGatewayPlan(wrappedPlan, inventory, settings);
-  if (plan?.schemaVersion === 1 && hasInternalPlanShape(plan)) return normalizeSchemaPlanOrder(plan, inventory);
+  if (wrappedPlan !== plan) return normalizeGatewayPlan(wrappedPlan, inventory, settings, options);
+  if (plan?.schemaVersion === 1 && hasInternalPlanShape(plan)) {
+    const normalized = normalizeSchemaPlanOrder(plan, inventory);
+    const cleanupSource = plan.cleanup || plan.cleanupPlan;
+    if (settings.analyzeCleanup && cleanupSource) {
+      normalized.cleanup = normalizeCleanupAnalysis(cleanupSource, inventory, options.activityOverview || {}, settings);
+    }
+    return normalized;
+  }
   if (!plan || typeof plan !== "object" || !Array.isArray(plan.groups)) return plan;
 
   const plannerTabs = inventory.plannerTabs || [];
@@ -1258,7 +1322,7 @@ function normalizeGatewayPlan(plan, inventory, settings) {
     }
   }
 
-  return {
+  const normalized = {
     schemaVersion: 1,
     mode: settings.organizeMode,
     scope:
@@ -1278,6 +1342,11 @@ function normalizeGatewayPlan(plan, inventory, settings) {
     groups: orderGroupsByOriginalPosition(groups, inventory),
     reviewTabs
   };
+  const cleanupSource = plan.cleanup || plan.cleanupPlan;
+  if (settings.analyzeCleanup && cleanupSource) {
+    normalized.cleanup = normalizeCleanupAnalysis(cleanupSource, inventory, options.activityOverview || {}, settings);
+  }
+  return normalized;
 }
 
 function unwrapGatewayPlan(plan) {
@@ -1459,8 +1528,8 @@ async function emitProgress(options, event) {
   }
 }
 
-function exampleCompactPlan() {
-  return {
+function exampleCompactPlan(settings = {}) {
+  const example = {
     schema: "tab_tidy_plan_compact_v1",
     groups: [
       {
@@ -1474,6 +1543,13 @@ function exampleCompactPlan() {
     ],
     review: [{ id: 2, reason: "Low confidence." }]
   };
+  if (settings.analyzeCleanup) {
+    example.cleanup = {
+      summary: "Short review summary.",
+      candidates: [{ id: 3, priority: "medium", reason: "Stale or superseded page.", evidence: ["old", "low activity"] }]
+    };
+  }
+  return example;
 }
 
 export { ACTION_PLAN_JSON_SCHEMA };

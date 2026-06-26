@@ -136,6 +136,16 @@ export function createFakeChrome(seed = {}) {
         Object.assign(tab, updateProperties);
         return structuredClone(tab);
       },
+      async remove(tabIds) {
+        const ids = Array.isArray(tabIds) ? tabIds : [tabIds];
+        for (const tabId of ids) {
+          const ownerWindow = [...state.windows.values()].find((window) => window.tabs.some((tab) => tab.id === tabId));
+          if (!ownerWindow) throw new Error(`No tab with id ${tabId}`);
+          ownerWindow.tabs = ownerWindow.tabs.filter((tab) => tab.id !== tabId);
+        }
+        cleanupGroups(state);
+        reindexAll(state);
+      },
       async query(queryInfo = {}) {
         let tabs = [...state.windows.values()].flatMap((window) => window.tabs);
         if (queryInfo.groupId !== undefined) tabs = tabs.filter((tab) => tab.groupId === queryInfo.groupId);

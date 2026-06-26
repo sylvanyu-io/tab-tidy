@@ -34,6 +34,7 @@ const PROGRESS_COPY_MAX_LENGTH = 18;
 const PROGRESS_COPY_TIMEOUT_MS = 12_000;
 const PAGE_SAMPLE_CONCURRENCY = 6;
 const PAGE_SAMPLE_TIMEOUT_MS = 1800;
+const CLEANUP_ACTIVITY_RANGE_MS = 30 * 24 * 60 * 60 * 1000;
 
 function scopedStorageKey(baseKey, windowId) {
   return `${baseKey}:${normalizeWindowScope(windowId)}`;
@@ -114,6 +115,8 @@ export async function handleRuntimeMessage(chromeApi, message) {
       return analyzeCleanupCandidates(chromeApi, message.settings, { windowId: message.windowId, rangeMs: message.rangeMs });
     case "activity:focusTab":
       return focusActivityTab(chromeApi, message);
+    case "tabs:closeCleanupCandidates":
+      return closeCleanupCandidates(chromeApi, message);
     case "tabs:applyLastPlan":
       return applyLastPlan(chromeApi, {
         windowId: message.windowId,
@@ -147,6 +150,115 @@ async function focusActivityTab(chromeApi, message = {}) {
   await chromeApi.windows?.update?.(tab.windowId, { focused: true }).catch(() => null);
   await chromeApi.tabs?.update?.(tabId, { active: true });
   return { focused: true, tabId, windowId: tab.windowId };
+}
+
+export async function closeCleanupCandidates(chromeApi, message = {}) {
+  return enqueueBrowserMutation(() => closeCleanupCandidatesLocked(chromeApi, message));
+}
+
+async function closeCleanupCandidatesLocked(chromeApi, message = {}) {
+  const resolvedWindowId = await resolveStateWindowId(chromeApi, message.windowId);
+  const job = await getScopedLocal(chromeApi, STORAGE_KEYS.lastJob, resolvedWindowId);
+  if (!job?.preview) {
+    throw new Error(localizedText(message.languageMode || "zh-CN", "还没有可清理的方案，请先生成方案。", "Generate a plan before closing cleanup candidates."));
+  }
+
+  const requestedIds = uniqueNumbers(asArray(message.tabIds).map((value) => Number(value)));
+  if (!requestedIds.length) {
+    throw new Error(localizedText(message.languageMode || "zh-CN", "请选择要关闭的标签页。", "Select tabs to close first."));
+  }
+
+  const candidateIds = new Set((job.plan?.cleanup?.candidates || job.preview?.cleanup?.candidates || []).map((tab) => tab.tabId));
+  const allowedIds = requestedIds.filter((tabId) => candidateIds.has(tabId));
+  if (!allowedIds.length) {
+    throw new Error(localizedText(message.languageMode || "zh-CN", "这些标签页不在清理建议里，请重新生成。", "These tabs are not in the cleanup suggestions. Regenerate the plan."));
+  }
+
+  const existingIds = [];
+  const skippedIds = [];
+  for (const tabId of allowedIds) {
+    const tab = await chromeApi.tabs?.get?.(tabId).catch(() => null);
+    if (!tab) {
+      skippedIds.push(tabId);
+      continue;
+    }
+    if (Number.isInteger(message.windowId) && job.settings?.organizeMode === ORGANIZE_MODES.CURRENT_WINDOW && tab.windowId !== resolvedWindowId) {
+      skippedIds.push(tabId);
+      continue;
+    }
+    existingIds.push(tabId);
+  }
+
+  if (existingIds.length) {
+    await chromeApi.tabs?.remove?.(existingIds);
+  }
+
+  const removedIds = [...existingIds, ...skippedIds];
+  const updatedJob = removeTabsFromStoredJob(job, removedIds);
+  const storedJob = sanitizeJobForStorage(updatedJob);
+  await setScopedLocal(chromeApi, STORAGE_KEYS.lastJob, resolvedWindowId, storedJob);
+  return {
+    closedTabIds: existingIds,
+    skippedTabIds: skippedIds,
+    preview: storedJob.preview,
+    validation: storedJob.validation
+  };
+}
+
+function removeTabsFromStoredJob(job, tabIds) {
+  const removeIds = new Set(uniqueNumbers(tabIds));
+  if (!removeIds.size) return job;
+  const settings = normalizeSettings(job.settings || {});
+  const inventory = filterInventoryTabs(job.inventory, removeIds);
+  const plan = filterPlanTabs(job.plan, removeIds);
+  const validation = validatePlan(plan, inventory, settings);
+  const preview = buildPreview(plan, inventory, validation, settings);
+  return {
+    ...job,
+    inventory,
+    plan,
+    validation,
+    preview
+  };
+}
+
+function filterInventoryTabs(inventory = {}, removeIds) {
+  const keepTab = (tab) => !removeIds.has(tab?.tabId);
+  return {
+    ...inventory,
+    tabs: (inventory.tabs || []).filter(keepTab),
+    plannerTabs: (inventory.plannerTabs || []).filter(keepTab),
+    excludedTabs: (inventory.excludedTabs || []).filter(keepTab),
+    lockedGroups: (inventory.lockedGroups || [])
+      .map((group) => ({
+        ...group,
+        tabIds: (group.tabIds || []).filter((tabId) => !removeIds.has(tabId))
+      }))
+      .filter((group) => group.tabIds.length),
+    pageSamples: (inventory.pageSamples || []).filter((sample) => !removeIds.has(sample.tabId))
+  };
+}
+
+function filterPlanTabs(plan = {}, removeIds) {
+  const keepRef = (ref) => !removeIds.has(ref?.tabId);
+  return {
+    ...plan,
+    eligibleTabs: (plan.eligibleTabs || []).filter(keepRef),
+    excludedTabs: (plan.excludedTabs || []).filter(keepRef),
+    groups: (plan.groups || [])
+      .map((group) => ({
+        ...group,
+        tabRefs: (group.tabRefs || []).filter(keepRef)
+      }))
+      .filter((group) => group.tabRefs.length),
+    reviewTabs: (plan.reviewTabs || []).filter(keepRef),
+    cleanup: plan.cleanup
+      ? {
+          ...plan.cleanup,
+          candidates: (plan.cleanup.candidates || []).filter((candidate) => !removeIds.has(candidate.tabId))
+        }
+      : plan.cleanup
+  };
 }
 
 async function analyzeCleanupCandidates(chromeApi, rawSettings, invocation = {}) {
@@ -287,9 +399,15 @@ async function runActiveAnalysis(chromeApi, rawSettings, invocation, operationId
     });
     throwIfCanceled(abortController.signal);
 
+    const activityOverview = settings.analyzeCleanup
+      ? await collectCleanupActivityOverview(chromeApi, settings, CLEANUP_ACTIVITY_RANGE_MS)
+      : null;
+    throwIfCanceled(abortController.signal);
+
     const planOptions = {
       signal: abortController.signal,
-      onProgress: reportProgress
+      onProgress: reportProgress,
+      activityOverview
     };
     if (settings.plannerProvider === PLANNER_PROVIDERS.GATEWAY) {
       planOptions.installId = await getOrCreateInstallId(chromeApi);
@@ -752,6 +870,10 @@ function uniqueNumbers(values) {
   return [...new Set(values.filter((value) => typeof value === "number"))];
 }
 
+function asArray(value) {
+  return Array.isArray(value) ? value : value === undefined || value === null ? [] : [value];
+}
+
 function extractProgressCopyText(data) {
   const content = data?.choices?.[0]?.message?.content ?? data?.output_text ?? data?.text ?? "";
   if (typeof content === "string") return content;
@@ -882,7 +1004,12 @@ function settingsForPersistence(settings) {
 
 async function createValidatedPlan(inventory, settings, options = {}) {
   throwIfCanceled(options.signal);
-  const plan = normalizePlanForSettings(await createPlan(inventory, settings, options), inventory, settings);
+  const plan = ensureCleanupPlan(
+    normalizePlanForSettings(await createPlan(inventory, settings, options), inventory, settings),
+    inventory,
+    settings,
+    options
+  );
   await options.onProgress?.({ phase: "validation", progress: 88, message: "正在校验 AI 方案" });
   let validation = validatePlan(plan, inventory, settings);
   if (validation.ok || settings.plannerProvider === PLANNER_PROVIDERS.FAKE) {
@@ -905,10 +1032,31 @@ async function createValidatedPlan(inventory, settings, options = {}) {
       .join("\n")
       .slice(0, 4000)
   };
-  const retryPlan = normalizePlanForSettings(await createPlan(inventory, retrySettings, options), inventory, settings);
+  const retryPlan = ensureCleanupPlan(
+    normalizePlanForSettings(await createPlan(inventory, retrySettings, options), inventory, settings),
+    inventory,
+    settings,
+    options
+  );
   await options.onProgress?.({ phase: "validation", progress: 94, message: "正在校验修正方案" });
   validation = validatePlan(retryPlan, inventory, settings);
   return { plan: retryPlan, validation };
+}
+
+function ensureCleanupPlan(plan, inventory, settings, options = {}) {
+  if (!settings.analyzeCleanup || plan?.cleanup) return plan;
+  return {
+    ...plan,
+    cleanup: createLocalCleanupAnalysis(inventory, options.activityOverview || {}, settings)
+  };
+}
+
+async function collectCleanupActivityOverview(chromeApi, settings, rangeMs = CLEANUP_ACTIVITY_RANGE_MS) {
+  await reconcileTabLifecycle(chromeApi, { includeIncognitoTabs: settings.includeIncognitoTabs }).catch(() => null);
+  return getActivityOverview(chromeApi, {
+    rangeMs,
+    includeIncognitoTabs: settings.includeIncognitoTabs
+  });
 }
 
 async function attachPageSamples(chromeApi, inventory, settings, options = {}) {

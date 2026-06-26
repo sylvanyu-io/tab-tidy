@@ -230,6 +230,88 @@ test("AI gateway cleanup planner posts Tab Tidy JSON and filters unknown ids", a
   assert.deepEqual(cleanup.candidates[0].evidence, ["old group", "inactive"]);
 });
 
+test("AI gateway planner returns cleanup candidates in the same full-detail plan request", async () => {
+  const activityOverview = {
+    rangeMs: 2592000000,
+    cache: { entries: 3, sampledEntries: 1 },
+    openTabs: { total: 2, tracked: 2 },
+    recap: { topTerms: [], topHosts: [] },
+    openTabSignals: [
+      {
+        tabId: 10,
+        windowId: 1,
+        index: 0,
+        ageMs: 18 * 24 * 60 * 60 * 1000,
+        idleMs: 12 * 24 * 60 * 60 * 1000,
+        activeCount: 1,
+        currentGroupTitle: "Old docs",
+        summary: { metaDescription: "Old JSON notes" }
+      }
+    ]
+  };
+
+  const fetchImpl = async (_url, options) => {
+    const body = JSON.parse(options.body);
+    assert.match(body.messages[0].content, /Analysis features: grouping=enabled, cleanup=enabled/);
+    const payload = JSON.parse(body.messages[1].content.slice(body.messages[1].content.indexOf("{")));
+    assert.equal(payload.analysisFeatures.grouping, true);
+    assert.equal(payload.analysisFeatures.cleanup, true);
+    assert.equal(rowToObject(payload.activityFields, payload.activity[0]).currentGroup, "Old docs");
+    return {
+      ok: true,
+      async json() {
+        return {
+          choices: [
+            {
+              message: {
+                content: JSON.stringify({
+                  groups: [
+                    {
+                      key: "docs",
+                      title: "Docs",
+                      color: "blue",
+                      confidence: 0.9,
+                      ids: [10, 11],
+                      reason: "Documentation tabs."
+                    }
+                  ],
+                  review: [],
+                  cleanup: {
+                    summary: "Review old docs first.",
+                    candidates: [
+                      { id: 10, priority: "high", reason: "Old notes look superseded.", evidence: ["18 days old", "low activity"] }
+                    ]
+                  }
+                })
+              }
+            }
+          ]
+        };
+      }
+    };
+  };
+
+  const plan = await createGatewayPlan(
+    inventory,
+    {
+      ...DEFAULT_SETTINGS,
+      plannerProvider: PLANNER_PROVIDERS.GATEWAY,
+      gatewayBaseUrl: "http://localhost:8317/v1",
+      gatewayApiKey: "gateway-test-key",
+      languageMode: "en-US"
+    },
+    fetchImpl,
+    { activityOverview }
+  );
+
+  assert.equal(plan.groups.length, 1);
+  assert.equal(plan.cleanup.summary, "Review old docs first.");
+  assert.equal(plan.cleanup.candidates.length, 1);
+  assert.equal(plan.cleanup.candidates[0].tabId, 10);
+  assert.equal(plan.cleanup.candidates[0].ageMs, 18 * 24 * 60 * 60 * 1000);
+  assert.deepEqual(plan.cleanup.candidates[0].evidence, ["18 days old", "low activity"]);
+});
+
 test("AI gateway planner sends a custom model name to custom gateways", async () => {
   const expectedPlan = {
     schemaVersion: 1,
@@ -1210,7 +1292,7 @@ test("AI gateway media-type mode does not refine repeated title patterns by topi
   );
 });
 
-test("AI gateway planner auto-selects hierarchical planning at 50 tabs", async () => {
+test("AI gateway planner keeps 50-tab product sessions on the single full-detail path", async () => {
   const plannerTabs = Array.from({ length: 50 }, (_, index) => ({
     tabId: 10_000 + index,
     windowId: 1,
@@ -1232,25 +1314,29 @@ test("AI gateway planner auto-selects hierarchical planning at 50 tabs", async (
             {
               message: {
                 content: JSON.stringify({
-                  buckets: [
+                  groups: [
                     {
-                      bucketKey: "first-half",
+                      key: "first-half",
                       title: "First Half",
                       color: "blue",
                       confidence: 0.95,
-                      tabIds: plannerTabs.slice(0, 25).map((tab) => tab.tabId),
+                      ids: plannerTabs.slice(0, 25).map((tab) => tab.tabId),
                       reason: "First half."
                     },
                     {
-                      bucketKey: "second-half",
+                      key: "second-half",
                       title: "Second Half",
                       color: "green",
                       confidence: 0.95,
-                      tabIds: plannerTabs.slice(25).map((tab) => tab.tabId),
+                      ids: plannerTabs.slice(25).map((tab) => tab.tabId),
                       reason: "Second half."
                     }
                   ],
-                  reviewTabIds: []
+                  review: [],
+                  cleanup: {
+                    summary: "No cleanup candidates.",
+                    candidates: []
+                  }
                 })
               }
             }
@@ -1265,7 +1351,8 @@ test("AI gateway planner auto-selects hierarchical planning at 50 tabs", async (
   const validation = validatePlan(plan, thresholdInventory, settings);
 
   assert.equal(requests.length, 1);
-  assert.match(requests[0].messages[0].content, /fast first-pass/);
+  assert.doesNotMatch(requests[0].messages[0].content, /fast first-pass/);
+  assert.equal(requests[0].messages[1].content.includes('"cleanup":true'), true);
   assert.equal(validation.ok, true, validation.errors.join(" "));
   assert.deepEqual(
     plan.groups.map((group) => group.tabRefs.length),
