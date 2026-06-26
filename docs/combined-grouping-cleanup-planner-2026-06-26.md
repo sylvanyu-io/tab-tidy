@@ -1,0 +1,64 @@
+# Combined grouping and cleanup planner
+
+Date: 2026-06-26
+
+## Product decision
+
+Tab Tidy should treat organization and cleanup as one AI analysis pass.
+
+Before this change, grouping and cleanup were separate product paths:
+
+- `tabs:startAnalyze` generated a grouping plan.
+- `activity:analyzeCleanup` sent a separate cleanup request after the user opened the old cleanup helper.
+- The cleanup result did not update the grouping preview when a user manually closed suggested tabs.
+
+After this change:
+
+- The main planner payload includes `analysisFeatures.grouping` and `analysisFeatures.cleanup`.
+- The AI can return top-level `cleanup` recommendations in the same full-detail plan response.
+- The preview shows both grouping recommendations and cleanup recommendations.
+- Closing cleanup candidates is explicit user action only.
+- Closing cleanup candidates rewrites the stored job, removes closed tabs from the plan, rebuilds validation, and refreshes the preview before the user applies grouping.
+
+## Request-count impact
+
+| Flow | Before | After |
+| --- | ---: | ---: |
+| Generate grouping only | 1 planner request | 1 planner request |
+| Generate grouping + cleanup | 1 planner request + 1 cleanup request | 1 planner request |
+| Close cleanup candidate | No linked plan update | 0 AI requests; local job rebase |
+
+This is primarily a latency and UX improvement. The LLM already receives the full tab inventory for grouping, so asking it to also return cleanup candidates adds output structure but avoids a second long request.
+
+## Safety rules
+
+- The AI never receives a close-tab tool.
+- Cleanup candidates are review suggestions only.
+- The extension closes tabs only after a direct click on a single candidate or the selected-candidates bulk action.
+- After closing, the stored plan is filtered and revalidated so apply cannot act on closed tabs.
+- Apply/undo/cleanup-close operations all use the browser mutation queue.
+
+## Planner strategy
+
+The product-default planner path now uses the single full-detail request. The older hierarchical coarse/refine planner remains available for benchmark and explicit test paths through `{ hierarchical: true }`, but it is not the default because it cannot naturally return a single combined grouping + cleanup recommendation.
+
+## Evidence
+
+Functional checks:
+
+- `node --test tests/gateway-planner.test.mjs tests/controller.test.mjs`: 71/71 passing.
+- `npx playwright test tests/ui-smoke.spec.mjs`: 24/24 passing.
+- `npm test`: 133/133 passing.
+- `npm run scan:secrets`: no provider-key patterns found.
+- `npm run build:extension`: built `dist/tab-tidy-0.1.5.zip`.
+
+New regression coverage:
+
+- Gateway planner returns cleanup candidates in the same full-detail plan request.
+- 50-tab product sessions stay on the single full-detail request path.
+- Closing cleanup candidates is explicit and updates the stored plan preview.
+- UI smoke verifies generated preview includes cleanup suggestions and supports selected-candidate closing.
+
+## Follow-up benchmark
+
+Live gateway speed should be remeasured after public gateway pressure is normal. The prior quota/rate-limit samples are not valid product evidence for this decision.
