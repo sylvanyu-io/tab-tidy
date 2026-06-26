@@ -27,16 +27,21 @@ pipeline over a known tab inventory.
 
 ## Current Product Decision
 
-As of the combined grouping + cleanup work on 2026-06-26, the product default is
-one full-detail planner request. The same request returns grouping
-recommendations and cleanup recommendations, controlled by `analyzeGrouping` and
-`analyzeCleanup`.
+As of the planner correction on 2026-06-26, the product default is one
+user-visible analysis job, not one low-level AI request. The same generated
+preview returns grouping recommendations and cleanup recommendations, controlled
+by `analyzeGrouping` and `analyzeCleanup`.
 
-The hierarchical coarse/refine path still exists for explicit benchmarks and
-research runs through `{ hierarchical: true }`, but it is not the product default
-because it breaks the "one request scans all tabs and returns both outputs"
-interaction. Previous quota/rate-limit failures from local gateway pressure are
-not treated as product evidence.
+The implementation remains adaptive:
+
+- below 50 tabs, the default path uses a single full-detail request;
+- at 50+ tabs, the default path uses coarse routing plus bounded bucket-worker
+  refinement;
+- grouping and cleanup are merged into one validated preview.
+
+Previous quota/rate-limit failures from local gateway pressure are not treated
+as product evidence, but the earlier measured threshold and quality comparison
+still apply.
 
 ## Historical Problem
 
@@ -51,7 +56,7 @@ The earlier optimization work compared two extremes:
 
 The bottleneck is model/runtime scheduling, not local JSON handling.
 
-## Research Harness, Not Current Product Default
+## Product Harness
 
 Use an adaptive orchestrator-worker plan:
 
@@ -86,6 +91,7 @@ Detailed comparison record:
 - `docs/benchmarks/page-summary-signals-experiment.md`
 - `docs/benchmarks/media-type-preset-axis-experiment.md`
 - `docs/benchmarks/small-session-hierarchical-threshold-2026-06-26.md`
+- `docs/benchmarks/combined-adaptive-planner-correction-2026-06-26.md`
 
 Public leaderboard signal checked on 2026-06-26:
 
@@ -97,15 +103,15 @@ Public leaderboard signal checked on 2026-06-26:
 - Claude models remain useful, but the user's Claude token budget is limited.
   Do not route every bucket refinement through Sonnet by default.
 
-Historical runtime recommendation, now superseded for the product path by the
-combined single-request decision:
+Runtime recommendation:
 
 - Coarse/router: selected GPT-family planner model with low thinking.
 - Refinement workers: selected GPT-family planner model with medium thinking by
   default, even when the visible user setting is high. If the user selects low,
   keep low.
-- Do not automatically route product sessions to hierarchical coarse/refine
-  while cleanup recommendations are part of the same generated plan.
+- Automatically route 50+ tab product sessions to hierarchical coarse/refine,
+  including sessions where cleanup recommendations are part of the same
+  generated preview.
 - `gpt-5.4-mini`: expose as an optional preset for cost/speed-sensitive runs.
 - `claude-sonnet-4-6`: keep available as a manual choice and reserve future
   automatic use for small repair/polish slices, not full inventories.
@@ -168,10 +174,12 @@ The final browser mutation must still be driven only by local validated data.
 
 ## Next Implementation Steps
 
-1. Refactor `gateway-planner.js` into explicit planner stages:
+1. Continue refactoring `gateway-planner.js` into explicit planner stages:
    `routeTabs`, `refineBucket`, `mergeBucketPlans`, `repairPlan`.
-2. Add a bounded concurrency helper with abort propagation.
-3. Extend the planner result to include cleanup recommendations in the same run.
+2. Add a validator repair path that can retry only the invalid slice instead of
+   retrying the full inventory.
+3. Measure the corrected combined adaptive path against the prior full-detail
+   regression path with grouping + cleanup both enabled.
 4. Add benchmark modes for:
    - single full-detail;
    - serial hierarchical;
