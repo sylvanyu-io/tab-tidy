@@ -67,6 +67,7 @@ Detailed comparison record:
 - `docs/benchmarks/gateway-planner-before-after-parallel.md`
 - `docs/benchmarks/adaptive-refine-experiment.md`
 - `docs/benchmarks/planner-quality-analysis.md`
+- `docs/benchmarks/planner-fixture-coverage.md`
 
 Public leaderboard signal checked on 2026-06-26:
 
@@ -155,5 +156,7 @@ The final browser mutation must still be driven only by local validated data.
    - serial hierarchical;
    - parallel hierarchical;
    - model/thinking matrix.
+   Scenario coverage is now available through `BENCHMARK_SCENARIOS`; see
+   `docs/benchmarks/planner-fixture-coverage.md`.
 5. Make benchmark reports append or aggregate instead of overwriting the previous
    report.
