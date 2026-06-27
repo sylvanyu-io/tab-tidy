@@ -230,7 +230,7 @@ test("control surface renders settings and mock preview", async ({ page }) => {
   await expect(page.locator(".preview").getByText("另有 1 个固定、无痕或受限标签页未参与整理。")).toBeVisible();
   await expect(page.locator(".activity-panel")).toHaveCount(0);
   await expect(page.locator(".cleanup-preview").getByText("建议先检查", { exact: true })).toBeVisible();
-  await expect(page.locator(".cleanup-preview").getByText("Old comparison notes")).toBeVisible();
+  await expect(page.locator(".cleanup-preview").getByText("旧方案对比笔记")).toBeVisible();
   await expect(page.locator(".cleanup-row-actions .icon-action").first()).toBeVisible();
   await expect(page.getByText("待确认")).toHaveCount(0);
   await expect(page.locator(".preview-stats")).toHaveCount(0);
@@ -309,8 +309,8 @@ test("cleanup candidates are returned with the generated plan and can be closed 
 
   await expect(page.locator("#previewSection")).toBeVisible();
   await expect(page.locator(".cleanup-preview").getByText("建议先检查", { exact: true })).toBeVisible();
-  await expect(page.locator(".cleanup-preview").getByText(/Old comparison notes/)).toBeVisible();
-  await expect(page.locator(".cleanup-preview").getByText("分组：Research", { exact: false })).toBeVisible();
+  await expect(page.locator(".cleanup-preview").getByText(/旧方案对比笔记/)).toBeVisible();
+  await expect(page.locator(".cleanup-preview").getByText("分组：技术调研", { exact: false })).toBeVisible();
   await expect(page.locator(".cleanup-preview").getByText("上一轮对比调研留下的页面", { exact: false })).toBeVisible();
   await expect(page.locator(".cleanup-preview").getByText("判断", { exact: true })).toHaveCount(0);
   await expect(page.locator(".cleanup-preview").getByText("依据", { exact: true })).toHaveCount(0);
@@ -328,8 +328,8 @@ test("cleanup candidates are returned with the generated plan and can be closed 
   await expect(page.locator(".cleanup-preview").getByRole("button", { name: "关闭选中的标签页" })).toHaveCount(0);
   await page.locator(".cleanup-preview").getByRole("button", { name: "关闭这个标签页" }).first().click();
   await page.locator(".cleanup-preview").getByRole("button", { name: "关闭这个标签页" }).first().click();
-  await expect(page.locator(".cleanup-preview").getByText("Old comparison notes")).toHaveCount(0);
-  await expect(page.locator(".cleanup-preview").getByText("Previous research")).toHaveCount(0);
+  await expect(page.locator(".cleanup-preview").getByText("旧方案对比笔记")).toHaveCount(0);
+  await expect(page.locator(".cleanup-preview").getByText("上轮调研资料")).toHaveCount(0);
   await expect(page.locator("#statusText")).toHaveText("已关闭 1 个标签页，方案已同步更新");
 });
 

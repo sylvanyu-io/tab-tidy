@@ -2858,9 +2858,9 @@ async function mockMessage(message) {
         {
           tabId: 31,
           windowId: 1,
-          title: "Old comparison notes",
-          hostname: "example.com",
-          currentGroupTitle: "Research",
+          title: "旧方案对比笔记",
+          hostname: "yuque.com",
+          currentGroupTitle: "技术调研",
           ageMs: 16 * 24 * 60 * 60 * 1000,
           idleMs: 9 * 24 * 60 * 60 * 1000,
           activeCount: 1,
@@ -2869,8 +2869,8 @@ async function mockMessage(message) {
         {
           tabId: 32,
           windowId: 1,
-          title: "Previous research",
-          hostname: "example.org",
+          title: "上轮调研资料",
+          hostname: "docs.qq.com",
           currentGroupTitle: "",
           ageMs: 22 * 24 * 60 * 60 * 1000,
           idleMs: 18 * 24 * 60 * 60 * 1000,
@@ -2887,22 +2887,22 @@ async function mockMessage(message) {
           {
             tabId: 31,
             windowId: 1,
-            title: "Old comparison notes",
-            hostname: "example.com",
-            currentGroupTitle: "Research",
+            title: "旧方案对比笔记",
+            hostname: "yuque.com",
+            currentGroupTitle: "技术调研",
             ageMs: 16 * 24 * 60 * 60 * 1000,
             idleMs: 9 * 24 * 60 * 60 * 1000,
             activeCount: 1,
             priority: "high",
             reason: "它像是上一轮对比调研留下的页面，时间较久且近期没有再打开。",
-            evidence: ["首次见到约 16 天前", "最近活跃约 9 天前", "当前分组 Research"],
+            evidence: ["首次见到约 16 天前", "最近活跃约 9 天前", "当前分组 技术调研"],
             summary: { metaDescription: "Comparison notes for an earlier investigation", headings: ["Old direction"] }
           },
           {
             tabId: 32,
             windowId: 1,
-            title: "Previous research",
-            hostname: "example.org",
+            title: "上轮调研资料",
+            hostname: "docs.qq.com",
             currentGroupTitle: "",
             ageMs: 22 * 24 * 60 * 60 * 1000,
             idleMs: 18 * 24 * 60 * 60 * 1000,
@@ -3028,9 +3028,9 @@ function mockCleanupPreview(grouping = true) {
       {
         tabId: 31,
         windowId: 1,
-        title: "Old comparison notes",
-        hostname: "example.com",
-        currentGroupTitle: "Research",
+        title: "旧方案对比笔记",
+        hostname: "yuque.com",
+        currentGroupTitle: "技术调研",
         ageMs: 16 * 24 * 60 * 60 * 1000,
         idleMs: 9 * 24 * 60 * 60 * 1000,
         activeCount: 1,
@@ -3041,14 +3041,14 @@ function mockCleanupPreview(grouping = true) {
       {
         tabId: 32,
         windowId: 1,
-        title: "Previous research",
-        hostname: "example.org",
+        title: "上轮调研资料",
+        hostname: "docs.qq.com",
         ageMs: 22 * 24 * 60 * 60 * 1000,
         idleMs: 18 * 24 * 60 * 60 * 1000,
         activeCount: 0,
         priority: "medium",
         reason: "标题显示是旧研究资料，且没有归属到当前分组。",
-        evidence: ["activeCount 为0", "ageDays 约22", "标题为“Previous research”"]
+        evidence: ["activeCount 为0", "ageDays 约22", "标题为“上轮调研资料”"]
       }
     ]
   };
