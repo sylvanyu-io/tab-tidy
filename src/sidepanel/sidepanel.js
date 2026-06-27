@@ -52,6 +52,12 @@ const UI_COPY = Object.freeze({
     "button.undo": "撤销",
     "button.language": "EN",
     "button.languageAria": "切换界面为英文",
+    "mode.organize": "整理",
+    "mode.recap": "回顾",
+    "status.recapPreparing": "正在准备回顾",
+    "status.recapGenerating": "正在生成近期回顾",
+    "status.recapReady": "回顾已生成",
+    "status.recapRangeInvalid": "请选择有效的开始和结束日期。",
     "scope.label": "范围",
     "scope.currentWindow": "当前窗口",
     "scope.allWindows": "所有窗口",
@@ -104,6 +110,26 @@ const UI_COPY = Object.freeze({
     "cleanup.closed": "已关闭 {count} 个标签页，方案已同步更新",
     "cleanup.noneSelected": "先选择要关闭的标签页。",
     "cleanup.selectedCount": "已选 {count} 个",
+    "recap.step": "近期回顾",
+    "recap.heading": "看看最近主要在忙什么",
+    "recap.subtitle": "根据本机活动、标题、网址和可用页面摘要生成，不会自动关闭标签页。",
+    "recap.range": "时间范围",
+    "recap.today": "今天",
+    "recap.7d": "最近 7 天",
+    "recap.30d": "最近 30 天",
+    "recap.custom": "自定义",
+    "recap.from": "开始日期",
+    "recap.to": "结束日期",
+    "recap.generate": "生成回顾",
+    "recap.generating": "正在生成…",
+    "recap.empty": "还没有回顾。",
+    "recap.themes": "主要方向",
+    "recap.timeline": "时间线索",
+    "recap.followUps": "下次继续",
+    "recap.review": "值得复查",
+    "recap.evidence": "证据详情",
+    "recap.localFallback": "AI 暂时不可用，先展示本机线索。",
+    "recap.findTab": "定位",
     "customPrompt.label": "自定义要求",
     "customPrompt.placeholder": "例如：找工作、AI 论文、当前项目分开；拿不准的先放到待分类。",
     "advanced.summary": "更多选项",
@@ -241,6 +267,12 @@ const UI_COPY = Object.freeze({
     "button.undo": "Undo",
     "button.language": "中",
     "button.languageAria": "Switch UI to Chinese",
+    "mode.organize": "Organize",
+    "mode.recap": "Recap",
+    "status.recapPreparing": "Preparing recap",
+    "status.recapGenerating": "Generating recent recap",
+    "status.recapReady": "Recap ready",
+    "status.recapRangeInvalid": "Choose a valid start and end date.",
     "scope.label": "Scope",
     "scope.currentWindow": "Current window",
     "scope.allWindows": "All windows",
@@ -293,6 +325,26 @@ const UI_COPY = Object.freeze({
     "cleanup.closed": "Closed {count} tabs and updated the plan",
     "cleanup.noneSelected": "Select tabs to close first.",
     "cleanup.selectedCount": "{count} selected",
+    "recap.step": "Recent recap",
+    "recap.heading": "See what you have been working on",
+    "recap.subtitle": "Built from local activity, titles, URLs, and available page summaries. It never closes tabs automatically.",
+    "recap.range": "Time range",
+    "recap.today": "Today",
+    "recap.7d": "Last 7 days",
+    "recap.30d": "Last 30 days",
+    "recap.custom": "Custom",
+    "recap.from": "Start date",
+    "recap.to": "End date",
+    "recap.generate": "Generate recap",
+    "recap.generating": "Generating...",
+    "recap.empty": "No recap yet.",
+    "recap.themes": "Main threads",
+    "recap.timeline": "Timeline clues",
+    "recap.followUps": "Continue next",
+    "recap.review": "Worth reviewing",
+    "recap.evidence": "Evidence details",
+    "recap.localFallback": "AI is unavailable, so this uses local signals.",
+    "recap.findTab": "Find",
     "customPrompt.label": "Custom instructions",
     "customPrompt.placeholder": "Example: keep job search, AI papers, and current projects separate; put uncertain pages in review.",
     "advanced.summary": "More options",
@@ -414,7 +466,10 @@ const fields = {
   analyzeCleanup: document.querySelector("#analyzeCleanup"),
   minConfidenceToApply: document.querySelector("#minConfidenceToApply"),
   maxTabsPerGroup: document.querySelector("#maxTabsPerGroup"),
-  ackSampling: document.querySelector("#ackSampling")
+  ackSampling: document.querySelector("#ackSampling"),
+  recapRangePreset: document.querySelector("#recapRangePreset"),
+  recapFromDate: document.querySelector("#recapFromDate"),
+  recapToDate: document.querySelector("#recapToDate")
 };
 
 const settingSwitches = [
@@ -440,6 +495,7 @@ const GENERATED_COPY_CACHE_LIMIT = 4;
 
 const nodes = {
   appShell: document.querySelector(".app-shell"),
+  modeTabs: document.querySelectorAll(".mode-tab"),
   statusText: document.querySelector("#statusText"),
   samplingRisk: document.querySelector("#samplingRisk"),
   continuousSummaryRisk: document.querySelector("#continuousSummaryRisk"),
@@ -459,13 +515,21 @@ const nodes = {
   previewRoot: document.querySelector("#previewRoot"),
   detailsRoot: document.querySelector("#detailsRoot"),
   detailsText: document.querySelector("#detailsText"),
-  gatewayCustomModelField: document.querySelector("#gatewayCustomModelField")
+  gatewayCustomModelField: document.querySelector("#gatewayCustomModelField"),
+  timeRecapPanel: document.querySelector("#timeRecapPanel"),
+  recapCustomRange: document.querySelector("#recapCustomRange"),
+  recapGenerateBtn: document.querySelector("#recapGenerateBtn"),
+  recapResult: document.querySelector("#recapResult"),
+  recapDetailsRoot: document.querySelector("#recapDetailsRoot"),
+  recapDetailsText: document.querySelector("#recapDetailsText")
 };
 
 let uiLanguage = readStoredUiLanguage() || browserUiLanguage();
+let currentPanelMode = "organize";
 let currentStatus = { key: "status.default", params: {}, text: "", isError: false };
 let lastPreview = null;
 let lastError = null;
+let lastTimeRecap = null;
 let lastCanApply = false;
 let canUndo = false;
 let pageSamplingOriginCache = { origins: [], refreshedAt: 0 };
@@ -481,6 +545,8 @@ init().catch((error) => setStatus(error.message, true));
 
 async function init() {
   applyUiLanguage();
+  initializeRecapDates();
+  applyPanelMode();
   panelWindowId = await resolveInvocationWindowId();
   bindEvents();
   bindSettingSwitches();
@@ -498,6 +564,7 @@ async function init() {
 function bindEvents() {
   for (const element of Object.values(fields)) {
     if (element === fields.ackSampling || element === fields.continuousPageSummaries) continue;
+    if (element === fields.recapRangePreset || element === fields.recapFromDate || element === fields.recapToDate) continue;
     element.addEventListener("change", persistSettings);
   }
   fields.ackSampling.addEventListener("change", async () => {
@@ -551,6 +618,11 @@ function bindEvents() {
   nodes.applyBtn.addEventListener("click", applyLastPlan);
   nodes.undoBtn.addEventListener("click", undoLastApply);
   nodes.uiLanguageToggle?.addEventListener("click", toggleUiLanguage);
+  nodes.recapGenerateBtn?.addEventListener("click", generateTimeRecap);
+  fields.recapRangePreset?.addEventListener("change", syncRecapRangeUi);
+  for (const button of nodes.modeTabs || []) {
+    button.addEventListener("click", () => setPanelMode(button.dataset.panelMode || "organize"));
+  }
 }
 
 function t(key, params = {}) {
@@ -587,6 +659,8 @@ function applyUiLanguage() {
   setText(".control-group .control-label span", t("scope.label"));
   setText('.choice-card[data-value="current_window"] .button-label', t("scope.currentWindow"));
   setText('.choice-card[data-value="consolidate_one_window"] .button-label', t("scope.allWindows"));
+  setText('.mode-tab[data-panel-mode="organize"]', t("mode.organize"));
+  setText('.mode-tab[data-panel-mode="recap"]', t("mode.recap"));
   setAttribute("#organizeMode", "aria-label", t("scope.nativeLabel"));
   setOptionText("#organizeMode", "current_window", t("scope.optionCurrent"));
   setOptionText("#organizeMode", "consolidate_one_window", t("scope.optionAll"));
@@ -625,6 +699,18 @@ function applyUiLanguage() {
   setText(".secret-remember-row small", t("field.rememberKeyHint"));
   setText('label[for="minConfidenceToApply"]', t("field.minConfidence"));
   setText('label[for="maxTabsPerGroup"]', t("field.maxTabs"));
+  setText(".recap-intro .step-label", t("recap.step"));
+  setText(".recap-intro h2", t("recap.heading"));
+  setText(".recap-intro p:not(.step-label)", t("recap.subtitle"));
+  setText('label[for="recapRangePreset"]', t("recap.range"));
+  setText('label[for="recapFromDate"]', t("recap.from"));
+  setText('label[for="recapToDate"]', t("recap.to"));
+  setOptionText("#recapRangePreset", "today", t("recap.today"));
+  setOptionText("#recapRangePreset", "7d", t("recap.7d"));
+  setOptionText("#recapRangePreset", "30d", t("recap.30d"));
+  setOptionText("#recapRangePreset", "custom", t("recap.custom"));
+  setButtonLabel(nodes.recapGenerateBtn, t("recap.generate"));
+  setText("#recapDetailsRoot > summary", t("recap.evidence"));
   setAttribute("#gatewayCustomModel", "placeholder", t("placeholder.customModel"));
   setAttribute("#gatewayBaseUrl", "placeholder", t("placeholder.gatewayUrl"));
   setAttribute("#gatewayApiKey", "placeholder", t("placeholder.gatewayKey"));
@@ -663,8 +749,8 @@ function applyUiLanguage() {
   setOptionText("#gatewayThinkingIntensity", "high", t("option.thinkingHigh"));
   setOptionText("#gatewayThinkingIntensity", "ultra", t("option.thinkingUltra"));
 
-  setText(".step-label", t("preview.step"));
-  setText(".section-heading h2", t("preview.heading"));
+  setText(".preview .step-label", t("preview.step"));
+  setText(".preview .section-heading h2", t("preview.heading"));
   setText("#detailsRoot > summary", t("details.summary"));
   setButtonLabel(nodes.cancelBtn, t("button.cancel"));
   setButtonLabel(nodes.applyBtn, t("button.apply"));
@@ -681,7 +767,10 @@ function applyUiLanguage() {
     nodes.previewCount.textContent = t("preview.pending");
     nodes.previewRoot.textContent = t("preview.empty");
   }
+  if (lastTimeRecap) renderTimeRecap(lastTimeRecap);
+  else if (nodes.recapResult) nodes.recapResult.textContent = t("recap.empty");
   syncActionState();
+  applyPanelMode();
   renderStatus();
 }
 
@@ -727,6 +816,42 @@ function currentResultLanguageMode() {
 
 function effectiveResultLanguageMode(languageMode) {
   return languageMode === "auto" ? uiLanguage : languageMode;
+}
+
+function setPanelMode(mode) {
+  currentPanelMode = mode === "recap" ? "recap" : "organize";
+  applyPanelMode();
+}
+
+function applyPanelMode() {
+  if (!nodes.appShell) return;
+  nodes.appShell.dataset.panelMode = currentPanelMode;
+  for (const button of nodes.modeTabs || []) {
+    button.setAttribute("aria-pressed", button.dataset.panelMode === currentPanelMode ? "true" : "false");
+  }
+  nodes.timeRecapPanel.hidden = currentPanelMode !== "recap";
+}
+
+function initializeRecapDates() {
+  if (!fields.recapFromDate || !fields.recapToDate) return;
+  const now = new Date();
+  const sevenDaysAgo = new Date(now.getTime() - 6 * 24 * 60 * 60 * 1000);
+  fields.recapFromDate.value = dateInputValue(sevenDaysAgo);
+  fields.recapToDate.value = dateInputValue(now);
+  syncRecapRangeUi();
+}
+
+function syncRecapRangeUi() {
+  if (nodes.recapCustomRange && fields.recapRangePreset) {
+    nodes.recapCustomRange.hidden = fields.recapRangePreset.value !== "custom";
+  }
+}
+
+function dateInputValue(date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
 }
 
 function bindChoiceGroups() {
@@ -927,6 +1052,193 @@ async function analyze() {
   }
 }
 
+async function generateTimeRecap() {
+  setRecapBusy(true);
+  setStatusKey("status.recapPreparing");
+  try {
+    const settings = readSettings({ effectiveForAnalysis: true });
+    settings.languageMode = effectiveResultLanguageMode(settings.languageMode);
+    validateGatewaySettingsForAnalyze(settings);
+    await ensurePlannerHostPermission(settings);
+
+    setStatusKey("status.recapGenerating");
+    const result = await sendMessage({
+      type: "activity:generateTimeRecap",
+      settings,
+      languageMode: settings.languageMode,
+      range: readRecapRange()
+    });
+    lastTimeRecap = result;
+    renderTimeRecap(result);
+    setStatusKey("status.recapReady");
+  } catch (error) {
+    const message = friendlyErrorMessage(error);
+    setStatus(message, true);
+    renderTimeRecapError(message);
+  } finally {
+    setRecapBusy(false);
+  }
+}
+
+function readRecapRange() {
+  const preset = fields.recapRangePreset.value || "7d";
+  if (preset !== "custom") return { preset };
+
+  const fromValue = fields.recapFromDate.value;
+  const toValue = fields.recapToDate.value;
+  const from = dateInputStartIso(fromValue);
+  const to = dateInputEndIso(toValue);
+  if (!from || !to || Date.parse(to) < Date.parse(from)) {
+    throw new Error(t("status.recapRangeInvalid"));
+  }
+  return { preset: "custom", from, to };
+}
+
+function dateInputStartIso(value) {
+  const parts = String(value || "").split("-").map((part) => Number(part));
+  if (parts.length !== 3 || parts.some((part) => !Number.isInteger(part))) return "";
+  return new Date(parts[0], parts[1] - 1, parts[2], 0, 0, 0, 0).toISOString();
+}
+
+function dateInputEndIso(value) {
+  const parts = String(value || "").split("-").map((part) => Number(part));
+  if (parts.length !== 3 || parts.some((part) => !Number.isInteger(part))) return "";
+  return new Date(parts[0], parts[1] - 1, parts[2], 23, 59, 59, 999).toISOString();
+}
+
+function setRecapBusy(isBusy) {
+  if (!nodes.recapGenerateBtn) return;
+  nodes.recapGenerateBtn.disabled = Boolean(isBusy);
+  nodes.recapGenerateBtn.textContent = t(isBusy ? "recap.generating" : "recap.generate");
+}
+
+function renderTimeRecap(result) {
+  const recap = result?.recap || {};
+  const input = result?.input || {};
+  const pagesById = new Map((input.pages || []).map((page) => [page.id, page]));
+  nodes.recapResult.className = "recap-result";
+
+  if (!recap.headline && !recap.summary) {
+    nodes.recapResult.className = "recap-result empty";
+    nodes.recapResult.textContent = t("recap.empty");
+    nodes.recapDetailsRoot.hidden = true;
+    return;
+  }
+
+  const summary = document.createElement("section");
+  summary.className = "recap-summary-card";
+  const headline = document.createElement("h3");
+  headline.textContent = recap.headline || t("recap.heading");
+  const copy = document.createElement("p");
+  copy.textContent = recap.summary || recap.coverageNote || "";
+  summary.append(headline, copy);
+  if (result.source === "local_fallback" || result.error) {
+    const fallback = document.createElement("p");
+    fallback.textContent = result.error ? `${t("recap.localFallback")} ${result.error}` : t("recap.localFallback");
+    summary.append(fallback);
+  }
+
+  const children = [summary];
+  children.push(...recapSection(t("recap.themes"), recap.themes, pagesById));
+  children.push(...recapSection(t("recap.timeline"), recap.timeline, pagesById, { labelKey: "label" }));
+  children.push(...recapSection(t("recap.followUps"), recap.followUps, pagesById, { descriptionKey: "reason" }));
+  children.push(...recapReviewSection(recap.reviewCandidates, pagesById));
+
+  nodes.recapResult.replaceChildren(...children);
+  nodes.recapDetailsRoot.hidden = false;
+  nodes.recapDetailsText.textContent = JSON.stringify(result, replacerForDetails, 2);
+}
+
+function renderTimeRecapError(message) {
+  nodes.recapResult.className = "recap-result";
+  const card = document.createElement("section");
+  card.className = "recap-card";
+  const title = document.createElement("h3");
+  title.textContent = t("error.heading");
+  const copy = document.createElement("p");
+  copy.textContent = message || t("status.previousFailed");
+  card.append(title, copy);
+  nodes.recapResult.replaceChildren(card);
+  nodes.recapDetailsRoot.hidden = true;
+}
+
+function recapSection(titleText, items = [], pagesById, options = {}) {
+  const validItems = Array.isArray(items) ? items.filter(Boolean) : [];
+  if (!validItems.length) return [];
+  const title = document.createElement("h3");
+  title.className = "recap-section-title";
+  title.textContent = titleText;
+  return [
+    title,
+    ...validItems.map((item) => recapCard(item, pagesById, options))
+  ];
+}
+
+function recapCard(item, pagesById, options = {}) {
+  const card = document.createElement("article");
+  card.className = "recap-card";
+  const title = document.createElement("h3");
+  title.textContent = item?.title || item?.[options.labelKey || "title"] || "";
+  const description = document.createElement("p");
+  description.textContent = item?.[options.descriptionKey || "description"] || item?.summary || item?.reason || "";
+  card.append(title, description);
+  const chips = recapPageChips(item?.pageIds || item?.ids || [], pagesById);
+  if (chips) card.append(chips);
+  return card;
+}
+
+function recapReviewSection(candidates = [], pagesById) {
+  const validItems = Array.isArray(candidates) ? candidates.filter(Boolean) : [];
+  if (!validItems.length) return [];
+  const title = document.createElement("h3");
+  title.className = "recap-section-title";
+  title.textContent = t("recap.review");
+  return [
+    title,
+    ...validItems.map((candidate) => recapReviewCard(candidate, pagesById))
+  ];
+}
+
+function recapReviewCard(candidate, pagesById) {
+  const page = pagesById.get(candidate.pageId) || {};
+  const card = document.createElement("article");
+  card.className = "recap-card";
+  const row = document.createElement("div");
+  row.className = "recap-review-row";
+  const copy = document.createElement("div");
+  const title = document.createElement("h3");
+  title.textContent = page.title || page.hostname || candidate.reason || t("recap.review");
+  const reason = document.createElement("p");
+  reason.textContent = candidate.reason || "";
+  copy.append(title, reason);
+  row.append(copy);
+  if (Number.isInteger(candidate.tabId || page.tabId)) {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.textContent = t("recap.findTab");
+    button.addEventListener("click", () => focusActivityTab({ tabId: candidate.tabId || page.tabId, windowId: candidate.windowId || page.windowId }));
+    row.append(button);
+  }
+  card.append(row);
+  const chips = recapPageChips([candidate.pageId], pagesById);
+  if (chips) card.append(chips);
+  return card;
+}
+
+function recapPageChips(ids, pagesById) {
+  const pages = uniqueNumbers(ids).map((id) => pagesById.get(id)).filter(Boolean).slice(0, 6);
+  if (!pages.length) return null;
+  const list = document.createElement("div");
+  list.className = "recap-page-list";
+  for (const page of pages) {
+    const chip = document.createElement("span");
+    chip.className = "recap-page-chip";
+    chip.textContent = page.title || page.hostname || "";
+    list.append(chip);
+  }
+  return list;
+}
+
 function validateGatewaySettingsForAnalyze(settings) {
   if (settings.plannerProvider !== "gateway" || settings.gatewayModel !== GATEWAY_CUSTOM_MODEL_VALUE) return;
   if (!settings.gatewayCustomModel.trim()) {
@@ -1068,8 +1380,8 @@ async function undoLastApply() {
 function renderPreview(job) {
   lastError = null;
   nodes.previewSection.hidden = false;
-  setText(".step-label", t("preview.step"));
-  setText(".section-heading h2", t("preview.heading"));
+  setText(".preview .step-label", t("preview.step"));
+  setText(".preview .section-heading h2", t("preview.heading"));
   const preview = job.preview;
   const resultLanguageMode = preview.languageMode || job.settings?.languageMode || currentResultLanguageMode();
   const groups = orderPreviewGroups(preview.groups || [], resultLanguageMode);
@@ -1500,8 +1812,8 @@ function renderError(error) {
   lastPreview = null;
   lastCanApply = false;
   nodes.previewSection.hidden = false;
-  setText(".step-label", t("preview.error"));
-  setText(".section-heading h2", t("error.heading"));
+  setText(".preview .step-label", t("preview.error"));
+  setText(".preview .section-heading h2", t("error.heading"));
   nodes.previewCount.textContent = t("preview.error");
   nodes.previewRoot.className = "error-panel";
   nodes.previewRoot.replaceChildren(errorPanelContent(lastError));
@@ -1538,8 +1850,8 @@ function resetToSetup() {
   lastError = null;
   lastCanApply = false;
   nodes.previewSection.hidden = true;
-  setText(".step-label", t("preview.step"));
-  setText(".section-heading h2", t("preview.heading"));
+  setText(".preview .step-label", t("preview.step"));
+  setText(".preview .section-heading h2", t("preview.heading"));
   nodes.previewCount.textContent = t("preview.pending");
   nodes.previewRoot.className = "empty";
   nodes.previewRoot.textContent = t("preview.empty");
@@ -2244,7 +2556,7 @@ async function mockMessage(message) {
       plannerProvider: "gateway",
       rememberProviderKeys: false,
       gatewayBaseUrl: "",
-      gatewayModel: "gpt-5.5",
+      gatewayModel: "gpt-5.4",
       gatewayAuxiliaryModel: "gpt-5.3-codex-spark",
       gatewayCustomModel: "",
       gatewayThinkingIntensity: "high",
@@ -2292,6 +2604,9 @@ async function mockMessage(message) {
   }
   if (message.type === "tabs:cancelActiveJob") return { canceled: false, job: mockActiveJob };
   if (message.type === "activity:focusTab") return { focused: true, tabId: message.tabId, windowId: message.windowId };
+  if (message.type === "activity:generateTimeRecap") {
+    return mockTimeRecap();
+  }
   if (message.type === "activity:getOverview") {
     const overview = {
       rangeMs: message.rangeMs || 604800000,
@@ -2377,6 +2692,73 @@ async function mockMessage(message) {
     };
   }
   throw new Error(`Mock does not implement ${message.type}`);
+}
+
+function mockTimeRecap() {
+  const now = new Date();
+  return {
+    source: "ai",
+    input: {
+      schema: "tab_tidy_time_recap_input_v1",
+      range: { preset: "7d", from: new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString(), to: now.toISOString() },
+      coverage: { includedPages: 18, sampledEntries: 7, currentOpenTabs: 24 },
+      pages: [
+        { id: 1, tabId: 31, windowId: 1, title: "Chrome extensions side panel docs", hostname: "developer.chrome.com", open: true },
+        { id: 2, tabId: 32, windowId: 1, title: "Tab Tidy release checklist", hostname: "github.com", open: true },
+        { id: 3, tabId: 33, windowId: 1, title: "AI planner benchmark notes", hostname: "github.com", open: true }
+      ]
+    },
+    recap: {
+      schema: "tab_tidy_time_recap_v1",
+      language: uiLanguage,
+      headline: uiLanguage === "en-US" ? "Recent work centered on extension polish and planner evaluation." : "最近主要在打磨扩展体验和验证 AI 整理策略。",
+      summary:
+        uiLanguage === "en-US"
+          ? "The active thread is productizing Tab Tidy: side panel behavior, release readiness, and planner benchmark evidence."
+          : "主线是把 Tab Tidy 做成可发布产品：侧边栏体验、发布检查和整理策略的基准对比。",
+      themes: [
+        {
+          title: uiLanguage === "en-US" ? "Extension product polish" : "扩展产品打磨",
+          description: uiLanguage === "en-US" ? "Side panel UX, permissions, and release copy are being refined together." : "侧边栏交互、权限说明和发布文案在一起收敛。",
+          confidence: "high",
+          pageIds: [1, 2],
+          evidence: ["side panel", "release"]
+        },
+        {
+          title: uiLanguage === "en-US" ? "Planner benchmarks" : "整理策略验证",
+          description: uiLanguage === "en-US" ? "Benchmark notes compare model routing and large-tab performance." : "基准记录在对比模型路由和大规模标签页耗时。",
+          confidence: "medium",
+          pageIds: [3],
+          evidence: ["benchmark"]
+        }
+      ],
+      timeline: [
+        {
+          label: uiLanguage === "en-US" ? "This week" : "这一周",
+          description: uiLanguage === "en-US" ? "Most activity points to release cleanup and side panel iteration." : "活动主要集中在发布收口和侧边栏迭代。",
+          pageIds: [1, 2, 3]
+        }
+      ],
+      followUps: [
+        {
+          title: uiLanguage === "en-US" ? "Verify the recap flow" : "验证回顾流程",
+          reason: uiLanguage === "en-US" ? "The new surface should be tested with cached summaries and local fallback." : "新入口需要覆盖缓存摘要和本地回退两条路径。",
+          pageIds: [1, 3]
+        }
+      ],
+      reviewCandidates: [
+        {
+          pageId: 2,
+          tabId: 32,
+          windowId: 1,
+          priority: "medium",
+          reason: uiLanguage === "en-US" ? "The release checklist may be closable after publishing." : "发布完成后，这个检查清单可能可以关闭。",
+          evidence: []
+        }
+      ],
+      coverageNote: uiLanguage === "en-US" ? "Used local activity plus available summaries." : "已结合本机活动和可用摘要。"
+    }
+  };
 }
 
 function mockAnalysisJob() {

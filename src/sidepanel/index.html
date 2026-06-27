@@ -24,6 +24,11 @@
         </button>
       </header>
 
+      <nav class="mode-tabs" aria-label="Tab Tidy modes">
+        <button class="mode-tab" type="button" data-panel-mode="organize" aria-pressed="true">整理</button>
+        <button class="mode-tab" type="button" data-panel-mode="recap" aria-pressed="false">回顾</button>
+      </nav>
+
       <div class="scroll-region">
         <section class="launch-panel">
           <div class="analysis-switches">
@@ -150,6 +155,45 @@
               ></textarea>
             </div>
           </div>
+        </section>
+
+        <section id="timeRecapPanel" class="time-recap-panel" hidden>
+          <div class="recap-intro">
+            <p class="step-label">近期回顾</p>
+            <h2>看看最近主要在忙什么</h2>
+            <p>根据本机活动、标题、网址和可用页面摘要生成，不会自动关闭标签页。</p>
+          </div>
+
+          <div class="recap-controls">
+            <div class="field setting-select-row">
+              <label for="recapRangePreset">时间范围</label>
+              <select id="recapRangePreset">
+                <option value="today">今天</option>
+                <option value="7d" selected>最近 7 天</option>
+                <option value="30d">最近 30 天</option>
+                <option value="custom">自定义</option>
+              </select>
+            </div>
+
+            <div id="recapCustomRange" class="recap-custom-range" hidden>
+              <div class="field setting-input-row">
+                <label for="recapFromDate">开始日期</label>
+                <input id="recapFromDate" type="date" />
+              </div>
+              <div class="field setting-input-row">
+                <label for="recapToDate">结束日期</label>
+                <input id="recapToDate" type="date" />
+              </div>
+            </div>
+
+            <button id="recapGenerateBtn" class="secondary-action" type="button">生成回顾</button>
+          </div>
+
+          <div id="recapResult" class="recap-result empty">还没有回顾。</div>
+          <details id="recapDetailsRoot" class="recap-details" hidden>
+            <summary>证据详情</summary>
+            <pre id="recapDetailsText"></pre>
+          </details>
         </section>
 
         <details class="advanced-settings">

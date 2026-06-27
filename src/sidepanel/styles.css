@@ -130,7 +130,7 @@ h2,
 .app-shell {
   position: relative;
   display: grid;
-  grid-template-rows: auto minmax(0, 1fr) auto;
+  grid-template-rows: auto auto minmax(0, 1fr) auto;
   gap: 0;
   width: 100%;
   max-width: none;
@@ -148,6 +148,17 @@ h2,
 
 .app-shell[data-flow-state="preview"] .launch-panel,
 .app-shell[data-flow-state="preview"] .advanced-settings {
+  display: none;
+}
+
+.app-shell[data-panel-mode="recap"] .launch-panel,
+.app-shell[data-panel-mode="recap"] .advanced-settings,
+.app-shell[data-panel-mode="recap"] .preview,
+.app-shell[data-panel-mode="recap"] .actions {
+  display: none;
+}
+
+.app-shell[data-panel-mode="organize"] .time-recap-panel {
   display: none;
 }
 
@@ -193,6 +204,40 @@ h2,
 
 .topbar::after {
   bottom: -18px;
+}
+
+.mode-tabs {
+  display: inline-grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 4px;
+  align-self: start;
+  width: 154px;
+  margin: 0 0 4px 2px;
+  padding: 3px;
+  background: color-mix(in srgb, var(--surface-soft) 76%, transparent);
+  border: 1px solid color-mix(in srgb, var(--line) 16%, transparent);
+  border-radius: 999px;
+  box-shadow: var(--control-shadow);
+}
+
+.mode-tab {
+  min-height: 26px;
+  padding: 0 10px;
+  color: var(--muted);
+  background: transparent;
+  border: 0;
+  border-radius: 999px;
+  box-shadow: none;
+  font-size: 12px;
+  font-weight: 850;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.mode-tab[aria-pressed="true"] {
+  color: #ffffff;
+  background: var(--primary);
+  box-shadow: 0 3px 10px color-mix(in srgb, var(--primary) 24%, transparent);
 }
 
 .scroll-region {
@@ -326,18 +371,162 @@ h2 {
 
 .launch-panel,
 .preview,
+.time-recap-panel,
 .advanced-settings {
   display: grid;
   gap: 10px;
 }
 
 .launch-panel,
-.preview {
+.preview,
+.time-recap-panel {
   padding: 14px;
   background: var(--surface);
   border: 1.25px solid color-mix(in srgb, var(--line) 88%, transparent);
   border-radius: var(--radius-lg);
   box-shadow: none;
+}
+
+.time-recap-panel {
+  gap: 12px;
+}
+
+.recap-intro {
+  display: grid;
+  gap: 5px;
+}
+
+.recap-intro p:not(.step-label) {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 650;
+  line-height: 1.45;
+}
+
+.recap-controls,
+.recap-custom-range {
+  display: grid;
+  gap: 9px;
+}
+
+.recap-custom-range {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.recap-controls .secondary-action {
+  min-height: 40px;
+  color: var(--primary);
+  background: var(--primary-soft);
+  border: 1px solid color-mix(in srgb, var(--primary) 28%, var(--line));
+  border-radius: var(--radius-md);
+  box-shadow: var(--control-shadow);
+  font-weight: 860;
+  cursor: pointer;
+}
+
+.recap-controls .secondary-action:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.recap-result {
+  display: grid;
+  gap: 10px;
+}
+
+.recap-result.empty {
+  min-height: 92px;
+}
+
+.recap-summary-card,
+.recap-card {
+  display: grid;
+  gap: 7px;
+  padding: 12px;
+  background: color-mix(in srgb, var(--surface) 88%, var(--surface-soft));
+  border: 1px solid color-mix(in srgb, var(--line) 38%, transparent);
+  border-radius: var(--radius-md);
+  box-shadow:
+    0 8px 18px rgba(42, 38, 31, 0.06),
+    inset 0 1px 0 color-mix(in srgb, #ffffff 34%, transparent);
+}
+
+.recap-summary-card {
+  color: var(--primary);
+  background: var(--primary-soft);
+  border-color: color-mix(in srgb, var(--primary) 24%, var(--line));
+}
+
+.recap-summary-card h3,
+.recap-card h3 {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.25;
+  font-weight: 870;
+}
+
+.recap-summary-card p,
+.recap-card p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.45;
+  font-weight: 650;
+}
+
+.recap-section-title {
+  margin: 4px 0 0;
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.recap-page-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.recap-page-chip {
+  max-width: 100%;
+  min-height: 22px;
+  padding: 2px 7px;
+  overflow: hidden;
+  color: var(--muted);
+  background: color-mix(in srgb, var(--surface-soft) 72%, transparent);
+  border: 1px solid color-mix(in srgb, var(--line) 18%, transparent);
+  border-radius: 999px;
+  font-size: 10.5px;
+  font-weight: 760;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.recap-review-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+}
+
+.recap-review-row button {
+  min-height: 30px;
+  padding: 0 10px;
+  color: var(--primary);
+  background: var(--primary-soft);
+  border: 1px solid color-mix(in srgb, var(--primary) 26%, var(--line));
+  border-radius: 999px;
+  box-shadow: none;
+  font-size: 11px;
+  font-weight: 820;
+  cursor: pointer;
+}
+
+.recap-details pre {
+  max-height: 220px;
+  overflow: auto;
+  font-size: 11px;
+  white-space: pre-wrap;
 }
 
 .analysis-switches {

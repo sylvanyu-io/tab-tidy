@@ -170,14 +170,14 @@ test("control surface renders settings and mock preview", async ({ page }) => {
   await expect(page.locator("#gatewayBaseUrl")).toHaveValue("");
   await expect(page.locator("#gatewayBaseUrl")).toHaveAttribute("placeholder", "不填则使用默认服务");
   await expect(page.locator("#gatewayApiKey")).toHaveAttribute("placeholder", "默认服务无需填写");
-  await expect(page.locator("#gatewayModel")).toHaveValue("gpt-5.5");
+  await expect(page.locator("#gatewayModel")).toHaveValue("gpt-5.4");
   await expect(page.locator("#gatewayAuxiliaryModel")).toHaveValue("gpt-5.3-codex-spark");
   await expect(page.locator("#gatewayCustomModelField")).toBeHidden();
   await page.locator("#gatewayModel").selectOption("custom");
   await expect(page.locator("#gatewayCustomModelField")).toBeVisible();
   await page.locator("#gatewayCustomModel").fill("glm-5.2");
   await expect(page.locator("#gatewayCustomModel")).toHaveValue("glm-5.2");
-  await page.locator("#gatewayModel").selectOption("gpt-5.5");
+  await page.locator("#gatewayModel").selectOption("gpt-5.4");
   await expect(page.locator("#gatewayCustomModelField")).toBeHidden();
   await expect(page.locator("#gatewayThinkingIntensity")).toHaveValue("high");
   await expect(page.locator("#languageMode")).toHaveValue("auto");
@@ -258,6 +258,35 @@ test("control surface renders settings and mock preview", async ({ page }) => {
   await expect(page.locator("#previewSection")).toBeHidden();
   await expect(page.getByRole("button", { name: "生成方案" })).toBeVisible();
   await expect(page.getByRole("button", { name: "撤销" })).toBeVisible();
+});
+
+test("time recap mode renders a first-class recap surface", async ({ page }) => {
+  await page.goto(`${baseUrl}/src/sidepanel/index.html`);
+
+  await page.getByRole("button", { name: "回顾" }).click();
+  await expect(page.locator("#timeRecapPanel")).toBeVisible();
+  await expect(page.locator(".launch-panel")).toBeHidden();
+  await expect(page.locator(".actions")).toBeHidden();
+  await expect(page.getByText("看看最近主要在忙什么")).toBeVisible();
+  await expect(page.locator("#recapRangePreset")).toHaveValue("7d");
+  await expect(page.locator("#recapCustomRange")).toBeHidden();
+
+  await page.locator("#recapRangePreset").selectOption("custom");
+  await expect(page.locator("#recapCustomRange")).toBeVisible();
+  await page.locator("#recapRangePreset").selectOption("7d");
+  await page.getByRole("button", { name: "生成回顾" }).click();
+
+  await expect(page.locator("#statusText")).toHaveText("回顾已生成");
+  await expect(page.locator(".recap-summary-card")).toContainText("最近主要在打磨扩展体验和验证 AI 整理策略。");
+  await expect(page.locator(".recap-card").getByText("扩展产品打磨", { exact: true })).toBeVisible();
+  await expect(page.locator(".recap-card").getByText("整理策略验证", { exact: true })).toBeVisible();
+  await expect(page.locator(".recap-card").getByText("发布完成后，这个检查清单可能可以关闭。", { exact: true })).toBeVisible();
+  await expect(page.locator("#recapDetailsRoot")).toBeVisible();
+
+  await page.getByRole("button", { name: "整理" }).click();
+  await expect(page.locator("#timeRecapPanel")).toBeHidden();
+  await expect(page.locator(".launch-panel")).toBeVisible();
+  await expect(page.getByRole("button", { name: "生成方案" })).toBeVisible();
 });
 
 test("cleanup candidates are returned with the generated plan and can be closed manually", async ({ page }) => {
@@ -358,7 +387,7 @@ test("default result language follows the English UI when generating", async ({ 
       plannerProvider: "gateway",
       rememberProviderKeys: false,
       gatewayBaseUrl: "",
-      gatewayModel: "gpt-5.5",
+      gatewayModel: "gpt-5.4",
       gatewayThinkingIntensity: "high",
       gatewayApiKey: "",
       customPrompt: ""
@@ -452,7 +481,7 @@ test("side panel restores a completed background preview after reopening", async
       plannerProvider: "gateway",
       rememberProviderKeys: false,
       gatewayBaseUrl: "",
-      gatewayModel: "gpt-5.5",
+      gatewayModel: "gpt-5.4",
       gatewayThinkingIntensity: "high",
       gatewayApiKey: "",
       customPrompt: ""
@@ -553,7 +582,7 @@ test("side panel restores a background planning error after reopening", async ({
       plannerProvider: "gateway",
       rememberProviderKeys: false,
       gatewayBaseUrl: "",
-      gatewayModel: "gpt-5.5",
+      gatewayModel: "gpt-5.4",
       gatewayThinkingIntensity: "high",
       gatewayApiKey: "",
       customPrompt: ""
@@ -584,8 +613,8 @@ test("side panel restores a background planning error after reopening", async ({
   await page.goto(`${baseUrl}/src/sidepanel/index.html`);
   await expect(page.locator("#statusText")).toHaveText("This model is not available on the free gateway.");
   await expect(page.locator("#previewSection")).toBeVisible();
-  await expect(page.locator(".step-label")).toHaveText("出错");
-  await expect(page.locator(".section-heading h2")).toHaveText("生成失败");
+  await expect(page.locator(".preview .step-label")).toHaveText("出错");
+  await expect(page.locator(".preview .section-heading h2")).toHaveText("生成失败");
   await expect(page.locator(".error-panel")).toContainText("This model is not available on the free gateway.");
   await expect(page.locator(".launch-panel")).toBeHidden();
   await expect(page.getByText("整理预览")).toBeHidden();
@@ -614,7 +643,7 @@ test("preview keeps review-like groups at the bottom", async ({ page }) => {
       plannerProvider: "gateway",
       rememberProviderKeys: false,
       gatewayBaseUrl: "",
-      gatewayModel: "gpt-5.5",
+      gatewayModel: "gpt-5.4",
       gatewayThinkingIntensity: "high",
       gatewayApiKey: "",
       customPrompt: ""
@@ -684,7 +713,7 @@ test("side panel shows optimistic progress while waiting for AI", async ({ page 
       plannerProvider: "gateway",
       rememberProviderKeys: false,
       gatewayBaseUrl: "",
-      gatewayModel: "gpt-5.5",
+      gatewayModel: "gpt-5.4",
       gatewayThinkingIntensity: "high",
       gatewayApiKey: "",
       customPrompt: ""
@@ -773,7 +802,7 @@ test("English UI localizes known background progress messages", async ({ page })
       plannerProvider: "gateway",
       rememberProviderKeys: false,
       gatewayBaseUrl: "",
-      gatewayModel: "gpt-5.5",
+      gatewayModel: "gpt-5.4",
       gatewayThinkingIntensity: "high",
       gatewayApiKey: "",
       customPrompt: ""
@@ -832,7 +861,7 @@ test("default gateway permission request is narrow and compact", async ({ page }
       plannerProvider: "gateway",
       rememberProviderKeys: false,
       gatewayBaseUrl: "",
-      gatewayModel: "gpt-5.5",
+      gatewayModel: "gpt-5.4",
       gatewayThinkingIntensity: "high",
       gatewayApiKey: "",
       customPrompt: ""
@@ -974,7 +1003,7 @@ test("current-window generation without sourceWindowId uses the focused normal w
       plannerProvider: "gateway",
       rememberProviderKeys: false,
       gatewayBaseUrl: "",
-      gatewayModel: "gpt-5.5",
+      gatewayModel: "gpt-5.4",
       gatewayThinkingIntensity: "high",
       gatewayApiKey: "",
       customPrompt: ""
@@ -1050,7 +1079,7 @@ test("current-window generation ignores a stale sourceWindowId", async ({ page }
       plannerProvider: "gateway",
       rememberProviderKeys: false,
       gatewayBaseUrl: "",
-      gatewayModel: "gpt-5.5",
+      gatewayModel: "gpt-5.4",
       gatewayThinkingIntensity: "high",
       gatewayApiKey: "",
       customPrompt: ""
@@ -1130,7 +1159,7 @@ test("review-only previews are shown as a pending classification group", async (
       plannerProvider: "gateway",
       rememberProviderKeys: false,
       gatewayBaseUrl: "",
-      gatewayModel: "gpt-5.5",
+      gatewayModel: "gpt-5.4",
       gatewayThinkingIntensity: "high",
       gatewayApiKey: "",
       customPrompt: ""
@@ -1205,7 +1234,7 @@ test("apply confirms changed tabs before adding them to review", async ({ page }
       plannerProvider: "gateway",
       rememberProviderKeys: false,
       gatewayBaseUrl: "",
-      gatewayModel: "gpt-5.5",
+      gatewayModel: "gpt-5.4",
       gatewayThinkingIntensity: "high",
       gatewayApiKey: "",
       customPrompt: ""
@@ -1330,7 +1359,7 @@ test("page summary main toggle requests scripting and page origins", async ({ pa
       plannerProvider: "gateway",
       rememberProviderKeys: false,
       gatewayBaseUrl: "",
-      gatewayModel: "gpt-5.5",
+      gatewayModel: "gpt-5.4",
       gatewayThinkingIntensity: "high",
       gatewayApiKey: "",
       customPrompt: ""
@@ -1442,7 +1471,7 @@ test("page summary range can be changed while the main toggle is off", async ({ 
       plannerProvider: "gateway",
       rememberProviderKeys: false,
       gatewayBaseUrl: "",
-      gatewayModel: "gpt-5.5",
+      gatewayModel: "gpt-5.4",
       gatewayThinkingIntensity: "high",
       gatewayApiKey: "",
       customPrompt: ""
@@ -1505,7 +1534,7 @@ test("continuous summaries request broad optional access once", async ({ page })
       plannerProvider: "gateway",
       rememberProviderKeys: false,
       gatewayBaseUrl: "",
-      gatewayModel: "gpt-5.5",
+      gatewayModel: "gpt-5.4",
       gatewayThinkingIntensity: "high",
       gatewayApiKey: "",
       customPrompt: ""
@@ -1596,7 +1625,7 @@ test("store manifest hides content-reading controls", async ({ page }) => {
       plannerProvider: "gateway",
       rememberProviderKeys: false,
       gatewayBaseUrl: "",
-      gatewayModel: "gpt-5.5",
+      gatewayModel: "gpt-5.4",
       gatewayThinkingIntensity: "high",
       gatewayApiKey: "",
       customPrompt: ""
@@ -1642,7 +1671,7 @@ test("page summary permission denial rolls back the toggle before generation", a
       plannerProvider: "gateway",
       rememberProviderKeys: false,
       gatewayBaseUrl: "",
-      gatewayModel: "gpt-5.5",
+      gatewayModel: "gpt-5.4",
       gatewayThinkingIntensity: "high",
       gatewayApiKey: "",
       customPrompt: ""
@@ -1711,7 +1740,7 @@ test("generation progress follows the background job after start", async ({ page
       plannerProvider: "gateway",
       rememberProviderKeys: false,
       gatewayBaseUrl: "",
-      gatewayModel: "gpt-5.5",
+      gatewayModel: "gpt-5.4",
       gatewayThinkingIntensity: "high",
       gatewayApiKey: "",
       customPrompt: ""
@@ -1797,7 +1826,7 @@ test("canceling generation returns to setup without error preview", async ({ pag
       plannerProvider: "gateway",
       rememberProviderKeys: false,
       gatewayBaseUrl: "",
-      gatewayModel: "gpt-5.5",
+      gatewayModel: "gpt-5.4",
       gatewayThinkingIntensity: "high",
       gatewayApiKey: "",
       customPrompt: ""
@@ -1873,7 +1902,7 @@ test("generation does not request page sampling permissions from a stale enabled
       plannerProvider: "gateway",
       rememberProviderKeys: false,
       gatewayBaseUrl: "",
-      gatewayModel: "gpt-5.5",
+      gatewayModel: "gpt-5.4",
       gatewayThinkingIntensity: "high",
       gatewayApiKey: "",
       customPrompt: ""
