@@ -387,6 +387,12 @@ test("time recap generation uses the shared bottom progress controls", async ({ 
 
   await page.goto(`${baseUrl}/src/sidepanel/index.html`);
   await page.getByRole("button", { name: "回顾" }).click();
+  await page.locator(".advanced-settings > summary").click();
+  await page.locator("#languageMode").selectOption("en-US");
+  await page.locator("#gatewayModel").selectOption("claude-sonnet-4-6");
+  await page.locator("#gatewayAuxiliaryModel").selectOption("same_as_primary");
+  await page.locator("#gatewayThinkingIntensity").selectOption("medium");
+  await page.locator(".advanced-settings > summary").click();
   await page.getByRole("button", { name: "生成回顾" }).click();
 
   await expect(page.locator(".actions #progressBar")).toBeVisible();
@@ -418,6 +424,24 @@ test("time recap generation uses the shared bottom progress controls", async ({ 
       page.evaluate(() => window.__recapMessages.some((message) => message.type === "activity:generateTimeRecap" && message.timeoutMs === 300000))
     )
     .toBe(true);
+  await expect
+    .poll(() =>
+      page.evaluate(() => {
+        const message = window.__recapMessages.find((item) => item.type === "activity:generateTimeRecap");
+        return {
+          languageMode: message?.languageMode,
+          gatewayModel: message?.settings?.gatewayModel,
+          gatewayAuxiliaryModel: message?.settings?.gatewayAuxiliaryModel,
+          gatewayThinkingIntensity: message?.settings?.gatewayThinkingIntensity
+        };
+      })
+    )
+    .toEqual({
+      languageMode: "en-US",
+      gatewayModel: "claude-sonnet-4-6",
+      gatewayAuxiliaryModel: "same_as_primary",
+      gatewayThinkingIntensity: "medium"
+    });
   await expect.poll(() => page.evaluate(() => window.__recapMessages.some((message) => message.type === "progressCopy:generate"))).toBe(true);
 });
 
@@ -559,7 +583,13 @@ test("time recap fallback keeps raw AI errors out of the visible product copy", 
   await expect(page.locator(".recap-summary-card")).toContainText("AI 暂时不可用，先展示本机线索。");
   await expect(page.locator(".recap-summary-card")).not.toContainText("timed out");
   await expect(page.locator(".recap-summary-card")).not.toContainText("300 seconds");
-  await expect.poll(() => page.locator("#recapDetailsText").textContent()).toContain("AI gateway time recap timed out after 300 seconds.");
+  await expect(page.locator("#recapDetailsText")).toContainText("已整理 65 个本机页面线索");
+  await expect(page.locator("#recapDetailsText")).toContainText("AI 暂时不可用，本次先展示本机线索。");
+  await expect(page.locator("#recapDetailsText")).not.toContainText("timed out");
+  await expect(page.locator("#recapDetailsText")).not.toContainText("300 seconds");
+  await expect(page.locator("#recapDetailsText")).not.toContainText("tabId");
+  await expect(page.locator("#recapDetailsText")).not.toContainText("activeCount");
+  await expect(page.locator("#recapDetailsText")).not.toContainText("sampleable");
 });
 
 test("cleanup candidates are returned with the generated plan and can be closed manually", async ({ page }) => {

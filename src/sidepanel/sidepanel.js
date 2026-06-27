@@ -140,6 +140,11 @@ const UI_COPY = Object.freeze({
     "recap.followUps": "下次继续",
     "recap.review": "值得复查",
     "recap.evidence": "证据详情",
+    "recap.evidenceRange": "时间范围：{from} - {to}",
+    "recap.evidenceCoverage": "已整理 {included} 个本机页面线索，其中 {summaries} 个带页面摘要。",
+    "recap.evidenceSignals": "参考信号：最近活跃、打开次数、保留时长、打开/关闭状态、现有分组、标题、网址和可用页面摘要。",
+    "recap.evidenceFallback": "AI 暂时不可用，本次先展示本机线索。",
+    "recap.evidencePages": "代表页面：",
     "recap.localFallback": "AI 暂时不可用，先展示本机线索。",
     "recap.findTab": "定位",
     "customPrompt.label": "自定义要求",
@@ -369,6 +374,11 @@ const UI_COPY = Object.freeze({
     "recap.followUps": "Continue next",
     "recap.review": "Worth reviewing",
     "recap.evidence": "Evidence details",
+    "recap.evidenceRange": "Time range: {from} - {to}",
+    "recap.evidenceCoverage": "Reviewed {included} local page signals, including {summaries} page summaries.",
+    "recap.evidenceSignals": "Signals used: recent activity, open counts, tab age, open/closed state, existing groups, titles, URLs, and available page summaries.",
+    "recap.evidenceFallback": "AI is unavailable, so this recap uses local signals.",
+    "recap.evidencePages": "Representative pages:",
     "recap.localFallback": "AI is unavailable, so this uses local signals.",
     "recap.findTab": "Find",
     "customPrompt.label": "Custom instructions",
@@ -1330,7 +1340,7 @@ function renderTimeRecap(result) {
 
   nodes.recapResult.replaceChildren(...children);
   nodes.recapDetailsRoot.hidden = false;
-  nodes.recapDetailsText.textContent = JSON.stringify(result, replacerForDetails, 2);
+  nodes.recapDetailsText.textContent = recapEvidenceDetailsText(result, pagesById);
 }
 
 function renderTimeRecapError(message) {
@@ -1421,6 +1431,77 @@ function recapPageChips(ids, pagesById) {
     list.append(chip);
   }
   return list;
+}
+
+function recapEvidenceDetailsText(result = {}, pagesById = new Map()) {
+  const input = result.input || {};
+  const coverage = input.coverage || {};
+  const lines = [
+    t("recap.evidenceCoverage", {
+      included: Number(coverage.includedPages || input.pages?.length || 0),
+      summaries: Number(coverage.sampledEntries || 0)
+    }),
+    t("recap.evidenceSignals")
+  ];
+
+  if (input.range?.from && input.range?.to) {
+    lines.push(
+      t("recap.evidenceRange", {
+        from: formatRecapDateTime(input.range.from),
+        to: formatRecapDateTime(input.range.to)
+      })
+    );
+  }
+
+  if (result.source === "local_fallback" || result.error) {
+    lines.push(t("recap.evidenceFallback"));
+  }
+
+  const pages = recapReferencedPages(result.recap || {}, input, pagesById);
+  if (pages.length) {
+    lines.push("", t("recap.evidencePages"));
+    for (const page of pages) {
+      const title = String(page.title || page.hostname || "").trim();
+      const site = String(page.hostname || "").trim();
+      const suffix = site && title && !title.includes(site) ? ` (${site})` : "";
+      lines.push(`- ${title || site}${suffix}`.slice(0, 180));
+    }
+  }
+
+  return lines.filter((line) => line !== null && line !== undefined).join("\n");
+}
+
+function recapReferencedPages(recap = {}, input = {}, pagesById = new Map()) {
+  const ids = [];
+  const collect = (values = []) => {
+    for (const item of Array.isArray(values) ? values : []) {
+      ids.push(...uniqueNumbers(item?.pageIds || item?.ids || []));
+      if (Number.isInteger(Number(item?.pageId))) ids.push(Number(item.pageId));
+    }
+  };
+
+  collect(recap.timeline);
+  collect(recap.themes);
+  collect(recap.followUps);
+  collect(recap.reviewCandidates);
+
+  const referenced = uniqueNumbers(ids)
+    .map((id) => pagesById.get(id))
+    .filter(Boolean);
+  const fallback = Array.isArray(input.pages) ? input.pages : [];
+  return (referenced.length ? referenced : fallback).slice(0, 8);
+}
+
+function formatRecapDateTime(value) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return String(value || "");
+  const locale = uiLanguage === "en-US" ? "en-US" : "zh-CN";
+  return date.toLocaleString(locale, {
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit"
+  });
 }
 
 function validateGatewaySettingsForAnalyze(settings) {
@@ -2461,17 +2542,25 @@ function syncChoiceGroups() {
 function syncActionState() {
   nodes.appShell.dataset.flowState = lastPreview || lastError ? "preview" : "setup";
   if (currentPanelMode === "recap") {
-    nodes.actions.dataset.state = "recap";
-    nodes.actions.dataset.canUndo = "false";
-    nodes.applyBtn.hidden = true;
-    nodes.undoBtn.hidden = true;
-    nodes.applyBtn.dataset.role = "";
-    nodes.analyzeBtn.dataset.role = "primary";
-    setButtonLabel(nodes.analyzeBtn, t("recap.generate"));
-    setButtonLabel(nodes.cancelBtn, t("recap.cancel"));
+    configureRecapActions();
     return;
   }
 
+  configureOrganizeActions();
+}
+
+function configureRecapActions() {
+  nodes.actions.dataset.state = "recap";
+  nodes.actions.dataset.canUndo = "false";
+  nodes.applyBtn.hidden = true;
+  nodes.undoBtn.hidden = true;
+  nodes.applyBtn.dataset.role = "";
+  nodes.analyzeBtn.dataset.role = "primary";
+  setButtonLabel(nodes.analyzeBtn, t("recap.generate"));
+  setButtonLabel(nodes.cancelBtn, t("recap.cancel"));
+}
+
+function configureOrganizeActions() {
   nodes.actions.dataset.state = lastPreview ? "preview" : lastError ? "error" : "idle";
   nodes.actions.dataset.canUndo = canUndo ? "true" : "false";
   nodes.applyBtn.hidden = !lastPreview || lastPreview.analysisFeatures?.grouping === false;
