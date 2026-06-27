@@ -254,7 +254,7 @@ Large local cache handling:
 
 - Send a compact row per relevant page.
 - Include page summaries only when available.
-- For more than 300 rows, rank locally first by recency, active count, open status, and sampled summary availability.
+- For more than 300 rows, rank locally first by recency, active count, tab age, and sampled summary availability; open/closed state is a context signal, not a dominance rule.
 - Keep excluded rows counted in coverage so the user can understand limits if they open details.
 
 ## Implementation Phases

@@ -548,7 +548,7 @@ function pageScore(page, range) {
   const lastSeenAge = ageMs(page.lastSeenAt, range.to);
   const firstSeenAge = ageMs(page.firstSeenAt, range.to);
   let score = 0;
-  if (page.open) score += 80;
+  if (page.open) score += 4;
   if (page.summary) score += 32;
   if (page.currentGroupTitle) score += 3;
   if (page.activeCount) score += Math.min(24, page.activeCount * 4);

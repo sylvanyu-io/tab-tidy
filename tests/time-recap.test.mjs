@@ -28,6 +28,75 @@ test("time recap input combines local activity, summaries, lifecycle, and curren
   assert.equal(input.coverage.includedPages >= 3, true);
 });
 
+test("time recap input keeps high-signal closed pages when many low-signal tabs are open", async () => {
+  const chrome = createFakeChrome({
+    windows: [
+      {
+        id: 1,
+        focused: true,
+        tabs: Array.from({ length: 370 }, (_, index) => ({
+          id: 1000 + index,
+          title: `Open placeholder ${index}`,
+          url: `https://open.example.com/page-${index}`
+        }))
+      }
+    ]
+  });
+
+  chrome.__state.storage[STORAGE_KEYS.pageActivityCache] = {
+    version: 1,
+    entries: {
+      closedResearch: {
+        key: "closedResearch",
+        title: "Closed recap design session",
+        hostname: "research.example",
+        sanitizedUrl: "https://research.example/closed-recap-design-session",
+        firstSeenAt: "2026-06-26T01:00:00.000Z",
+        lastSeenAt: "2026-06-27T05:45:00.000Z",
+        seenCount: 9,
+        sampleable: true,
+        sample: {
+          title: "Closed recap design session",
+          metaDescription: "Important closed page about recap interaction design",
+          contentKind: "research",
+          headings: ["Timeline recap", "Closed tab signals"],
+          visibleText: "Detailed notes about treating closed pages as first-class recap evidence."
+        }
+      }
+    }
+  };
+  chrome.__state.storage[STORAGE_KEYS.tabLifecycleLog] = {
+    version: 1,
+    sessions: {
+      closedResearch: {
+        sessionId: "closedResearch",
+        title: "Closed recap design session",
+        hostname: "research.example",
+        sanitizedUrl: "https://research.example/closed-recap-design-session",
+        urlKey: "closedResearch",
+        openedAt: "2026-06-26T01:00:00.000Z",
+        firstObservedAt: "2026-06-26T01:00:00.000Z",
+        lastObservedAt: "2026-06-27T05:45:00.000Z",
+        closedAt: "2026-06-27T05:50:00.000Z",
+        activeCount: 8
+      }
+    },
+    events: []
+  };
+
+  const input = await buildTimeRecapInput(
+    chrome,
+    { ...DEFAULT_SETTINGS, languageMode: "en-US" },
+    { range: { preset: "7d" }, now: NOW }
+  );
+  const closedPage = input.pages.find((page) => page.title === "Closed recap design session");
+
+  assert.equal(input.pages.length, 360);
+  assert.ok(closedPage);
+  assert.equal(closedPage.open, false);
+  assert.equal(input.pages.some((page) => page.title === "Open placeholder 369"), false);
+});
+
 test("time recap gateway request parses fenced JSON and keeps page references valid", async () => {
   const chrome = seededRecapChrome();
   let capturedRequest = null;
