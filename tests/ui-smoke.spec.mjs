@@ -233,8 +233,11 @@ test("control surface renders settings and mock preview", async ({ page }) => {
   await expect(page.locator(".cleanup-preview").getByText("旧方案对比笔记")).toBeVisible();
   await expect(page.locator(".cleanup-row-actions .icon-action").first()).toBeVisible();
   await expect(page.locator(".cleanup-row-actions").first().locator(".icon-action")).toHaveText(["定位", "关闭"]);
+  await expect(page.locator(".cleanup-row-actions").first().locator(".cleanup-priority")).toHaveText("优先复查");
+  await expect(page.locator(".cleanup-title-line").first().locator(".cleanup-priority")).toHaveCount(0);
   await expect(page.locator(".cleanup-row-actions").first()).toHaveCSS("float", "right");
   await expect(page.locator(".cleanup-row-actions").first()).toHaveCSS("position", "static");
+  await expect(page.locator(".cleanup-row-actions").first()).toHaveCSS("shape-outside", "inset(0px round 999px)");
   await expect(page.locator(".cleanup-reason").first()).toHaveCSS("display", "block");
   await expect(page.locator(".cleanup-preview-actions")).toHaveCount(0);
   await expect(page.locator(".cleanup-select")).toHaveCount(0);
@@ -243,6 +246,7 @@ test("control surface renders settings and mock preview", async ({ page }) => {
   await expect(page.locator(".stat-chip")).toHaveCount(0);
   await page.locator("#uiLanguageToggle").click();
   await expect(page.locator("#previewCount")).toHaveText("3 groups");
+  await expect(page.locator(".cleanup-row-actions").first().locator(".cleanup-priority")).toHaveText("Review first");
   await expect(page.locator(".cleanup-row-actions").first().locator(".icon-action")).toHaveText(["Find", "Close"]);
   await expect(
     page

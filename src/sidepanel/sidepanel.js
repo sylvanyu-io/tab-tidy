@@ -1921,7 +1921,7 @@ function cleanupPreviewRow(candidate) {
   titleLine.className = "cleanup-title-line";
   const title = document.createElement("strong");
   title.textContent = candidate.title || candidate.hostname || "Untitled";
-  titleLine.append(title, cleanupPriorityChip(candidate.priority));
+  titleLine.append(title);
   const meta = document.createElement("small");
   meta.textContent = cleanupCandidateMeta(candidate);
   body.append(titleLine, meta);
@@ -1950,6 +1950,7 @@ function cleanupPreviewRow(candidate) {
 
   const actions = document.createElement("div");
   actions.className = "cleanup-row-actions";
+  actions.append(cleanupPriorityChip(candidate.priority));
   const focus = iconButton("focus", t("cleanup.focusAria"));
   focus.addEventListener("click", () => focusActivityTab(candidate));
   const close = iconButton("close", t("cleanup.closeOneAria"));

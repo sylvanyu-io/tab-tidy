@@ -1655,7 +1655,6 @@ details[open] > summary::before {
   align-items: center;
   vertical-align: 2px;
   min-height: 22px;
-  margin-left: 6px;
   padding: 2px 8px;
   border: 1px solid color-mix(in srgb, var(--line) 28%, transparent);
   border-radius: 999px;
@@ -1695,7 +1694,16 @@ details[open] > summary::before {
   float: right;
   flex-direction: row;
   margin: -2px 0 4px 10px;
+  shape-outside: inset(0 round 999px);
   shape-margin: 8px;
+}
+
+.cleanup-row-actions .cleanup-priority {
+  min-height: 28px;
+  padding: 0 9px;
+  line-height: 1;
+  vertical-align: initial;
+  white-space: nowrap;
 }
 
 .group-swatch {
