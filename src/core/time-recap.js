@@ -1,4 +1,5 @@
 import { PLANNER_PROVIDERS, URL_PRIVACY_MODES, normalizeSettings } from "../shared/settings.js";
+import { TIME_RECAP_GATEWAY_TIMEOUT_MS } from "../shared/task-constants.js";
 import { localizedText } from "../shared/language.js";
 import { fetchJsonWithTimeout } from "./fetch-timeout.js";
 import {
@@ -19,9 +20,10 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 const DEFAULT_RANGE_MS = 7 * DAY_MS;
 const MAX_RANGE_MS = 90 * DAY_MS;
 const MAX_RECAP_PAGES = 360;
-export const TIME_RECAP_GATEWAY_TIMEOUT_MS = 300_000;
 const REVIEW_AGE_MS = 14 * DAY_MS;
 const REVIEW_IDLE_MS = 7 * DAY_MS;
+
+export { TIME_RECAP_GATEWAY_TIMEOUT_MS };
 
 const STOP_WORDS = new Set([
   "about",

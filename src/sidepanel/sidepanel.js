@@ -1,6 +1,7 @@
 import { BUILTIN_GATEWAY_BASE_URL, GATEWAY_CUSTOM_MODEL_VALUE } from "../shared/settings.js";
 import { isReviewLikeGroup, localizedText, reviewGroupReason, reviewGroupTitle } from "../shared/language.js";
 import { shouldShowPageSampleCount } from "../shared/page-sampling-copy.js";
+import { TIME_RECAP_GATEWAY_TIMEOUT_MS } from "../shared/task-constants.js";
 
 const UI_LANGUAGE_STORAGE_KEY = "tabTidy.uiLanguage";
 const UI_LANGUAGES = Object.freeze(["zh-CN", "en-US"]);
@@ -518,7 +519,6 @@ const AI_WAIT_RAMP_MS = 45000;
 const AI_WAIT_COPY_INTERVAL_SECONDS = 4;
 const ACTIVE_JOB_POLL_MS = 600;
 const GENERATED_COPY_CACHE_LIMIT = 4;
-const TIME_RECAP_GATEWAY_TIMEOUT_MS = 300_000;
 const CANCELED_RECAP_OPERATION_TTL_MS = 5 * 60 * 1000;
 
 const nodes = {
@@ -2219,13 +2219,23 @@ function updateLocalProgress(label, progress) {
 }
 
 function startRecapProgress(operationId, settings = {}) {
+  startLocalAiWaitProgress({
+    operationId,
+    phase: "recapping",
+    progress: 38,
+    message: "正在生成近期回顾",
+    settings
+  });
+}
+
+function startLocalAiWaitProgress({ operationId, phase, progress, message, settings = {} }) {
   stopRecapProgress();
   recapProgressJob = {
     operationId,
     status: "running",
-    phase: "recapping",
-    progress: 38,
-    message: "正在生成近期回顾",
+    phase,
+    progress,
+    message,
     tabCount: 0,
     windowCount: 0,
     createdAt: new Date().toISOString(),

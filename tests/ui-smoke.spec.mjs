@@ -290,6 +290,8 @@ test("time recap mode renders a first-class recap surface", async ({ page }) => 
   await expect(page.locator("#recapToDate")).toBeVisible();
 
   await page.locator(".advanced-settings > summary").click();
+  await expect(page.locator("#urlPrivacyMode")).toBeVisible();
+  await expect(page.locator("#languageMode")).toBeVisible();
   await expect(page.locator("#gatewayModel")).toBeVisible();
   await expect(page.locator("#gatewayAuxiliaryModel")).toBeVisible();
   await expect(page.locator("#gatewayThinkingIntensity")).toBeVisible();
