@@ -1693,8 +1693,8 @@ details[open] > summary::before {
 
 .cleanup-row-actions {
   float: right;
-  flex-direction: column;
-  margin: -2px 0 6px 10px;
+  flex-direction: row;
+  margin: -2px 0 4px 10px;
   shape-margin: 8px;
 }
 
