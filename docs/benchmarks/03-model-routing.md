@@ -76,7 +76,11 @@ Recorded signals:
 
 Public-data conclusion:
 
-- GPT-5.5 remains a reasonable default visible model for best quality.
+- GPT-5.4 high is the product default after the 2026-06-27 cost/scale decision:
+  it keeps the GPT-family behavior, reduces default model cost, and had a
+  positive 120-tab signal in the live matrix.
+- GPT-5.5 remains a manual higher-end option for ambiguous sessions where the
+  user wants maximum quality.
 - For the harness, high thinking should be reserved for the coarse/global
   decision or explicit user choice, not repeated automatically for every bucket.
 - GPT-5.4-mini deserves exposure because the product workload is short JSON
@@ -105,20 +109,21 @@ Runtime behavior after these commits:
   `gpt-5.3-codex-spark` for progress copy only.
 - Coarse planning still uses low thinking.
 - Hierarchical refinement runs with bounded concurrency.
-- Large-job refinement defaults to medium thinking unless the user picked low.
+- The visible default is `gpt-5.4` with high thinking. Large-job refinement may
+  still cap internal bucket work to medium thinking unless the user picked low.
 
 ## What Is Not Yet Proven
 
-The repository now records architecture and scale evidence, but it does not yet
-contain a live model-matrix benchmark across:
+The repository records architecture and scale evidence plus one live
+model-matrix benchmark across:
 
 - `gpt-5.5`
 - `gpt-5.4`
 - `gpt-5.4-mini`
 - `claude-sonnet-4-6`
 
-That should be the next benchmark before changing the product default away from
-`gpt-5.5`.
+The next useful benchmark is a larger real-browser 200/300-tab comparison before
+promoting any smaller or Claude model to an automatic route.
 
 ## Reproduction Commands
 

@@ -56,18 +56,20 @@ current `worker/wrangler.toml` fixed the product-facing gateway.
 
 ## Decision
 
-Do not change the default planner model or thinking intensity from this data.
+Use `gpt-5.4` with high thinking as the product default.
 
 - The earlier `model_not_allowed` failures were a Worker deployment/config
   problem, not a CLIProxyAPI model support problem.
-- `gpt-5.4` medium is now a plausible candidate for 100+ tab workloads, but the
-  evidence is still too small to change the default.
+- `gpt-5.4` medium is a plausible candidate for 100+ tab workloads: the 120-tab
+  run matched the best `gpt-5.5` high Pair F1 and was slightly faster.
+- The default uses high thinking, not medium, to keep the consumer-facing quality
+  bar closer to the previous `gpt-5.5` high default while reducing model cost.
+- `gpt-5.5` remains available as a higher-end manual option, especially for
+  small but ambiguous sessions where the previous 50-tab baseline was stronger.
 - `gpt-5.4-mini` medium is available after the Worker redeploy, but this run was
   slower than the larger models.
 - `gpt-5.5 medium` did not prove a stable latency win and was worse than the
   50-tab high baseline on both speed and pair F1.
-- `gpt-5.5 high` remains the safest default until a larger model/effort matrix
-  proves otherwise.
 
 ## Product Implication
 

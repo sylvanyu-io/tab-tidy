@@ -124,7 +124,7 @@ export const DEFAULT_SETTINGS = Object.freeze({
   plannerProvider: PLANNER_PROVIDERS.GATEWAY,
   rememberProviderKeys: false,
   gatewayBaseUrl: DEFAULT_GATEWAY_BASE_URL,
-  gatewayModel: "gpt-5.5",
+  gatewayModel: "gpt-5.4",
   gatewayAuxiliaryModel: "gpt-5.3-codex-spark",
   gatewayCustomModel: "",
   gatewayThinkingIntensity: THINKING_INTENSITIES.HIGH,

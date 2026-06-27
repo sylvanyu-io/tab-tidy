@@ -104,7 +104,7 @@ test("AI gateway planner posts a chat-completions JSON request", async () => {
     assert.equal(options.method, "POST");
     assert.equal(options.headers.authorization, "Bearer gateway-test-key");
     const body = JSON.parse(options.body);
-    assert.equal(body.model, "gpt-5.5");
+    assert.equal(body.model, "gpt-5.4");
     assert.equal(body.response_format.type, "json_object");
     assert.equal(body.reasoning_effort, "high");
     assert.match(body.messages[0].content, /JSON-only planner/);
@@ -1688,7 +1688,7 @@ test("AI gateway planner splits sub-50 cleanup ranking to the auxiliary model", 
       };
     }
 
-    assert.equal(body.model, "gpt-5.5");
+    assert.equal(body.model, "gpt-5.4");
     assert.equal(payload.analysisFeatures.cleanup, false);
     assert.equal(payload.cleanupInstructions, undefined);
     return {
