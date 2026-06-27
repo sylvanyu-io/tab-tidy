@@ -232,7 +232,7 @@ async function renderShowcase() {
     { waitUntil: "load" }
   );
   await page.locator(".showcase").screenshot({
-    path: resolve(assetDir, "readme-hero-cn.png"),
+    path: resolve(assetDir, "readme-hero-zh.png"),
     omitBackground: true
   });
   await context.close();
