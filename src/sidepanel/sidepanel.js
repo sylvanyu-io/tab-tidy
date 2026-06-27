@@ -23,6 +23,7 @@ const UI_COPY = Object.freeze({
     "status.canceling": "正在取消整理",
     "status.organizing": "正在整理标签页",
     "status.organizingChanged": "正在整理变化后的标签页",
+    "status.closingTabs": "正在关闭标签页",
     "status.undoing": "正在撤销",
     "status.previousFailed": "上次生成失败，请重新生成",
     "status.previousCanceled": "上次整理已取消",
@@ -251,6 +252,7 @@ const UI_COPY = Object.freeze({
     "status.canceling": "Canceling organization",
     "status.organizing": "Organizing tabs",
     "status.organizingChanged": "Organizing changed tabs",
+    "status.closingTabs": "Closing tabs",
     "status.undoing": "Undoing changes",
     "status.previousFailed": "Last generation failed. Try again.",
     "status.previousCanceled": "Last organization run was canceled",
@@ -1956,7 +1958,7 @@ async function closeCleanupTabs(tabIds) {
     setStatusKey("cleanup.noneSelected", {}, true);
     return;
   }
-  setBusy(true, t("status.organizing"));
+  setBusy(true, t("status.closingTabs"));
   try {
     const result = await sendMessage(scopedWindowMessage({ type: "tabs:closeCleanupCandidates", tabIds: ids, languageMode: uiLanguage }));
     lastPreview = result.preview;
@@ -2773,7 +2775,16 @@ function sourceWindowIdFromUrl() {
   }
 }
 
+async function maybeDelayMockMessage(type) {
+  const delays = globalThis.__tabRecapMockMessageDelays;
+  const delayMs = Number(delays?.[type] || 0);
+  if (Number.isFinite(delayMs) && delayMs > 0) {
+    await new Promise((resolve) => setTimeout(resolve, delayMs));
+  }
+}
+
 async function mockMessage(message) {
+  await maybeDelayMockMessage(message.type);
   if (message.type === "settings:get") {
     return {
       organizeMode: "current_window",
