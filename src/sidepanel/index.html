@@ -31,21 +31,18 @@
 
       <div class="scroll-region">
         <section class="launch-panel">
-          <div class="analysis-switches">
-            <label class="switch-row compact-switch">
-              <span>
-                <strong>生成分组建议</strong>
-                <small>按主题和任务整理标签页</small>
-              </span>
-              <input id="analyzeGrouping" type="checkbox" />
-            </label>
-            <label class="switch-row compact-switch">
-              <span>
-                <strong>找出可清理标签页</strong>
-                <small>AI 标出可能过期、重复或已完成的页面</small>
-              </span>
-              <input id="analyzeCleanup" type="checkbox" />
-            </label>
+          <div class="analysis-mode-panel">
+            <div class="control-label">
+              <span>本次分析</span>
+            </div>
+            <div class="analysis-mode-choice" role="group" aria-label="本次分析内容">
+              <button type="button" data-analysis-mode="both" aria-pressed="true">整理 + 清理</button>
+              <button type="button" data-analysis-mode="grouping" aria-pressed="false">只整理</button>
+              <button type="button" data-analysis-mode="cleanup" aria-pressed="false">只清理</button>
+            </div>
+            <p id="analysisModeHint" class="analysis-mode-hint">默认一次 AI 分析同时给出分组方案和清理建议。</p>
+            <input id="analyzeGrouping" type="checkbox" hidden />
+            <input id="analyzeCleanup" type="checkbox" hidden />
           </div>
 
           <div class="control-group">
