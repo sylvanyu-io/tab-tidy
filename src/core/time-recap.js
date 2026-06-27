@@ -73,6 +73,9 @@ export async function generateTimeRecap(chromeApi, rawSettings = {}, options = {
       input
     };
   } catch (error) {
+    if (options.signal?.aborted) {
+      throw error;
+    }
     return {
       source: "local_fallback",
       error: error?.message || String(error),

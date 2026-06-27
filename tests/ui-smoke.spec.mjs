@@ -273,8 +273,14 @@ test("time recap mode renders a first-class recap surface", async ({ page }) => 
   await expect(page.locator("#recapFromDate")).toBeVisible();
   await expect(page.locator("#recapToDate")).toBeVisible();
 
-  await page.getByRole("button", { name: "最近 1 天" }).click();
+  await page.getByRole("button", { name: "过去 24 小时" }).click();
   await expect(page.locator("#recapRangePreset")).toHaveValue("1d");
+  await expect(page.locator("#recapFromDate")).toHaveAttribute("type", "datetime-local");
+  await expect(page.locator("#recapFromDate")).toHaveValue(/T\d{2}:\d{2}$/);
+  await expect(page.locator("#recapRangeHint")).toContainText("24 小时");
+  await page.getByRole("button", { name: "本日" }).click();
+  await expect(page.locator("#recapRangePreset")).toHaveValue("today");
+  await expect(page.locator("#recapFromDate")).toHaveValue(/T00:00$/);
   await page.getByRole("button", { name: "最近 7 天" }).click();
   await page.getByRole("button", { name: "生成回顾" }).click();
 

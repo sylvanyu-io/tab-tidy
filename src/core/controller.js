@@ -24,6 +24,7 @@ import { generateTimeRecap } from "./time-recap.js";
 import { validatePlan } from "./plan-validator.js";
 
 const activeAnalyses = new Map();
+const activeTimeRecaps = new Map();
 let browserMutationQueue = Promise.resolve();
 const ACTIVE_JOB_TERMINAL_STATUSES = new Set(["complete", "canceled", "error"]);
 const APPLY_REBASE_MAX_CHANGED_TABS = 25;
@@ -113,6 +114,8 @@ export async function handleRuntimeMessage(chromeApi, message) {
       return getActivityOverview(chromeApi, { rangeMs: message.rangeMs, includeIncognitoTabs: settings.includeIncognitoTabs });
     case "activity:generateTimeRecap":
       return generateTimeRecapForMessage(chromeApi, message);
+    case "activity:cancelTimeRecap":
+      return cancelTimeRecap(chromeApi, message);
     case "activity:focusTab":
       return focusActivityTab(chromeApi, message);
     case "tabs:closeCleanupCandidates":
@@ -134,19 +137,50 @@ export async function handleRuntimeMessage(chromeApi, message) {
 }
 
 async function generateTimeRecapForMessage(chromeApi, message = {}) {
-  const storedSettings = await getSettings(chromeApi);
-  const settings = normalizeSettings({
-    ...storedSettings,
-    ...(message.settings || {}),
-    languageMode: message.languageMode || message.settings?.languageMode || storedSettings.languageMode
-  });
-  await reconcileTabLifecycle(chromeApi, { includeIncognitoTabs: settings.includeIncognitoTabs }).catch(() => null);
+  const resolvedWindowId = await resolveStateWindowId(chromeApi, message.windowId);
+  const scope = normalizeWindowScope(resolvedWindowId);
+  const operationId = message.operationId || createOperationId();
+  const abortController = new AbortController();
+  const previousRecap = activeTimeRecaps.get(scope);
+  previousRecap?.abortController?.abort();
+  activeTimeRecaps.set(scope, { operationId, abortController });
 
-  const options = { range: message.range || {} };
-  if (settings.plannerProvider === PLANNER_PROVIDERS.GATEWAY) {
-    options.installId = await getOrCreateInstallId(chromeApi);
+  let settings = normalizeSettings(message.settings || {});
+  try {
+    const storedSettings = await getSettings(chromeApi);
+    settings = normalizeSettings({
+      ...storedSettings,
+      ...(message.settings || {}),
+      languageMode: message.languageMode || message.settings?.languageMode || storedSettings.languageMode
+    });
+    await reconcileTabLifecycle(chromeApi, { includeIncognitoTabs: settings.includeIncognitoTabs }).catch(() => null);
+
+    const options = { range: message.range || {}, signal: abortController.signal };
+    if (settings.plannerProvider === PLANNER_PROVIDERS.GATEWAY) {
+      options.installId = await getOrCreateInstallId(chromeApi);
+    }
+    return await generateTimeRecap(chromeApi, settings, options);
+  } catch (error) {
+    if (abortController.signal.aborted) {
+      throw new Error(localizedText(settings.languageMode, "已停止生成回顾。", "Recap generation stopped."));
+    }
+    throw error;
+  } finally {
+    const active = activeTimeRecaps.get(scope);
+    if (active?.operationId === operationId) activeTimeRecaps.delete(scope);
   }
-  return generateTimeRecap(chromeApi, settings, options);
+}
+
+async function cancelTimeRecap(chromeApi, message = {}) {
+  const resolvedWindowId = await resolveStateWindowId(chromeApi, message.windowId);
+  const scope = normalizeWindowScope(resolvedWindowId);
+  const active = activeTimeRecaps.get(scope);
+  if (!active || (message.operationId && active.operationId !== message.operationId)) {
+    return { canceled: false };
+  }
+  active.abortController.abort();
+  activeTimeRecaps.delete(scope);
+  return { canceled: true, operationId: active.operationId };
 }
 
 async function focusActivityTab(chromeApi, message = {}) {

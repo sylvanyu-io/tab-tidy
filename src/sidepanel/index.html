@@ -168,7 +168,7 @@
             <div class="recap-range-head">
               <span id="recapRangeLabel">时间范围</span>
               <div class="recap-range-shortcuts" aria-label="快捷时间范围">
-                <button type="button" data-recap-preset="1d">最近 1 天</button>
+                <button type="button" data-recap-preset="1d">过去 24 小时</button>
                 <button type="button" data-recap-preset="7d" aria-pressed="true">最近 7 天</button>
                 <button type="button" data-recap-preset="30d">最近 30 天</button>
                 <button type="button" data-recap-preset="today">今天</button>
@@ -181,14 +181,15 @@
             <div id="recapCustomRange" class="recap-date-range">
               <div class="date-field">
                 <label for="recapFromDate">开始日期</label>
-                <input id="recapFromDate" type="date" />
+                <input id="recapFromDate" type="datetime-local" />
               </div>
               <span class="date-range-separator" aria-hidden="true">-</span>
               <div class="date-field">
                 <label for="recapToDate">结束日期</label>
-                <input id="recapToDate" type="date" />
+                <input id="recapToDate" type="datetime-local" />
               </div>
             </div>
+            <p id="recapRangeHint" class="recap-range-hint" hidden></p>
 
             <button id="recapGenerateBtn" class="secondary-action" type="button">生成回顾</button>
           </div>

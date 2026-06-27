@@ -56,6 +56,8 @@ const UI_COPY = Object.freeze({
     "mode.recap": "回顾",
     "status.recapPreparing": "正在准备回顾",
     "status.recapGenerating": "正在生成近期回顾",
+    "status.recapCanceling": "正在停止生成回顾",
+    "status.recapCanceled": "已停止生成回顾。",
     "status.recapReady": "回顾已生成",
     "status.recapRangeInvalid": "请选择有效的开始和结束日期。",
     "scope.label": "范围",
@@ -114,7 +116,7 @@ const UI_COPY = Object.freeze({
     "recap.heading": "看看最近主要在忙什么",
     "recap.subtitle": "结合最近活跃、打开次数、保留时长、标题、网址、现有分组和可用页面摘要生成，不会自动关闭标签页。",
     "recap.range": "时间范围",
-    "recap.1d": "最近 1 天",
+    "recap.1d": "过去 24 小时",
     "recap.today": "本日",
     "recap.7d": "最近 7 天",
     "recap.30d": "最近 30 天",
@@ -125,6 +127,9 @@ const UI_COPY = Object.freeze({
     "recap.to": "结束日期",
     "recap.generate": "生成回顾",
     "recap.generating": "正在生成…",
+    "recap.cancel": "停止生成",
+    "recap.rangeHint24h": "按当前时间向前回看 24 小时。",
+    "recap.rangeHintCalendar": "按自然日历范围回顾。",
     "recap.empty": "还没有回顾。",
     "recap.themes": "主题线索",
     "recap.timeline": "时间轴",
@@ -274,6 +279,8 @@ const UI_COPY = Object.freeze({
     "mode.recap": "Recap",
     "status.recapPreparing": "Preparing recap",
     "status.recapGenerating": "Generating recent recap",
+    "status.recapCanceling": "Stopping recap generation",
+    "status.recapCanceled": "Recap generation stopped.",
     "status.recapReady": "Recap ready",
     "status.recapRangeInvalid": "Choose a valid start and end date.",
     "scope.label": "Scope",
@@ -332,7 +339,7 @@ const UI_COPY = Object.freeze({
     "recap.heading": "See what you have been working on",
     "recap.subtitle": "Uses recent activity, open counts, age, titles, URLs, existing groups, and available page summaries. It never closes tabs automatically.",
     "recap.range": "Time range",
-    "recap.1d": "Last 1 day",
+    "recap.1d": "Past 24 hours",
     "recap.today": "Today",
     "recap.7d": "Last 7 days",
     "recap.30d": "Last 30 days",
@@ -343,6 +350,9 @@ const UI_COPY = Object.freeze({
     "recap.to": "End date",
     "recap.generate": "Generate recap",
     "recap.generating": "Generating...",
+    "recap.cancel": "Stop generating",
+    "recap.rangeHint24h": "Looks back 24 hours from the current time.",
+    "recap.rangeHintCalendar": "Uses calendar boundaries for this range.",
     "recap.empty": "No recap yet.",
     "recap.themes": "Topic clues",
     "recap.timeline": "Timeline",
@@ -528,6 +538,7 @@ const nodes = {
   recapResult: document.querySelector("#recapResult"),
   recapDetailsRoot: document.querySelector("#recapDetailsRoot"),
   recapDetailsText: document.querySelector("#recapDetailsText"),
+  recapRangeHint: document.querySelector("#recapRangeHint"),
   recapQuickButtons: document.querySelectorAll("[data-recap-preset]")
 };
 
@@ -539,6 +550,8 @@ let lastError = null;
 let lastTimeRecap = null;
 let lastCanApply = false;
 let canUndo = false;
+let activeRecapOperationId = null;
+const canceledRecapOperations = new Set();
 let pageSamplingOriginCache = { origins: [], refreshedAt: 0 };
 let pageSamplingOriginRefreshTimer = null;
 let progressPollTimer = null;
@@ -723,6 +736,7 @@ function applyUiLanguage() {
   setText('[data-recap-preset="30d"]', t("recap.30d"));
   setText('[data-recap-preset="thisWeek"]', t("recap.thisWeek"));
   setText('[data-recap-preset="thisMonth"]', t("recap.thisMonth"));
+  updateRecapRangeHint();
   setButtonLabel(nodes.recapGenerateBtn, t("recap.generate"));
   setText("#recapDetailsRoot > summary", t("recap.evidence"));
   setAttribute("#gatewayCustomModel", "placeholder", t("placeholder.customModel"));
@@ -856,6 +870,7 @@ function syncRecapRangeUi() {
   for (const button of nodes.recapQuickButtons || []) {
     button.setAttribute("aria-pressed", button.dataset.recapPreset === preset ? "true" : "false");
   }
+  updateRecapRangeHint();
 }
 
 function setRecapPreset(preset, options = {}) {
@@ -895,17 +910,35 @@ function dateRangeForRecapPreset(preset) {
     from.setHours(0, 0, 0, 0);
   } else {
     const days = preset === "1d" ? 1 : preset === "30d" ? 30 : 7;
-    from.setDate(from.getDate() - days + 1);
-    from.setHours(0, 0, 0, 0);
+    from.setTime(now.getTime() - days * 24 * 60 * 60 * 1000);
   }
   return { from, to };
+}
+
+function updateRecapRangeHint() {
+  if (!nodes.recapRangeHint) return;
+  const preset = fields.recapRangePreset?.value || "custom";
+  const text =
+    preset === "1d"
+      ? t("recap.rangeHint24h")
+      : ["today", "thisWeek", "thisMonth"].includes(preset)
+      ? t("recap.rangeHintCalendar")
+      : "";
+  nodes.recapRangeHint.hidden = !text;
+  nodes.recapRangeHint.textContent = text;
 }
 
 function dateInputValue(date) {
   const year = date.getFullYear();
   const month = String(date.getMonth() + 1).padStart(2, "0");
   const day = String(date.getDate()).padStart(2, "0");
-  return `${year}-${month}-${day}`;
+  const hours = String(date.getHours()).padStart(2, "0");
+  const minutes = String(date.getMinutes()).padStart(2, "0");
+  return `${year}-${month}-${day}T${hours}:${minutes}`;
+}
+
+function createClientOperationId(prefix) {
+  return `${prefix}_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 9)}`;
 }
 
 function bindChoiceGroups() {
@@ -1107,6 +1140,12 @@ async function analyze() {
 }
 
 async function generateTimeRecap() {
+  if (activeRecapOperationId) {
+    await cancelTimeRecap();
+    return;
+  }
+  const operationId = createClientOperationId("recap");
+  activeRecapOperationId = operationId;
   setRecapBusy(true);
   setStatusKey("status.recapPreparing");
   try {
@@ -1118,27 +1157,56 @@ async function generateTimeRecap() {
     setStatusKey("status.recapGenerating");
     const result = await sendMessage({
       type: "activity:generateTimeRecap",
+      operationId,
       settings,
       languageMode: settings.languageMode,
       range: readRecapRange()
     });
+    if (canceledRecapOperations.has(operationId) || activeRecapOperationId !== operationId) return;
     lastTimeRecap = result;
     renderTimeRecap(result);
     setStatusKey("status.recapReady");
   } catch (error) {
+    if (canceledRecapOperations.has(operationId) || /stopped|canceled|cancelled|已停止|已取消/i.test(error?.message || "")) {
+      setStatusKey("status.recapCanceled");
+      return;
+    }
     const message = friendlyErrorMessage(error);
     setStatus(message, true);
     renderTimeRecapError(message);
   } finally {
-    setRecapBusy(false);
+    canceledRecapOperations.delete(operationId);
+    if (activeRecapOperationId === operationId) {
+      activeRecapOperationId = null;
+      setRecapBusy(false);
+    }
+  }
+}
+
+async function cancelTimeRecap() {
+  const operationId = activeRecapOperationId;
+  if (!operationId) return;
+  canceledRecapOperations.add(operationId);
+  setRecapBusy(true, { canceling: true });
+  setStatusKey("status.recapCanceling");
+  try {
+    await sendMessage({ type: "activity:cancelTimeRecap", operationId });
+  } catch {
+    // The UI should still stop waiting if the background context has already gone away.
+  } finally {
+    if (activeRecapOperationId === operationId) {
+      activeRecapOperationId = null;
+      setRecapBusy(false);
+    }
+    setStatusKey("status.recapCanceled");
   }
 }
 
 function readRecapRange() {
   const fromValue = fields.recapFromDate.value;
   const toValue = fields.recapToDate.value;
-  const from = dateInputStartIso(fromValue);
-  const to = dateInputEndIso(toValue);
+  const from = dateTimeInputIso(fromValue, "start");
+  const to = dateTimeInputIso(toValue, "end");
   if (!from || !to || Date.parse(to) < Date.parse(from)) {
     throw new Error(t("status.recapRangeInvalid"));
   }
@@ -1149,22 +1217,21 @@ function readRecapRange() {
   };
 }
 
-function dateInputStartIso(value) {
+function dateTimeInputIso(value, boundary = "start") {
   const parts = String(value || "").split("-").map((part) => Number(part));
-  if (parts.length !== 3 || parts.some((part) => !Number.isInteger(part))) return "";
-  return new Date(parts[0], parts[1] - 1, parts[2], 0, 0, 0, 0).toISOString();
+  if (parts.length === 3 && parts.every((part) => Number.isInteger(part))) {
+    return new Date(parts[0], parts[1] - 1, parts[2], boundary === "end" ? 23 : 0, boundary === "end" ? 59 : 0, boundary === "end" ? 59 : 0, boundary === "end" ? 999 : 0).toISOString();
+  }
+  const match = String(value || "").match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})$/);
+  if (!match) return "";
+  const [, year, month, day, hour, minute] = match.map((part) => Number(part));
+  return new Date(year, month - 1, day, hour, minute, 0, 0).toISOString();
 }
 
-function dateInputEndIso(value) {
-  const parts = String(value || "").split("-").map((part) => Number(part));
-  if (parts.length !== 3 || parts.some((part) => !Number.isInteger(part))) return "";
-  return new Date(parts[0], parts[1] - 1, parts[2], 23, 59, 59, 999).toISOString();
-}
-
-function setRecapBusy(isBusy) {
+function setRecapBusy(isBusy, options = {}) {
   if (!nodes.recapGenerateBtn) return;
-  nodes.recapGenerateBtn.disabled = Boolean(isBusy);
-  nodes.recapGenerateBtn.textContent = t(isBusy ? "recap.generating" : "recap.generate");
+  nodes.recapGenerateBtn.disabled = Boolean(options.canceling);
+  nodes.recapGenerateBtn.textContent = t(isBusy ? (options.canceling ? "status.recapCanceling" : "recap.cancel") : "recap.generate");
 }
 
 function renderTimeRecap(result) {
@@ -2659,6 +2726,7 @@ async function mockMessage(message) {
   }
   if (message.type === "tabs:cancelActiveJob") return { canceled: false, job: mockActiveJob };
   if (message.type === "activity:focusTab") return { focused: true, tabId: message.tabId, windowId: message.windowId };
+  if (message.type === "activity:cancelTimeRecap") return { canceled: true, operationId: message.operationId || "mock_recap" };
   if (message.type === "activity:generateTimeRecap") {
     return mockTimeRecap();
   }

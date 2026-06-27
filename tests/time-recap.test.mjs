@@ -88,6 +88,55 @@ test("time recap runtime message returns local fallback without mutating tabs", 
   assert.equal((await chrome.tabs.query({})).length, 3);
 });
 
+test("time recap runtime message can be canceled while AI is running", async () => {
+  const chrome = seededRecapChrome();
+  const originalFetch = globalThis.fetch;
+  let sawAbort = false;
+  let releaseFetchStart;
+  const fetchStarted = new Promise((resolve) => {
+    releaseFetchStart = resolve;
+  });
+  globalThis.fetch = async (_url, init = {}) => {
+    releaseFetchStart();
+    return new Promise((resolve, reject) => {
+      init.signal?.addEventListener(
+        "abort",
+        () => {
+          sawAbort = true;
+          reject(new Error("fetch aborted"));
+        },
+        { once: true }
+      );
+    });
+  };
+
+  try {
+    const pending = handleRuntimeMessage(chrome, {
+      type: "activity:generateTimeRecap",
+      operationId: "recap_cancel_test",
+      settings: {
+        ...DEFAULT_SETTINGS,
+        plannerProvider: PLANNER_PROVIDERS.GATEWAY,
+        gatewayBaseUrl: "http://127.0.0.1:8317/v1",
+        gatewayApiKey: "test-key",
+        languageMode: "zh-CN"
+      },
+      range: { preset: "7d" }
+    });
+    await fetchStarted;
+    const canceled = await handleRuntimeMessage(chrome, {
+      type: "activity:cancelTimeRecap",
+      operationId: "recap_cancel_test"
+    });
+
+    assert.equal(canceled.canceled, true);
+    await assert.rejects(pending, /已停止生成回顾/);
+    assert.equal(sawAbort, true);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
 test("time recap local themes do not use existing browser groups as the primary axis", async () => {
   const chrome = seededRecapChrome();
 

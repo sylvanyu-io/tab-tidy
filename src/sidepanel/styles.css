@@ -485,6 +485,27 @@ h2 {
   font-weight: 900;
 }
 
+@media (max-width: 460px) {
+  .recap-date-range {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 4px;
+    align-items: stretch;
+  }
+
+  .date-range-separator {
+    min-height: 14px;
+    line-height: 1;
+  }
+}
+
+.recap-range-hint {
+  margin: -2px 0 0;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 720;
+  line-height: 1.35;
+}
+
 .recap-controls .secondary-action {
   min-height: 40px;
   color: var(--primary);
