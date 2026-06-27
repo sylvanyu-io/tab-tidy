@@ -592,6 +592,93 @@ test("time recap fallback keeps raw AI errors out of the visible product copy", 
   await expect(page.locator("#recapDetailsText")).not.toContainText("sampleable");
 });
 
+test("time recap error state does not resurrect the previous recap", async ({ page }) => {
+  await page.addInitScript(() => {
+    const settings = {
+      organizeMode: "current_window",
+      targetWindowMode: "current_window",
+      existingGroupMode: "preserve_existing_groups",
+      reviewGroupMode: "create_review_group",
+      undoTargetWindowMode: "leave_empty_target_window",
+      pageContextMode: "off",
+      hostPermissionRequestMode: "never",
+      pageSamplingConsentMode: "not_acknowledged",
+      urlPrivacyMode: "sanitized_url",
+      includePinnedTabs: false,
+      includeIncognitoTabs: false,
+      collapseGroupsAfterApply: true,
+      analyzeGrouping: true,
+      analyzeCleanup: true,
+      minConfidenceToApply: 0.65,
+      maxTabsPerGroup: 40,
+      languageMode: "auto",
+      promptPreset: "conservative",
+      groupingGranularity: "balanced",
+      plannerProvider: "gateway",
+      rememberProviderKeys: false,
+      gatewayBaseUrl: "",
+      gatewayModel: "gpt-5.4",
+      gatewayAuxiliaryModel: "gpt-5.3-codex-spark",
+      gatewayCustomModel: "",
+      gatewayThinkingIntensity: "high",
+      gatewayApiKey: "",
+      customPrompt: ""
+    };
+    window.__failNextRecap = false;
+    window.chrome = {
+      runtime: {
+        sendMessage: async (message) => {
+          if (message.type === "settings:get") return { ok: true, result: settings };
+          if (message.type === "settings:save") return { ok: true, result: message.settings };
+          if (message.type === "tabs:getActiveJob") return { ok: true, result: null };
+          if (message.type === "tabs:canUndo") return { ok: true, result: { canUndo: false } };
+          if (message.type === "activity:generateTimeRecap") {
+            if (window.__failNextRecap) {
+              return { ok: false, error: "AI gateway time recap timed out after 300 seconds." };
+            }
+            return {
+              ok: true,
+              result: {
+                source: "ai",
+                input: { pages: [], coverage: { includedPages: 8, sampledEntries: 2 } },
+                recap: {
+                  schema: "tab_tidy_time_recap_v1",
+                  headline: "第一次回顾结果",
+                  summary: "这是一段旧的成功回顾。",
+                  timeline: [],
+                  themes: [],
+                  followUps: [],
+                  reviewCandidates: [],
+                  coverageNote: "已参考本机活动。"
+                }
+              }
+            };
+          }
+          return { ok: true, result: null };
+        }
+      }
+    };
+  });
+
+  await page.goto(`${baseUrl}/src/sidepanel/index.html`);
+  await page.getByRole("button", { name: "回顾" }).click();
+  await page.getByRole("button", { name: "生成回顾" }).click();
+  await expect(page.locator(".recap-summary-card")).toContainText("第一次回顾结果");
+
+  await page.evaluate(() => {
+    window.__failNextRecap = true;
+  });
+  await page.getByRole("button", { name: "生成回顾" }).click();
+  await expect(page.locator(".recap-card")).toContainText("AI 回顾暂时没有完成");
+  await expect(page.locator("#timeRecapPanel")).not.toContainText("第一次回顾结果");
+  await expect(page.locator("#timeRecapPanel")).not.toContainText("300 seconds");
+
+  await page.locator("#uiLanguageToggle").click();
+  await expect(page.locator(".recap-card")).toContainText("AI recap did not finish");
+  await expect(page.locator("#timeRecapPanel")).not.toContainText("第一次回顾结果");
+  await expect(page.locator("#timeRecapPanel")).not.toContainText("300 seconds");
+});
+
 test("cleanup candidates are returned with the generated plan and can be closed manually", async ({ page }) => {
   await page.goto(`${baseUrl}/src/sidepanel/index.html`);
 

@@ -61,6 +61,7 @@ const UI_COPY = Object.freeze({
     "status.recapCanceling": "正在停止生成回顾",
     "status.recapCanceled": "已停止生成回顾。",
     "status.recapReady": "回顾已生成",
+    "status.recapAiUnavailable": "AI 回顾暂时没有完成。请稍后再试，或在更多选项里切换 AI 设置。",
     "status.recapRangeInvalid": "请选择有效的开始和结束日期。",
     "scope.label": "范围",
     "scope.currentWindow": "当前窗口",
@@ -295,6 +296,7 @@ const UI_COPY = Object.freeze({
     "status.recapCanceling": "Stopping recap generation",
     "status.recapCanceled": "Recap generation stopped.",
     "status.recapReady": "Recap ready",
+    "status.recapAiUnavailable": "AI recap did not finish. Try again later, or switch AI settings in More options.",
     "status.recapRangeInvalid": "Choose a valid start and end date.",
     "scope.label": "Scope",
     "scope.currentWindow": "Current window",
@@ -573,6 +575,7 @@ let currentStatus = { key: "status.default", params: {}, text: "", isError: fals
 let lastPreview = null;
 let lastError = null;
 let lastTimeRecap = null;
+let lastTimeRecapError = null;
 let lastCanApply = false;
 let canUndo = false;
 let activeRecapOperationId = null;
@@ -828,6 +831,7 @@ function applyUiLanguage() {
     nodes.previewRoot.textContent = t("preview.empty");
   }
   if (lastTimeRecap) renderTimeRecap(lastTimeRecap);
+  else if (lastTimeRecapError) renderTimeRecapError(lastTimeRecapError);
   else if (nodes.recapResult) nodes.recapResult.textContent = t("recap.empty");
   syncActionState();
   applyPanelMode();
@@ -1241,6 +1245,7 @@ async function generateTimeRecap() {
     });
     if (canceledRecapOperations.has(operationId) || activeRecapOperationId !== operationId) return;
     lastTimeRecap = result;
+    lastTimeRecapError = null;
     renderTimeRecap(result);
     setStatusKey("status.recapReady");
   } catch (error) {
@@ -1250,7 +1255,7 @@ async function generateTimeRecap() {
     }
     const message = friendlyErrorMessage(error);
     setStatus(message, true);
-    renderTimeRecapError(message);
+    renderTimeRecapError(error);
   } finally {
     stopRecapProgress();
     canceledRecapOperations.delete(operationId);
@@ -1343,17 +1348,38 @@ function renderTimeRecap(result) {
   nodes.recapDetailsText.textContent = recapEvidenceDetailsText(result, pagesById);
 }
 
-function renderTimeRecapError(message) {
+function renderTimeRecapError(error) {
+  const errorState = normalizeTimeRecapError(error);
+  lastTimeRecap = null;
+  lastTimeRecapError = errorState;
   nodes.recapResult.className = "recap-result";
   const card = document.createElement("section");
   card.className = "recap-card";
   const title = document.createElement("h3");
   title.textContent = t("error.heading");
   const copy = document.createElement("p");
-  copy.textContent = message || t("status.previousFailed");
+  copy.textContent = timeRecapErrorText(errorState);
   card.append(title, copy);
   nodes.recapResult.replaceChildren(card);
   nodes.recapDetailsRoot.hidden = true;
+}
+
+function normalizeTimeRecapError(error) {
+  if (error && typeof error === "object" && ("key" in error || "text" in error)) {
+    return {
+      key: error.key || "",
+      text: error.text || ""
+    };
+  }
+  const rawMessage = String(error?.message || error || "").trim();
+  if (/AI gateway time recap timed out/i.test(rawMessage)) {
+    return { key: "status.recapAiUnavailable", text: "" };
+  }
+  return { key: "", text: friendlyErrorMessage(error) || t("status.previousFailed") };
+}
+
+function timeRecapErrorText(errorState = {}) {
+  return errorState.key ? t(errorState.key) : errorState.text || t("status.previousFailed");
 }
 
 function recapSection(titleText, items = [], pagesById, options = {}) {
@@ -1522,6 +1548,7 @@ function friendlyErrorMessage(error) {
   if (/No rollback snapshot is available/i.test(message)) return t("status.noRollback");
   if (/Cannot apply an invalid plan/i.test(message)) return t("status.invalidPlan");
   if (/Progress copy generation returned invalid JSON/i.test(message)) return t("status.progressCopyFailed");
+  if (/AI gateway time recap timed out/i.test(message)) return t("status.recapAiUnavailable");
   return message;
 }
 
