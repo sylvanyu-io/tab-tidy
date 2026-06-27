@@ -45,7 +45,8 @@ async function renderPanelShot(filename, { preview }) {
   const context = await browser.newContext({
     viewport: { width: 390, height: 560 },
     deviceScaleFactor: 2,
-    colorScheme: "light"
+    colorScheme: "light",
+    locale: "zh-CN"
   });
   const page = await context.newPage();
   await installChromeMock(page);
@@ -239,6 +240,10 @@ async function renderShowcase() {
 
 async function installChromeMock(page) {
   await page.addInitScript(() => {
+    localStorage.setItem("tabTidy.uiLanguage", "zh-CN");
+    Object.defineProperty(navigator, "language", { get: () => "zh-CN" });
+    Object.defineProperty(navigator, "languages", { get: () => ["zh-CN", "zh"] });
+
     const settings = {
       organizeMode: "consolidate_one_window",
       targetWindowMode: "current_window",
