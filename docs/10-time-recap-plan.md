@@ -353,7 +353,7 @@ Implemented:
 - Shared bottom progress and stop button while generating.
 - Scoped advanced settings so recap does not show organization-only controls.
 
-Deferred:
+Future product expansion:
 
 - Manual close controls inside recap review candidates.
 - Launch an organize job from a recap theme.
