@@ -1587,10 +1587,10 @@ details[open] > summary::before {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 30px;
-  min-width: 30px;
-  height: 30px;
-  min-height: 30px;
+  width: 26px;
+  min-width: 26px;
+  height: 26px;
+  min-height: 26px;
   padding: 0;
   color: var(--primary);
   background: var(--primary-soft);
@@ -1602,8 +1602,8 @@ details[open] > summary::before {
 
 .cleanup-preview-actions button svg,
 .cleanup-row-actions button svg {
-  width: 16px;
-  height: 16px;
+  width: 14px;
+  height: 14px;
   fill: none;
   stroke: currentColor;
   stroke-width: 1.9;
@@ -1618,6 +1618,12 @@ details[open] > summary::before {
   cursor: default;
 }
 
+.cleanup-row-actions button:last-child {
+  color: var(--muted);
+  background: color-mix(in srgb, var(--surface-soft) 76%, transparent);
+  border-color: color-mix(in srgb, var(--line) 26%, transparent);
+}
+
 .cleanup-preview-list {
   display: grid;
   gap: 8px;
@@ -1629,7 +1635,7 @@ details[open] > summary::before {
   grid-template-columns: auto minmax(0, 1fr);
   gap: 9px;
   align-items: start;
-  padding: 10px 76px 10px 10px;
+  padding: 10px;
   background: color-mix(in srgb, var(--surface) 86%, var(--surface-soft));
   border: 1px solid color-mix(in srgb, var(--line) 42%, transparent);
   border-radius: var(--radius-md);
@@ -1656,6 +1662,7 @@ details[open] > summary::before {
   grid-template-columns: minmax(0, 1fr) auto;
   gap: 7px;
   align-items: start;
+  padding-right: 34px;
 }
 
 .cleanup-title-line > strong {
@@ -1702,6 +1709,7 @@ details[open] > summary::before {
 }
 
 .cleanup-preview-body > small {
+  padding-right: 34px;
   color: var(--muted);
   font-size: 11.5px;
   line-height: 1.35;
@@ -1709,8 +1717,9 @@ details[open] > summary::before {
 
 .cleanup-row-actions {
   position: absolute;
-  top: 10px;
-  right: 10px;
+  top: 8px;
+  right: 8px;
+  flex-direction: column;
 }
 
 .group-swatch {

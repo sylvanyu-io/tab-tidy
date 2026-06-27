@@ -109,11 +109,10 @@ const UI_COPY = Object.freeze({
     "cleanup.clue.sameGroup": "同组已有更具体页面",
     "cleanup.clue.ungrouped": "还没归类",
     "cleanup.selectAll": "全选",
-    "cleanup.closeSelected": "关闭选中",
     "cleanup.closeOne": "关闭",
     "cleanup.focus": "定位",
     "cleanup.selectAllAria": "全选清理建议",
-    "cleanup.closeSelectedAria": "关闭选中的标签页",
+    "cleanup.clearSelectionAria": "取消全选清理建议",
     "cleanup.closeOneAria": "关闭这个标签页",
     "cleanup.focusAria": "定位这个标签页",
     "cleanup.closed": "已关闭 {count} 个标签页，方案已同步更新",
@@ -341,11 +340,10 @@ const UI_COPY = Object.freeze({
     "cleanup.clue.sameGroup": "More specific pages nearby",
     "cleanup.clue.ungrouped": "Not yet grouped",
     "cleanup.selectAll": "Select all",
-    "cleanup.closeSelected": "Close selected",
     "cleanup.closeOne": "Close",
     "cleanup.focus": "Find",
     "cleanup.selectAllAria": "Select all cleanup suggestions",
-    "cleanup.closeSelectedAria": "Close selected tabs",
+    "cleanup.clearSelectionAria": "Clear cleanup selection",
     "cleanup.closeOneAria": "Close this tab",
     "cleanup.focusAria": "Find this tab",
     "cleanup.closed": "Closed {count} tabs and updated the plan",
@@ -1767,9 +1765,7 @@ function cleanupPreviewSection(cleanup, options = {}) {
   const actions = document.createElement("div");
   actions.className = "cleanup-preview-actions";
   const selectAll = iconButton("selectAll", t("cleanup.selectAllAria"));
-  const closeSelected = iconButton("close", t("cleanup.closeSelectedAria"));
-  closeSelected.disabled = true;
-  actions.append(selectAll, closeSelected);
+  actions.append(selectAll);
   header.append(copy, actions);
 
   const candidates = cleanup?.candidates || [];
@@ -1793,8 +1789,13 @@ function cleanupPreviewSection(cleanup, options = {}) {
 
   const updateSelectedState = () => {
     const count = selectedCleanupTabIds(section).length;
-    closeSelected.disabled = count === 0;
+    const total = section.querySelectorAll(".cleanup-select").length;
+    const allSelected = total > 0 && count === total;
     selectedLabel.textContent = t("cleanup.selectedCount", { count });
+    const label = allSelected ? t("cleanup.clearSelectionAria") : t("cleanup.selectAllAria");
+    selectAll.setAttribute("aria-label", label);
+    selectAll.setAttribute("title", label);
+    selectAll.setAttribute("aria-pressed", allSelected ? "true" : "false");
   };
   selectAll.addEventListener("click", () => {
     const boxes = [...section.querySelectorAll(".cleanup-select")];
@@ -1804,7 +1805,6 @@ function cleanupPreviewSection(cleanup, options = {}) {
     });
     updateSelectedState();
   });
-  closeSelected.addEventListener("click", () => closeCleanupTabs(selectedCleanupTabIds(section)));
   section.addEventListener("change", (event) => {
     if (event.target?.classList?.contains("cleanup-select")) updateSelectedState();
   });

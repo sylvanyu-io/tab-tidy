@@ -320,12 +320,17 @@ test("cleanup candidates are returned with the generated plan and can be closed 
   await expect(page.locator(".cleanup-preview")).not.toContainText("ageDays");
   await expect(page.locator(".cleanup-preview")).not.toContainText("标题为");
 
-  await page.locator(".cleanup-preview").getByRole("button", { name: "全选" }).click();
+  await page.locator(".cleanup-preview").getByRole("button", { name: "全选清理建议" }).click();
   await expect(page.locator(".cleanup-selected-count")).toHaveText("已选 2 个");
-  await page.locator(".cleanup-preview").getByRole("button", { name: "关闭选中" }).click();
+  await expect(page.locator(".cleanup-preview").getByRole("button", { name: "取消全选清理建议" })).toBeVisible();
+  await page.locator(".cleanup-preview").getByRole("button", { name: "取消全选清理建议" }).click();
+  await expect(page.locator(".cleanup-selected-count")).toHaveText("已选 0 个");
+  await expect(page.locator(".cleanup-preview").getByRole("button", { name: "关闭选中的标签页" })).toHaveCount(0);
+  await page.locator(".cleanup-preview").getByRole("button", { name: "关闭这个标签页" }).first().click();
+  await page.locator(".cleanup-preview").getByRole("button", { name: "关闭这个标签页" }).first().click();
   await expect(page.locator(".cleanup-preview").getByText("Old comparison notes")).toHaveCount(0);
   await expect(page.locator(".cleanup-preview").getByText("Previous research")).toHaveCount(0);
-  await expect(page.locator("#statusText")).toHaveText("已关闭 2 个标签页，方案已同步更新");
+  await expect(page.locator("#statusText")).toHaveText("已关闭 1 个标签页，方案已同步更新");
 });
 
 test("cleanup-only mode renders cleanup copy without fake grouping", async ({ page }) => {
@@ -345,7 +350,7 @@ test("cleanup-only mode renders cleanup copy without fake grouping", async ({ pa
   await expect(page.locator(".preview .group-row")).toHaveCount(0);
   await expect(page.getByRole("button", { name: "开始整理" })).toBeHidden();
   await expect(page.locator(".cleanup-preview").getByRole("button", { name: "全选清理建议" })).toBeVisible();
-  await expect(page.locator(".cleanup-preview").getByRole("button", { name: "关闭选中的标签页" })).toBeVisible();
+  await expect(page.locator(".cleanup-preview").getByRole("button", { name: "关闭选中的标签页" })).toHaveCount(0);
 });
 
 test("auto-selects English UI and can manually switch back", async ({ page }) => {
