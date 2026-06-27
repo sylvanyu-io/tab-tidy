@@ -232,11 +232,15 @@ test("control surface renders settings and mock preview", async ({ page }) => {
   await expect(page.locator(".cleanup-preview").getByText("建议先检查", { exact: true })).toBeVisible();
   await expect(page.locator(".cleanup-preview").getByText("旧方案对比笔记")).toBeVisible();
   await expect(page.locator(".cleanup-row-actions .icon-action").first()).toBeVisible();
+  await expect(page.locator(".cleanup-preview-actions .icon-action")).toHaveText("全");
+  await expect(page.locator(".cleanup-row-actions").first().locator(".icon-action")).toHaveText(["定", "关"]);
   await expect(page.getByText("待确认")).toHaveCount(0);
   await expect(page.locator(".preview-stats")).toHaveCount(0);
   await expect(page.locator(".stat-chip")).toHaveCount(0);
   await page.locator("#uiLanguageToggle").click();
   await expect(page.locator("#previewCount")).toHaveText("3 groups");
+  await expect(page.locator(".cleanup-preview-actions .icon-action")).toHaveText("All");
+  await expect(page.locator(".cleanup-row-actions").first().locator(".icon-action")).toHaveText(["Go", "×"]);
   await expect(
     page
       .locator(".preview")

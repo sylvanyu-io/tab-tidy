@@ -1587,10 +1587,10 @@ details[open] > summary::before {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 26px;
-  min-width: 26px;
-  height: 26px;
-  min-height: 26px;
+  width: 28px;
+  min-width: 28px;
+  height: 28px;
+  min-height: 28px;
   padding: 0;
   color: var(--primary);
   background: var(--primary-soft);
@@ -1600,15 +1600,16 @@ details[open] > summary::before {
   cursor: pointer;
 }
 
-.cleanup-preview-actions button svg,
-.cleanup-row-actions button svg {
-  width: 14px;
-  height: 14px;
-  fill: none;
-  stroke: currentColor;
-  stroke-width: 1.9;
-  stroke-linecap: round;
-  stroke-linejoin: round;
+.icon-action-label {
+  display: block;
+  min-width: 0;
+  font-size: 12px;
+  font-weight: 850;
+  line-height: 1;
+  letter-spacing: 0;
+  text-align: center;
+  font-variant-east-asian: proportional-width;
+  transform: translateY(-0.5px);
 }
 
 .cleanup-preview-actions button:disabled {

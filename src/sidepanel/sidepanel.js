@@ -111,6 +111,9 @@ const UI_COPY = Object.freeze({
     "cleanup.selectAll": "全选",
     "cleanup.closeOne": "关闭",
     "cleanup.focus": "定位",
+    "cleanup.selectAllShort": "全",
+    "cleanup.focusShort": "定",
+    "cleanup.closeOneShort": "关",
     "cleanup.selectAllAria": "全选清理建议",
     "cleanup.clearSelectionAria": "取消全选清理建议",
     "cleanup.closeOneAria": "关闭这个标签页",
@@ -342,6 +345,9 @@ const UI_COPY = Object.freeze({
     "cleanup.selectAll": "Select all",
     "cleanup.closeOne": "Close",
     "cleanup.focus": "Find",
+    "cleanup.selectAllShort": "All",
+    "cleanup.focusShort": "Go",
+    "cleanup.closeOneShort": "×",
     "cleanup.selectAllAria": "Select all cleanup suggestions",
     "cleanup.clearSelectionAria": "Clear cleanup selection",
     "cleanup.closeOneAria": "Close this tab",
@@ -1883,32 +1889,16 @@ function iconButton(icon, label) {
   button.className = "icon-action";
   button.setAttribute("aria-label", label);
   button.setAttribute("title", label);
-  button.append(actionIcon(icon));
-  return button;
-}
-
-function actionIcon(icon) {
-  const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
-  svg.setAttribute("viewBox", "0 0 20 20");
-  svg.setAttribute("aria-hidden", "true");
-  svg.setAttribute("focusable", "false");
-  const paths = {
-    focus: [
-      "M10 4.5v2.2",
-      "M10 13.3v2.2",
-      "M4.5 10h2.2",
-      "M13.3 10h2.2",
-      "M10 13.25a3.25 3.25 0 1 0 0-6.5 3.25 3.25 0 0 0 0 6.5Z"
-    ],
-    close: ["M6.2 6.2l7.6 7.6", "M13.8 6.2l-7.6 7.6"],
-    selectAll: ["M5.2 10.1l2.5 2.5 7.1-7.2", "M4 4.5h12v11H4z"]
+  const text = document.createElement("span");
+  text.className = "icon-action-label";
+  const labels = {
+    focus: t("cleanup.focusShort"),
+    close: t("cleanup.closeOneShort"),
+    selectAll: t("cleanup.selectAllShort")
   };
-  for (const d of paths[icon] || paths.close) {
-    const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
-    path.setAttribute("d", d);
-    svg.append(path);
-  }
-  return svg;
+  text.textContent = labels[icon] || labels.close;
+  button.append(text);
+  return button;
 }
 
 function selectedCleanupTabIds(root) {
