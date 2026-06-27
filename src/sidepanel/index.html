@@ -134,11 +134,11 @@
             </div>
 
             <div class="field prompt-preset-field">
-              <label for="groupingGranularity">分组粒度</label>
+              <label for="groupingGranularity">分组数量</label>
               <select id="groupingGranularity">
                 <option value="compact">更少分组</option>
-                <option value="balanced">平衡</option>
-                <option value="detailed">更细</option>
+                <option value="balanced" selected>平衡</option>
+                <option value="detailed">更多分组</option>
               </select>
             </div>
 
@@ -299,7 +299,7 @@
               <label for="gatewayModel">AI 模型</label>
               <select id="gatewayModel">
                 <option value="gpt-5.5">gpt-5.5</option>
-                <option value="gpt-5.4">gpt-5.4</option>
+                <option value="gpt-5.4" selected>gpt-5.4</option>
                 <option value="gpt-5.4-mini">gpt-5.4-mini</option>
                 <option value="claude-opus-4-8">claude-opus-4-8</option>
                 <option value="claude-sonnet-4-6">claude-sonnet-4-6</option>
@@ -321,7 +321,7 @@
               <select id="gatewayThinkingIntensity">
                 <option value="low">低</option>
                 <option value="medium">中</option>
-                <option value="high">高</option>
+                <option value="high" selected>高</option>
                 <option value="ultra">超高</option>
               </select>
             </div>
