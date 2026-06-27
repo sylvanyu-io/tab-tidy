@@ -289,6 +289,20 @@ test("time recap mode renders a first-class recap surface", async ({ page }) => 
   await expect(page.locator("#recapFromDate")).toBeVisible();
   await expect(page.locator("#recapToDate")).toBeVisible();
 
+  await page.locator(".advanced-settings > summary").click();
+  await expect(page.locator("#gatewayModel")).toBeVisible();
+  await expect(page.locator("#gatewayAuxiliaryModel")).toBeVisible();
+  await expect(page.locator("#gatewayThinkingIntensity")).toBeVisible();
+  await expect(page.locator("#gatewayBaseUrl")).toBeVisible();
+  await expect(page.locator("#includeIncognitoTabs")).toBeVisible();
+  await expect(page.locator("#dissolveExistingGroupsToggle")).toBeHidden();
+  await expect(page.locator("#createReviewGroupToggle")).toBeHidden();
+  await expect(page.locator("#includePinnedTabs")).toBeHidden();
+  await expect(page.locator("#collapseGroupsAfterApply")).toBeHidden();
+  await expect(page.locator("#pageContextMode")).toBeHidden();
+  await expect(page.locator("#minConfidenceToApply")).toBeHidden();
+  await page.locator(".advanced-settings > summary").click();
+
   await page.getByRole("button", { name: "过去 24 小时" }).click();
   await expect(page.locator("#recapRangePreset")).toHaveValue("1d");
   await expect(page.locator("#recapFromDate")).toHaveAttribute("type", "datetime-local");
@@ -398,6 +412,81 @@ test("time recap generation uses the shared bottom progress controls", async ({ 
   await expect(page.locator(".actions #progressBar")).toBeHidden();
   await expect(page.locator(".recap-summary-card")).toContainText("这段时间主要在打磨回顾功能。");
   await expect.poll(() => page.evaluate(() => window.__recapMessages.includes("progressCopy:generate"))).toBe(true);
+});
+
+test("time recap fallback keeps raw AI errors out of the visible product copy", async ({ page }) => {
+  await page.addInitScript(() => {
+    const settings = {
+      organizeMode: "current_window",
+      targetWindowMode: "current_window",
+      existingGroupMode: "preserve_existing_groups",
+      reviewGroupMode: "create_review_group",
+      undoTargetWindowMode: "leave_empty_target_window",
+      pageContextMode: "off",
+      hostPermissionRequestMode: "never",
+      pageSamplingConsentMode: "not_acknowledged",
+      urlPrivacyMode: "sanitized_url",
+      includePinnedTabs: false,
+      includeIncognitoTabs: false,
+      collapseGroupsAfterApply: true,
+      analyzeGrouping: true,
+      analyzeCleanup: true,
+      minConfidenceToApply: 0.65,
+      maxTabsPerGroup: 40,
+      languageMode: "auto",
+      promptPreset: "conservative",
+      groupingGranularity: "balanced",
+      plannerProvider: "gateway",
+      rememberProviderKeys: false,
+      gatewayBaseUrl: "",
+      gatewayModel: "gpt-5.4",
+      gatewayAuxiliaryModel: "gpt-5.3-codex-spark",
+      gatewayCustomModel: "",
+      gatewayThinkingIntensity: "high",
+      gatewayApiKey: "",
+      customPrompt: ""
+    };
+    window.chrome = {
+      runtime: {
+        sendMessage: async (message) => {
+          if (message.type === "settings:get") return { ok: true, result: settings };
+          if (message.type === "settings:save") return { ok: true, result: message.settings };
+          if (message.type === "tabs:getActiveJob") return { ok: true, result: null };
+          if (message.type === "tabs:canUndo") return { ok: true, result: { canUndo: false } };
+          if (message.type === "activity:generateTimeRecap") {
+            return {
+              ok: true,
+              result: {
+                source: "local_fallback",
+                error: "AI gateway time recap timed out after 300 seconds.",
+                input: { pages: [], coverage: { includedPages: 65 } },
+                recap: {
+                  schema: "tab_tidy_time_recap_v1",
+                  headline: "这段时间主要在整理标签页。",
+                  summary: "本机线索显示最近集中在扩展发布和工作流回顾。",
+                  timeline: [],
+                  themes: [],
+                  followUps: [],
+                  reviewCandidates: [],
+                  coverageNote: "已参考本机活动。"
+                }
+              }
+            };
+          }
+          return { ok: true, result: null };
+        }
+      }
+    };
+  });
+
+  await page.goto(`${baseUrl}/src/sidepanel/index.html`);
+  await page.getByRole("button", { name: "回顾" }).click();
+  await page.getByRole("button", { name: "生成回顾" }).click();
+
+  await expect(page.locator(".recap-summary-card")).toContainText("AI 暂时不可用，先展示本机线索。");
+  await expect(page.locator(".recap-summary-card")).not.toContainText("timed out");
+  await expect(page.locator(".recap-summary-card")).not.toContainText("300 seconds");
+  await expect.poll(() => page.locator("#recapDetailsText").textContent()).toContain("AI gateway time recap timed out after 300 seconds.");
 });
 
 test("cleanup candidates are returned with the generated plan and can be closed manually", async ({ page }) => {

@@ -156,6 +156,10 @@ h2,
   display: none;
 }
 
+.app-shell[data-panel-mode="recap"] .organize-only-setting {
+  display: none !important;
+}
+
 .app-shell[data-panel-mode="organize"] .time-recap-panel {
   display: none;
 }

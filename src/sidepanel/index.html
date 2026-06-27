@@ -207,7 +207,7 @@
           </select>
 
           <div class="advanced-list advanced-switch-list">
-            <div class="setting-toggle-field">
+            <div class="setting-toggle-field organize-only-setting">
               <label class="switch-row compact-switch">
                 <span>
                   <strong>重新整理已有分组</strong>
@@ -221,7 +221,7 @@
               </select>
             </div>
 
-            <div class="setting-toggle-field">
+            <div class="setting-toggle-field organize-only-setting">
               <label class="switch-row compact-switch">
                 <span>
                   <strong>使用待分类分组</strong>
@@ -235,7 +235,7 @@
               </select>
             </div>
 
-            <label class="switch-row compact-switch">
+            <label class="switch-row compact-switch organize-only-setting">
               <span>
                 <strong>包含固定标签页</strong>
                 <small>会参与移动和分组</small>
@@ -249,7 +249,7 @@
               </span>
               <input id="includeIncognitoTabs" type="checkbox" />
             </label>
-            <label class="switch-row compact-switch">
+            <label class="switch-row compact-switch organize-only-setting">
               <span>
                 <strong>整理后收起分组</strong>
                 <small>新分组默认折叠</small>
@@ -268,7 +268,7 @@
               </select>
             </div>
 
-            <div class="field setting-select-row content-access-feature">
+            <div class="field setting-select-row content-access-feature organize-only-setting">
               <label for="pageContextMode">页面摘要读取范围</label>
               <select id="pageContextMode">
                 <option value="off">不补读页面摘要</option>
@@ -277,7 +277,7 @@
               </select>
             </div>
 
-            <div id="hostPermissionField" class="field setting-select-row" hidden>
+            <div id="hostPermissionField" class="field setting-select-row organize-only-setting" hidden>
               <label for="hostPermissionRequestMode">站点授权</label>
               <select id="hostPermissionRequestMode">
                 <option value="never">整理时不弹授权</option>
@@ -357,7 +357,7 @@
             </label>
           </div>
 
-        <div class="number-grid">
+        <div class="number-grid organize-only-setting">
           <div class="field">
             <label for="minConfidenceToApply">最低置信度</label>
             <input id="minConfidenceToApply" type="number" min="0" max="1" step="0.05" />

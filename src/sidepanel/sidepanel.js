@@ -1315,7 +1315,7 @@ function renderTimeRecap(result) {
   summary.append(headline, copy);
   if (result.source === "local_fallback" || result.error) {
     const fallback = document.createElement("p");
-    fallback.textContent = result.error ? `${t("recap.localFallback")} ${result.error}` : t("recap.localFallback");
+    fallback.textContent = t("recap.localFallback");
     summary.append(fallback);
   }
 
