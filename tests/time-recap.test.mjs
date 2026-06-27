@@ -88,6 +88,40 @@ test("time recap runtime message returns local fallback without mutating tabs", 
   assert.equal((await chrome.tabs.query({})).length, 3);
 });
 
+test("time recap runtime message honors explicit timeout and falls back locally", async () => {
+  const chrome = seededRecapChrome();
+  const originalFetch = globalThis.fetch;
+  let requested = false;
+  globalThis.fetch = async () => {
+    requested = true;
+    return new Promise(() => {});
+  };
+
+  try {
+    const startedAt = Date.now();
+    const result = await handleRuntimeMessage(chrome, {
+      type: "activity:generateTimeRecap",
+      settings: {
+        ...DEFAULT_SETTINGS,
+        plannerProvider: PLANNER_PROVIDERS.GATEWAY,
+        gatewayBaseUrl: "http://127.0.0.1:8317/v1",
+        gatewayApiKey: "test-key",
+        languageMode: "zh-CN"
+      },
+      languageMode: "zh-CN",
+      range: { preset: "7d" },
+      timeoutMs: 25
+    });
+
+    assert.equal(requested, true);
+    assert.equal(result.source, "local_fallback");
+    assert.match(result.error, /timed out/);
+    assert.equal(Date.now() - startedAt < 1500, true);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
 test("time recap runtime message can be canceled while AI is running", async () => {
   const chrome = seededRecapChrome();
   const originalFetch = globalThis.fetch;

@@ -518,6 +518,8 @@ const AI_WAIT_RAMP_MS = 45000;
 const AI_WAIT_COPY_INTERVAL_SECONDS = 4;
 const ACTIVE_JOB_POLL_MS = 600;
 const GENERATED_COPY_CACHE_LIMIT = 4;
+const TIME_RECAP_GATEWAY_TIMEOUT_MS = 300_000;
+const CANCELED_RECAP_OPERATION_TTL_MS = 5 * 60 * 1000;
 
 const nodes = {
   appShell: document.querySelector(".app-shell"),
@@ -1222,7 +1224,8 @@ async function generateTimeRecap() {
       operationId,
       settings,
       languageMode: settings.languageMode,
-      range: readRecapRange()
+      range: readRecapRange(),
+      timeoutMs: TIME_RECAP_GATEWAY_TIMEOUT_MS
     });
     if (canceledRecapOperations.has(operationId) || activeRecapOperationId !== operationId) return;
     lastTimeRecap = result;
@@ -1250,21 +1253,19 @@ async function cancelTimeRecap() {
   const operationId = activeRecapOperationId;
   if (!operationId) return;
   canceledRecapOperations.add(operationId);
+  setTimeout(() => canceledRecapOperations.delete(operationId), CANCELED_RECAP_OPERATION_TTL_MS);
   stopRecapProgress();
   setBusy(true, t("status.recapCanceling"), { cancelable: true, progress: currentProgressValue() || 92 });
   nodes.cancelBtn.disabled = true;
   setStatusKey("status.recapCanceling");
-  try {
-    await sendMessage({ type: "activity:cancelTimeRecap", operationId });
-  } catch {
-    // The UI should still stop waiting if the background context has already gone away.
-  } finally {
-    if (activeRecapOperationId === operationId) {
-      activeRecapOperationId = null;
-      setBusy(false);
-    }
-    setStatusKey("status.recapCanceled");
+  if (activeRecapOperationId === operationId) {
+    activeRecapOperationId = null;
+    setBusy(false);
   }
+  setStatusKey("status.recapCanceled");
+  sendMessage({ type: "activity:cancelTimeRecap", operationId }).catch(() => {
+    // The UI should still stop waiting if the background context has already gone away.
+  });
 }
 
 function readRecapRange() {

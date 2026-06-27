@@ -20,7 +20,7 @@ import { normalizePlanForSettings } from "./plan-normalizer.js";
 import { buildPreview } from "./preview.js";
 import { STORAGE_KEYS, getLocal, removeLocal, setLocal } from "./storage.js";
 import { collectTabInventory } from "./tab-inventory.js";
-import { generateTimeRecap } from "./time-recap.js";
+import { TIME_RECAP_GATEWAY_TIMEOUT_MS, generateTimeRecap } from "./time-recap.js";
 import { validatePlan } from "./plan-validator.js";
 
 const activeAnalyses = new Map();
@@ -155,7 +155,14 @@ async function generateTimeRecapForMessage(chromeApi, message = {}) {
     });
     await reconcileTabLifecycle(chromeApi, { includeIncognitoTabs: settings.includeIncognitoTabs }).catch(() => null);
 
-    const options = { range: message.range || {}, signal: abortController.signal };
+    const requestedTimeoutMs = Number(message.timeoutMs);
+    const options = {
+      range: message.range || {},
+      signal: abortController.signal,
+      timeoutMs: Number.isFinite(requestedTimeoutMs) && requestedTimeoutMs > 0
+        ? requestedTimeoutMs
+        : TIME_RECAP_GATEWAY_TIMEOUT_MS
+    };
     if (settings.plannerProvider === PLANNER_PROVIDERS.GATEWAY) {
       options.installId = await getOrCreateInstallId(chromeApi);
     }

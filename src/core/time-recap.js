@@ -19,7 +19,7 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 const DEFAULT_RANGE_MS = 7 * DAY_MS;
 const MAX_RANGE_MS = 90 * DAY_MS;
 const MAX_RECAP_PAGES = 360;
-const GATEWAY_TIMEOUT_MS = 300_000;
+export const TIME_RECAP_GATEWAY_TIMEOUT_MS = 300_000;
 const REVIEW_AGE_MS = 14 * DAY_MS;
 const REVIEW_IDLE_MS = 7 * DAY_MS;
 
@@ -326,7 +326,7 @@ export async function createGatewayTimeRecap(input, rawSettings = {}, fetchImpl 
       body: JSON.stringify(body)
     },
     "AI gateway time recap",
-    options.timeoutMs ?? GATEWAY_TIMEOUT_MS,
+    options.timeoutMs ?? TIME_RECAP_GATEWAY_TIMEOUT_MS,
     options.signal
   );
   if (!response.ok) {

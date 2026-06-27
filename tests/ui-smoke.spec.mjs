@@ -368,7 +368,7 @@ test("time recap generation uses the shared bottom progress controls", async ({ 
     window.chrome = {
       runtime: {
         sendMessage: async (message) => {
-          window.__recapMessages.push(message.type);
+          window.__recapMessages.push(message);
           if (message.type === "settings:get") return { ok: true, result: settings };
           if (message.type === "settings:save") return { ok: true, result: message.settings };
           if (message.type === "tabs:getActiveJob") return { ok: true, result: null };
@@ -411,7 +411,78 @@ test("time recap generation uses the shared bottom progress controls", async ({ 
   await expect(page.locator("#statusText")).toHaveText("回顾已生成");
   await expect(page.locator(".actions #progressBar")).toBeHidden();
   await expect(page.locator(".recap-summary-card")).toContainText("这段时间主要在打磨回顾功能。");
-  await expect.poll(() => page.evaluate(() => window.__recapMessages.includes("progressCopy:generate"))).toBe(true);
+  await expect
+    .poll(() =>
+      page.evaluate(() => window.__recapMessages.some((message) => message.type === "activity:generateTimeRecap" && message.timeoutMs === 300000))
+    )
+    .toBe(true);
+  await expect.poll(() => page.evaluate(() => window.__recapMessages.some((message) => message.type === "progressCopy:generate"))).toBe(true);
+});
+
+test("time recap cancellation restores the shared bottom controls immediately", async ({ page }) => {
+  await page.addInitScript(() => {
+    const settings = {
+      organizeMode: "current_window",
+      targetWindowMode: "current_window",
+      existingGroupMode: "preserve_existing_groups",
+      reviewGroupMode: "create_review_group",
+      undoTargetWindowMode: "leave_empty_target_window",
+      pageContextMode: "off",
+      hostPermissionRequestMode: "never",
+      pageSamplingConsentMode: "not_acknowledged",
+      urlPrivacyMode: "sanitized_url",
+      includePinnedTabs: false,
+      includeIncognitoTabs: false,
+      collapseGroupsAfterApply: true,
+      analyzeGrouping: true,
+      analyzeCleanup: true,
+      minConfidenceToApply: 0.65,
+      maxTabsPerGroup: 40,
+      languageMode: "auto",
+      promptPreset: "conservative",
+      groupingGranularity: "balanced",
+      plannerProvider: "gateway",
+      rememberProviderKeys: false,
+      gatewayBaseUrl: "",
+      gatewayModel: "gpt-5.4",
+      gatewayAuxiliaryModel: "gpt-5.3-codex-spark",
+      gatewayCustomModel: "",
+      gatewayThinkingIntensity: "high",
+      gatewayApiKey: "",
+      customPrompt: ""
+    };
+    window.__recapMessages = [];
+    window.__recapPromise = new Promise(() => {});
+    window.__cancelRecapPromise = new Promise(() => {});
+    window.chrome = {
+      runtime: {
+        sendMessage: async (message) => {
+          window.__recapMessages.push(message);
+          if (message.type === "settings:get") return { ok: true, result: settings };
+          if (message.type === "settings:save") return { ok: true, result: message.settings };
+          if (message.type === "tabs:getActiveJob") return { ok: true, result: null };
+          if (message.type === "tabs:canUndo") return { ok: true, result: { canUndo: false } };
+          if (message.type === "progressCopy:generate") return { ok: true, result: { messages: ["梳理时间线索"] } };
+          if (message.type === "activity:generateTimeRecap") return { ok: true, result: await window.__recapPromise };
+          if (message.type === "activity:cancelTimeRecap") return { ok: true, result: await window.__cancelRecapPromise };
+          return { ok: true, result: null };
+        }
+      }
+    };
+  });
+
+  await page.goto(`${baseUrl}/src/sidepanel/index.html`);
+  await page.getByRole("button", { name: "回顾" }).click();
+  await page.getByRole("button", { name: "生成回顾" }).click();
+  await expect(page.locator(".actions #progressBar")).toBeVisible();
+
+  await page.getByRole("button", { name: "停止生成" }).click();
+  await expect(page.locator("#statusText")).toHaveText("已停止生成回顾。");
+  await expect(page.locator(".actions #progressBar")).toBeHidden();
+  await expect(page.getByRole("button", { name: "生成回顾" })).toBeVisible();
+  await expect
+    .poll(() => page.evaluate(() => window.__recapMessages.some((message) => message.type === "activity:cancelTimeRecap")))
+    .toBe(true);
 });
 
 test("time recap fallback keeps raw AI errors out of the visible product copy", async ({ page }) => {
