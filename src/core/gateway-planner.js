@@ -216,7 +216,7 @@ export function effectiveGatewayBaseUrl(settings) {
   return settings.gatewayBaseUrl || BUILTIN_GATEWAY_BASE_URL;
 }
 
-function requireGatewayModel(settings) {
+export function requireGatewayModel(settings) {
   const model = resolveGatewayModel(settings);
   if (!model) {
     throw new Error(
@@ -234,7 +234,7 @@ function requireGatewayAuxiliaryModel(settings) {
   return resolveGatewayAuxiliaryModel(settings) || requireGatewayModel(settings);
 }
 
-function gatewayHeaders(settings, requestMeta = {}) {
+export function gatewayHeaders(settings, requestMeta = {}) {
   const headers = { "content-type": "application/json" };
   if (settings.gatewayBaseUrl && settings.gatewayApiKey) {
     headers.authorization = `Bearer ${settings.gatewayApiKey}`;
@@ -248,14 +248,14 @@ function gatewayHeaders(settings, requestMeta = {}) {
   return headers;
 }
 
-function gatewayRequestMeta(inventory, options = {}) {
+export function gatewayRequestMeta(inventory, options = {}) {
   return {
     installId: options.installId || "",
     hasPageSamples: (inventory.pageSamples || []).some((sample) => sample.status === "ok")
   };
 }
 
-function gatewayErrorMessage(response, data, settings) {
+export function gatewayErrorMessage(response, data, settings) {
   const providerMessage = extractProviderErrorMessage(data);
   if (response.status === 401 || response.status === 403) {
     return settings.gatewayBaseUrl
@@ -1660,7 +1660,7 @@ function clampConfidence(value) {
   return Math.min(1, Math.max(0, numeric));
 }
 
-function applyThinkingIntensity(body, settings, intensity = settings.gatewayThinkingIntensity) {
+export function applyThinkingIntensity(body, settings, intensity = settings.gatewayThinkingIntensity) {
   if (usesGlmThinking(settings)) {
     body.thinking = { type: intensity === THINKING_INTENSITIES.LOW ? "disabled" : "enabled" };
     return;

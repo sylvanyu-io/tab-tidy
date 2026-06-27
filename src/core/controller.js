@@ -20,6 +20,7 @@ import { normalizePlanForSettings } from "./plan-normalizer.js";
 import { buildPreview } from "./preview.js";
 import { STORAGE_KEYS, getLocal, removeLocal, setLocal } from "./storage.js";
 import { collectTabInventory } from "./tab-inventory.js";
+import { generateTimeRecap } from "./time-recap.js";
 import { validatePlan } from "./plan-validator.js";
 
 const activeAnalyses = new Map();
@@ -110,6 +111,8 @@ export async function handleRuntimeMessage(chromeApi, message) {
       const settings = await getSettings(chromeApi);
       await reconcileTabLifecycle(chromeApi, { includeIncognitoTabs: settings.includeIncognitoTabs }).catch(() => null);
       return getActivityOverview(chromeApi, { rangeMs: message.rangeMs, includeIncognitoTabs: settings.includeIncognitoTabs });
+    case "activity:generateTimeRecap":
+      return generateTimeRecapForMessage(chromeApi, message);
     case "activity:focusTab":
       return focusActivityTab(chromeApi, message);
     case "tabs:closeCleanupCandidates":
@@ -128,6 +131,22 @@ export async function handleRuntimeMessage(chromeApi, message) {
     default:
       throw new Error(`Unknown message type: ${message?.type || "<missing>"}`);
   }
+}
+
+async function generateTimeRecapForMessage(chromeApi, message = {}) {
+  const storedSettings = await getSettings(chromeApi);
+  const settings = normalizeSettings({
+    ...storedSettings,
+    ...(message.settings || {}),
+    languageMode: message.languageMode || message.settings?.languageMode || storedSettings.languageMode
+  });
+  await reconcileTabLifecycle(chromeApi, { includeIncognitoTabs: settings.includeIncognitoTabs }).catch(() => null);
+
+  const options = { range: message.range || {} };
+  if (settings.plannerProvider === PLANNER_PROVIDERS.GATEWAY) {
+    options.installId = await getOrCreateInstallId(chromeApi);
+  }
+  return generateTimeRecap(chromeApi, settings, options);
 }
 
 async function focusActivityTab(chromeApi, message = {}) {
