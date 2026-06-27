@@ -13,7 +13,7 @@
 7. [Planner optimization](07-planner-optimization.md) - 模型路由、并行化和性能优化方向。
 8. [Agent harness research](08-agent-harness-research.md) - 外部 agent harness 模式如何映射到 TabRecap。
 9. [Release readiness](09-release-readiness.md) - 发布前检查清单和残余风险。
-10. [Time recap plan](10-time-recap-plan.md) - 基于本地活动和页面摘要生成时间段回顾的开发计划与落地状态。
+10. [Time recap status](10-time-recap-plan.md) - 基于本地活动和页面摘要生成时间段回顾的产品边界、落地状态与后续增强。
 
 ## Benchmark 入口
 

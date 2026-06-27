@@ -15,6 +15,13 @@ Implemented:
 - Page sampling off by default with explicit consent and permission gates.
 - Long-term page memory is opt-in, local, best-effort, and does not claim complete browser history.
 - AI gateway planner, with an offline fake planner kept for automated harnesses.
+- Recent Recap mode builds a compact local activity timeline from tab activity,
+  lifecycle sessions, current tabs, existing groups, URL metadata, and optional
+  page summaries.
+- Recap generation uses the same gateway, language, model, thinking-intensity,
+  URL-privacy, progress, and cancellation patterns as organization.
+- Recap AI failures fall back to local signals without exposing raw gateway
+  timeout or infrastructure errors in the visible product copy.
 - Local schema validation before every browser mutation.
 - Low-confidence groups below the apply threshold are rejected; the planner must
   put uncertain tabs in Review.
@@ -32,11 +39,14 @@ Implemented:
   runner against an isolated Chromium profile.
 - Active analysis jobs expose coarse progress states in the side panel and can be
   canceled; cancellation aborts provider fetches when the request is still live.
+- Recap jobs expose the same side-panel bottom progress and stop controls.
 - Large AI gateway jobs use a coarse-then-refine planner: a low-effort coarse
   bucket pass, followed by high-effort refinement for oversized or uncertain
   buckets, then normal local validation.
 - Planner errors are restored in the side panel with visible recovery UI instead of
   being hidden in the title bar.
+- Recap advanced settings are scoped to recap-relevant controls and do not show
+  organization-only switches.
 - Release checks clean stale artifacts, regenerate icons, run Node and
   Playwright tests, scan current files and git history for provider-key
   patterns, then build both local and store packages.
@@ -72,6 +82,11 @@ Blocking gates:
   tabs.
 - If a tab disappears mid-apply, the executor fails rather than silently grouping
   a partial tab set.
+- Time recap generation does not mutate tabs.
+- Time recap can be canceled while the AI request is still live.
+- Time recap fallback keeps raw AI errors in diagnostics rather than visible
+  product copy.
+- Recap UI exposes only recap-relevant advanced settings.
 - No custom gateway key appears in git history, screenshots, test output, or
   fixtures.
 - Extension package contains no `node_modules`, test outputs, or local secrets.
@@ -83,6 +98,9 @@ Recommended before public listing:
 
 - Add export/import settings without exporting custom gateway keys by default.
 - Add first-run privacy disclosure.
+- Add a clear local-memory clearing control before making recap history a
+  first-class history surface.
+- Add larger real-browser recap benchmarks for 30, 120, and 300 tab sessions.
 - Expand adaptive planning beyond the AI gateway path if other providers become
   first-class large-session targets.
 

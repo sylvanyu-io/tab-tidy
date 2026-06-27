@@ -1,6 +1,6 @@
 # Time Recap Development Plan / 时间段回顾开发计划
 
-Status: implementation in progress. The current codebase now has a core recap input builder, gateway recap planner, local fallback, runtime message, side-panel entry, and focused unit coverage. Remaining work is UI smoke coverage, real-browser verification, and benchmark evidence before release.
+Status: implemented in the current dev build. The codebase now has a recap input builder, gateway recap planner, local fallback, cancelable runtime message, side-panel Recap mode, shared bottom progress controls, scoped advanced AI settings, and Node plus Playwright coverage. Remaining work is product expansion, not first-use viability: recap history, direct recap-to-organize actions, manual close controls inside recap review candidates, and larger real-browser benchmark evidence.
 
 This document records the product plan for "summarize what I did during a time period" and the acceptance checks needed before treating it as release-ready. TabRecap already records useful local signals; the feature turns those signals into a user-facing recap instead of a developer activity dump.
 
@@ -23,9 +23,9 @@ This is not a browser history replacement. It is a local, best-effort work recap
 - Do not expose raw implementation terms such as `activeCount`, `ageDays`, `idleDays`, or internal cache keys in UI copy.
 - Do not make this a separate generic note-taking product.
 
-## Current Baseline
+## Current Implementation
 
-Existing implementation pieces:
+Implemented pieces:
 
 - `src/core/page-activity-cache.js`
   - Stores sanitized URL key, title, hostname, first seen, last seen, seen count, last tab/window, and compact sample metadata.
@@ -40,18 +40,29 @@ Existing implementation pieces:
   - Tracks first observed, last observed, last activated, active count, pinned/discarded/audible state.
   - Session TTL is 90 days and max sessions/events are 1800.
 - `src/core/controller.js`
-  - Exposes `activity:getOverview`.
+  - Exposes `activity:getOverview`, `activity:generateTimeRecap`, and `activity:cancelTimeRecap`.
   - Uses activity overview as cleanup fallback and as planner input.
-- `src/core/gateway-planner.js`
-  - Sends local activity rows and a compact recap to the combined grouping and cleanup planner.
+- `src/core/time-recap.js`
+  - Builds compact recap input from local activity, summaries, lifecycle sessions, and current tabs.
+  - Sends the recap request through the same chat-completions-compatible gateway.
+  - Parses fenced JSON, validates returned IDs, drops invalid references, and falls back to a local recap if AI is unavailable.
 - `src/sidepanel/sidepanel.js`
-  - Has cleanup preview UI and a mock `activity:getOverview`, but no real time-recap screen.
+  - Provides a top-level `回顾` / `Recap` mode.
+  - Supports past 24 hours, today, last 7 days, last 30 days, this week, this month, and custom date-time ranges.
+  - Uses the same bottom progress, disabled primary action, and stop button pattern as organizing.
+  - Keeps raw AI errors in diagnostics instead of visible product copy.
+- `src/sidepanel/index.html` and `src/sidepanel/styles.css`
+  - Show recap-relevant advanced settings only: incognito inclusion, URL privacy, result language, primary/auxiliary model, thinking intensity, gateway URL/key, and key persistence.
+  - Hide organization-only controls in recap mode.
 - `README.md`
-  - Already mentions time recap as a feature. This is ahead of implementation and must be corrected before the next release if the feature is not shipped.
+  - Mentions time recap as shipped behavior.
 
-Current gap:
+Current verification:
 
-- We have local signals, but no user-facing "Recent Recap" product flow.
+- `npm test`: 149 passed on 2026-06-27.
+- `npm run test:ui`: 28 passed on 2026-06-27.
+- `npm run build:extension`: built `dist/tab-recap-0.2.1.zip` on 2026-06-27.
+- Visual smoke screenshots were inspected for recap advanced settings and shared progress controls.
 
 ## User Experience
 
@@ -79,10 +90,13 @@ Suggested English copy:
 
 Provide simple presets:
 
+- `过去 24 小时`
 - `今天`
 - `最近 7 天`
 - `最近 30 天`
-- `自定义`
+- `本周`
+- `本月`
+- custom start/end date-time inputs
 
 Default: `最近 7 天`.
 
@@ -105,7 +119,8 @@ The recap result should be a review surface, not a wall of text.
 
 3. `可能可以收尾`
    - Reuse cleanup candidates, but frame them as "worth reviewing", not "trash".
-   - Actions: locate tab, select, close selected.
+   - Current action: locate the tab.
+   - Future action: selected/manual close controls, still never automatic.
    - Closing remains explicit user action only.
 
 4. `下次继续`
@@ -125,34 +140,46 @@ type TimeRecapInput = {
   schema: "tab_tidy_time_recap_input_v1";
   languageMode: "auto" | "zh-CN" | "en-US";
   range: {
+    preset: "1d" | "today" | "7d" | "30d" | "thisWeek" | "thisMonth" | "custom";
     from: string;
     to: string;
-    label: "today" | "7d" | "30d" | "custom";
+    rangeMs: number;
+    label: string;
   };
   coverage: {
     activityEntries: number;
+    summaryEntries: number;
     sampledEntries: number;
-    openTabsTracked: number;
+    currentOpenTabs: number;
     lifecycleSessions: number;
-    inferredEvents: number;
+    lifecycleEvents: number;
+    inferredClosed: number;
+    includedPages: number;
+    clippedPages: number;
   };
   pages: TimeRecapPage[];
 };
 
 type TimeRecapPage = {
+  id: number;
   tabId?: number;
   windowId?: number;
+  index?: number;
+  open: boolean;
   title: string;
   hostname: string;
   sanitizedUrl?: string;
   firstSeenAt?: string;
   lastSeenAt?: string;
   lastActivatedAt?: string;
+  closedAt?: string;
   seenCount?: number;
   activeCount?: number;
   currentGroupTitle?: string;
   discarded?: boolean;
   pinned?: boolean;
+  audible?: boolean;
+  sampleable?: boolean;
   summary?: {
     title?: string;
     metaDescription?: string;
@@ -175,21 +202,21 @@ type TimeRecapOutput = {
     title: string;
     description: string;
     confidence: "high" | "medium" | "low";
-    tabIds: number[];
+    ids: number[];
     evidence: string[];
   }>;
   timeline: Array<{
     label: string;
     description: string;
-    tabIds: number[];
+    ids: number[];
   }>;
   followUps: Array<{
     title: string;
     reason: string;
-    tabIds: number[];
+    ids: number[];
   }>;
   reviewCandidates: Array<{
-    tabId: number;
+    id: number;
     priority: "high" | "medium" | "low";
     reason: string;
     evidence: string[];
@@ -200,7 +227,8 @@ type TimeRecapOutput = {
 
 Validation rules:
 
-- Every returned `tabId` must exist in the recap input or be dropped.
+- Every returned `id` must exist in the recap input or be dropped.
+- Compatibility parser also accepts `pageIds`, `pages`, and `tabIds`, but normalized UI state uses page IDs.
 - Empty or duplicate themes are merged or removed locally.
 - Review candidates are suggestions only.
 - Output language must follow the selected UI language.
@@ -233,37 +261,38 @@ Large local cache handling:
 
 Goal: avoid shipping a claim before the feature exists.
 
-Tasks:
+Status: done.
 
-- Either implement this feature before the next release or remove/downgrade time recap claims from `README.md`.
-- Add this plan to `docs/README.md`.
+Evidence:
 
-Acceptance:
-
-- Public README does not imply a finished feature unless UI and tests exist.
+- Time recap is now implemented in code and included in UI tests.
+- `docs/README.md` links this document.
+- Public README can describe the feature as shipped behavior.
 
 ### Phase 1: Data Aggregator
 
 Goal: convert current cache and lifecycle data into a clean recap input.
 
-Tasks:
+Status: done.
 
-- Add `buildTimeRecapInput(chromeApi, settings, range)` in a new core module or near `page-activity-cache.js`.
-- Combine:
+Implemented:
+
+- `buildTimeRecapInput(chromeApi, settings, range)` in `src/core/time-recap.js`.
+- Combines:
   - activity cache entries;
   - lifecycle sessions;
   - current open tabs and groups;
   - page summary cache entries.
-- Add local ranking:
+- Adds local ranking:
   - currently open tabs first;
   - recently active pages;
   - pages with summaries;
   - old but still open pages;
   - repeated visits.
-- Keep sanitized URLs only by default.
-- Exclude incognito unless the user explicitly enables it.
+- Keeps sanitized URLs only by default.
+- Excludes incognito unless the user explicitly enables it.
 
-Tests:
+Verified by tests:
 
 - Unit test range filtering.
 - Unit test lifecycle merge.
@@ -275,13 +304,15 @@ Tests:
 
 Goal: generate structured recap JSON from local input.
 
-Tasks:
+Status: done.
 
-- Add a gateway recap planner function, separate from grouping planner.
-- Add JSON repair for code-fenced model responses.
-- Add schema validation and local fallback.
-- Add localized prompt instructions.
-- Add strict privacy instruction: do not reveal internal field names in user-facing evidence.
+Implemented:
+
+- Gateway recap planner function, separate from grouping planner.
+- JSON repair for code-fenced model responses.
+- Schema validation and local fallback.
+- Localized prompt instructions.
+- Strict privacy instruction: do not reveal internal field names in user-facing evidence.
 
 Fallback:
 
@@ -292,7 +323,7 @@ Fallback:
   - stale open tabs.
 - Make the fallback look intentional, not like a crash state.
 
-Tests:
+Verified by tests:
 
 - Valid AI response.
 - Markdown fenced JSON response.
@@ -304,17 +335,26 @@ Tests:
 
 Goal: make recap feel like a first-class product feature.
 
-Tasks:
+Status: first-use flow done.
 
-- Add a top-level mode switch:
+Implemented:
+
+- Top-level mode switch:
   - `整理`
   - `回顾`
-- Add time-range selector.
-- Add CTA: `生成回顾`.
-- Render theme cards, timeline cards, follow-up hints, and review candidates.
-- Add collapsed evidence details.
-- Add locate-tab action for representative tabs.
-- Reuse cleanup close-selected behavior only inside review candidates, with explicit confirmation if many tabs are selected.
+- Time-range selector.
+- CTA: `生成回顾`.
+- Theme cards, timeline cards, follow-up hints, and review candidates.
+- Collapsed evidence details.
+- Representative page chips.
+- Locate-tab action for review candidates.
+- Shared bottom progress and stop button while generating.
+- Scoped advanced settings so recap does not show organization-only controls.
+
+Deferred:
+
+- Manual close controls inside recap review candidates.
+- Launch an organize job from a recap theme.
 
 Design requirements:
 
@@ -324,19 +364,23 @@ Design requirements:
 - Keep side panel height stable and middle content scrollable.
 - Support Chinese and English.
 
-Tests:
+Verified by tests:
 
 - Playwright render for empty state.
 - Playwright render for successful recap.
 - Playwright render for AI failure fallback.
 - Playwright language switch.
-- Playwright close-selected flow from recap review candidates.
+- Playwright shared bottom progress controls.
+- Playwright AI failure fallback without raw error leakage in visible copy.
+- Playwright recap advanced settings only expose recap-relevant controls.
 
 ### Phase 4: Integration With Organize/Cleanup
 
 Goal: connect recap to existing product actions without blurring responsibilities.
 
-Tasks:
+Status: deferred.
+
+Future tasks:
 
 - From a recap theme, allow "organize these tabs" by launching a scoped grouping job for those tab IDs.
 - From review candidates, allow selected manual close.
@@ -351,16 +395,22 @@ Acceptance:
 
 Goal: make data use understandable without sounding like a dev note.
 
-Tasks:
+Status: partially done.
 
-- Add a small explanation near the recap CTA:
-  - `回顾会使用本机保存的标签页活动、标题、网址和可用页面摘要。生成时会把精简后的线索发送给 AI。`
+Implemented:
+
+- Recap subtitle explains the data classes used: recent activity, open counts, age, titles, URLs, existing groups, and available page summaries.
+- Advanced settings let the user control URL privacy, result language, model, thinking intensity, gateway URL/key, and incognito inclusion.
+- Turning off continuous summaries stops future page-summary capture while preserving existing local records for recap.
+
+Future tasks:
+
 - Add details:
   - what is stored locally;
   - what may be sent to AI;
   - what is never read;
   - how to clear local memory.
-- Add a clear local memory control before release if we keep long-term recap records.
+- Add a clear local memory control before making recap history a first-class feature.
 
 Acceptance:
 
@@ -372,7 +422,14 @@ Acceptance:
 
 Goal: leave an auditable before/after trail.
 
-Create benchmark records under `docs/benchmarks/` for:
+Status: partially done.
+
+Existing evidence:
+
+- Model-routing and planner optimization records live under `docs/benchmarks/`.
+- Current automated gates include Node and Playwright coverage for recap data, UI, cancellation, fallback, and language handling.
+
+Future benchmark records under `docs/benchmarks/`:
 
 - Metadata-only recap on 30, 120, 300 synthetic tabs.
 - Recap with page summaries.
@@ -398,37 +455,40 @@ Acceptance:
 
 ## Release Gate
 
-Before release:
+Current first-use gate:
+
+- `npm test` passes.
+- `npm run test:ui` passes.
+- `npm run build:extension` passes.
+- UI smoke covers empty recap, successful recap, cancelable progress, AI fallback, language switch, and scoped advanced settings.
+- Time recap generation does not mutate tabs.
+- README describes only shipped behavior.
+- Docs index links this plan.
+
+Recommended before a broad public listing:
 
 - `npm run release:check` passes.
-- Stress test includes recap data but does not mutate tabs.
-- Real Chrome side panel test covers:
-  - metadata-only recap;
-  - recap with continuous summaries enabled;
-  - denied page permission;
-  - sleeping tabs;
-  - language switch;
-  - gateway failure fallback.
-- README describes only shipped behavior.
-- Docs index links this plan or the final feature doc.
+- Real Chrome side panel smoke includes metadata-only recap, recap with continuous summaries enabled, denied page permission, sleeping tabs, language switch, and gateway failure fallback.
+- Larger real-browser recap benchmarks are added to `docs/benchmarks/`.
+- A local-memory clearing control exists if recap history becomes persistent user-facing history.
 
 ## Open Decisions
 
-- Should recap history be stored, or should each recap be disposable?
-- Should the entry be called `近期回顾`, `工作回顾`, or `浏览回顾`?
-- Should default range be 7 days or "since last organize"?
-- Should the recap planner use the primary model by default, or benchmark a cheaper recap-only route first?
-- Should the store build include long-term page summaries, or keep content recap as a developer/private build capability?
+- Should recap history be stored, or should each recap stay disposable?
+- Should recap themes offer "organize these pages" as a scoped follow-up action?
+- Should review candidates in recap get the same manual close controls as cleanup results?
+- Should recap use the primary model by default, or benchmark a cheaper recap-only route before changing defaults?
 
-## Recommended First Slice
+## Completed First Slice
 
-Build the smallest honest version:
+Implemented:
 
 1. Add `buildTimeRecapInput()` and tests.
 2. Add `activity:generateTimeRecap` with local fallback.
-3. Add side panel `回顾` entry with 7-day range only.
+3. Add side panel `回顾` entry with quick ranges and custom date-time range.
 4. Render AI recap cards and evidence details.
-5. Run real Chrome test with current open tabs.
-6. Update README only after the UI works.
+5. Add cancelable bottom progress controls.
+6. Keep raw AI errors out of visible product copy.
+7. Update tests and docs after the UI works.
 
-This first slice is enough to validate whether the feature feels useful before expanding custom ranges and recap history.
+This slice is enough for first-use validation. The next product step is not more plumbing; it is deciding whether recap should become a persistent history surface or remain a disposable "what happened recently" view.
