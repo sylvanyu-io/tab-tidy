@@ -235,6 +235,7 @@ test("control surface renders settings and mock preview", async ({ page }) => {
   await expect(page.locator(".cleanup-row-actions").first().locator(".icon-action")).toHaveText(["定位", "关闭"]);
   await expect(page.locator(".cleanup-row-actions").first()).toHaveCSS("float", "right");
   await expect(page.locator(".cleanup-row-actions").first()).toHaveCSS("position", "static");
+  await expect(page.locator(".cleanup-reason").first()).toHaveCSS("display", "block");
   await expect(page.locator(".cleanup-preview-actions")).toHaveCount(0);
   await expect(page.locator(".cleanup-select")).toHaveCount(0);
   await expect(page.getByText("待确认")).toHaveCount(0);

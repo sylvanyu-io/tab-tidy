@@ -1672,11 +1672,12 @@ details[open] > summary::before {
   white-space: nowrap;
 }
 
-.cleanup-reason,
-.cleanup-clues {
-  display: grid;
-  gap: 4px;
+.cleanup-reason {
   margin-top: 3px;
+}
+
+.cleanup-clues {
+  margin-top: 4px;
 }
 
 .cleanup-reason p {
