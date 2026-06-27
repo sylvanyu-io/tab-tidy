@@ -1,6 +1,6 @@
-# Tab Tidy Gateway Worker
+# TabRecap Gateway Worker
 
-Cloudflare Worker wrapper for the default free Tab Tidy AI gateway.
+Cloudflare Worker wrapper for the default free TabRecap AI gateway.
 
 The extension sends chat-completions-compatible planner requests to this Worker.
 The Worker validates the request, applies coarse anti-abuse limits, injects the
@@ -11,11 +11,11 @@ upstream base URL.
 
 - No upstream API key is shipped in the extension.
 - Clients cannot override the upstream target.
-- Only the Tab Tidy text-model allowlist is accepted by default. It mirrors the
+- Only the TabRecap text-model allowlist is accepted by default. It mirrors the
   current CLIProxyAPI origin chat models, including `gpt-5.5`, `gpt-5.4`,
   `gpt-5.4-mini`, `codex-auto-review`, Claude Opus/Sonnet/Haiku variants, and
   `gpt-5.3-codex-spark`. The spark model is allowed for bounded progress UI
-  copy and compact auxiliary Tab Tidy planning shapes; generic chat remains
+  copy and compact auxiliary TabRecap planning shapes; generic chat remains
   rejected. Image models are intentionally excluded because this Worker only
   exposes `/v1/chat/completions`.
 - Request body size and `max_tokens` are capped before upstream forwarding.

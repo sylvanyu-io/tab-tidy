@@ -545,7 +545,7 @@ export async function generateProgressCopy(chromeApi, request = {}) {
       method: "POST",
       headers: {
         "content-type": "application/json",
-        "x-tab-tidy-install-id": installId
+        "x-tab-recap-install-id": installId
       },
       body: JSON.stringify(body)
     },

@@ -123,7 +123,7 @@ function validateChatRequest(body, env, limits) {
     return { ok: false, code: "invalid_messages", message: "messages must be a non-empty array." };
   }
   if (body.response_format?.type !== "json_object") {
-    return { ok: false, code: "json_required", message: "Tab Tidy gateway requests must use JSON object output." };
+    return { ok: false, code: "json_required", message: "TabRecap gateway requests must use JSON object output." };
   }
   if (Number(body.max_tokens || 0) > limits.maxTokens) {
     return { ok: false, code: "max_tokens_exceeded", message: `max_tokens must be <= ${limits.maxTokens}.` };
@@ -156,11 +156,11 @@ function validateTopLevelFields(body) {
     return {
       ok: false,
       code: "request_shape_not_allowed",
-      message: `This gateway only accepts Tab Tidy planner fields. Unsupported field: ${unsupported[0]}.`
+      message: `This gateway only accepts TabRecap planner fields. Unsupported field: ${unsupported[0]}.`
     };
   }
   if (body.stream || body.tools || body.functions || body.tool_choice || body.function_call || body.max_completion_tokens) {
-    return { ok: false, code: "request_shape_not_allowed", message: "This gateway only accepts Tab Tidy JSON planning requests." };
+    return { ok: false, code: "request_shape_not_allowed", message: "This gateway only accepts TabRecap JSON planning requests." };
   }
   return { ok: true };
 }
@@ -170,10 +170,10 @@ function validatePlannerRequest(body, modelAllowlist, options = {}) {
     modelAllowlist.filter((model) => options.includeProgressModel || model !== PROGRESS_COPY_MODEL)
   );
   if (!plannerModels.has(body.model)) {
-    return { ok: false, code: "planner_model_not_allowed", message: "This model is not available for Tab Tidy planning." };
+    return { ok: false, code: "planner_model_not_allowed", message: "This model is not available for TabRecap planning." };
   }
   if (body.messages.length !== 2) {
-    return { ok: false, code: "planner_shape_required", message: "Planner requests must use the Tab Tidy two-message shape." };
+    return { ok: false, code: "planner_shape_required", message: "Planner requests must use the TabRecap two-message shape." };
   }
   const [system, user] = body.messages;
   const systemText = messageText(system);
@@ -182,13 +182,13 @@ function validatePlannerRequest(body, modelAllowlist, options = {}) {
     return { ok: false, code: "planner_shape_required", message: "Planner requests must include one system message and one user message." };
   }
   if (!/Chrome tab organization extension|Chrome extension runtime|Chrome tab organization/i.test(systemText)) {
-    return { ok: false, code: "planner_shape_required", message: "Planner system prompt is not recognized as a Tab Tidy request." };
+    return { ok: false, code: "planner_shape_required", message: "Planner system prompt is not recognized as a TabRecap request." };
   }
   if (!/browser tabs|browser tab inventory|tab inventory|broad semantic buckets/i.test(userText)) {
-    return { ok: false, code: "planner_shape_required", message: "Planner user payload is not recognized as a Tab Tidy request." };
+    return { ok: false, code: "planner_shape_required", message: "Planner user payload is not recognized as a TabRecap request." };
   }
   if (!/"tabFields"\s*:/.test(userText) || !/"tabs"\s*:/.test(userText)) {
-    return { ok: false, code: "planner_payload_required", message: "Planner payload must include compact Tab Tidy tab fields." };
+    return { ok: false, code: "planner_payload_required", message: "Planner payload must include compact TabRecap tab fields." };
   }
   return { ok: true };
 }
@@ -203,7 +203,7 @@ function validateProgressCopyRequest(body) {
     return { ok: false, code: "spark_token_cap_exceeded", message: "Progress copy max_tokens must be <= 1200." };
   }
   if (body.messages.length !== 2) {
-    return { ok: false, code: "spark_shape_required", message: "Progress copy requests must use the Tab Tidy two-message shape." };
+    return { ok: false, code: "spark_shape_required", message: "Progress copy requests must use the TabRecap two-message shape." };
   }
   const [system, user] = body.messages;
   const systemText = messageText(system);
@@ -212,7 +212,7 @@ function validateProgressCopyRequest(body) {
     return { ok: false, code: "spark_shape_required", message: "Progress copy requests must include one system message and one user message." };
   }
   if (!/AI browser-tab organization extension|loading captions/i.test(systemText)) {
-    return { ok: false, code: "spark_shape_required", message: "Progress copy system prompt is not recognized as a Tab Tidy request." };
+    return { ok: false, code: "spark_shape_required", message: "Progress copy system prompt is not recognized as a TabRecap request." };
   }
   let payload;
   try {
@@ -221,7 +221,7 @@ function validateProgressCopyRequest(body) {
     return { ok: false, code: "spark_payload_required", message: "Progress copy user payload must be JSON." };
   }
   if (!payload || typeof payload !== "object" || !("languageMode" in payload) || !("phase" in payload)) {
-    return { ok: false, code: "spark_payload_required", message: "Progress copy payload must include Tab Tidy progress fields." };
+    return { ok: false, code: "spark_payload_required", message: "Progress copy payload must include TabRecap progress fields." };
   }
   return { ok: true };
 }
@@ -247,9 +247,14 @@ async function checkRateLimits(request, env, limits) {
   const now = new Date();
   const day = now.toISOString().slice(0, 10);
   const hour = now.toISOString().slice(0, 13);
-  const installId = normalizeInstallId(request.headers.get("x-tab-tidy-install-id"));
+  const installId = normalizeInstallId(
+    request.headers.get("x-tab-recap-install-id") ||
+      request.headers.get("x-tab-tidy-install-id")
+  );
   const ipKey = normalizeIp(clientIp(request));
-  const pageSummary = request.headers.get("x-tab-tidy-page-summary") === "1";
+  const pageSummary =
+    request.headers.get("x-tab-recap-page-summary") === "1" ||
+    request.headers.get("x-tab-tidy-page-summary") === "1";
   const checks = [
     ["global", `global:${day}`, limits.globalDailyRequests, secondsUntilNextUtcDay(now) + 3600],
     ["install", `install:${installId}:${day}`, limits.installDailyRequests, secondsUntilNextUtcDay(now) + 3600],
@@ -391,7 +396,7 @@ function corsHeaders(request) {
   return {
     ...(allowedOrigin ? { "access-control-allow-origin": allowedOrigin } : {}),
     "access-control-allow-methods": "GET,POST,OPTIONS",
-    "access-control-allow-headers": "content-type,authorization,x-tab-tidy-install-id,x-tab-tidy-page-summary",
+    "access-control-allow-headers": "content-type,authorization,x-tab-recap-install-id,x-tab-recap-page-summary,x-tab-tidy-install-id,x-tab-tidy-page-summary",
     vary: "Origin"
   };
 }

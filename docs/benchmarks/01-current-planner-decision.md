@@ -66,7 +66,7 @@
 
 ## 已修正的问题
 
-- Worker 之前把所有 `gpt-5.3-codex-spark` 请求都当成进度文案请求，导致辅助规划被 `spark_token_cap_exceeded` 拒绝。现在 Worker 按请求形状区分：进度文案继续限制 1200 token，Tab Tidy 辅助规划允许走 planner 校验。
+- Worker 之前把所有 `gpt-5.3-codex-spark` 请求都当成进度文案请求，导致辅助规划被 `spark_token_cap_exceeded` 拒绝。现在 Worker 按请求形状区分：进度文案继续限制 1200 token，TabRecap 辅助规划允许走 planner 校验。
 - 50 个以上的粗分请求曾经没有带压缩后的 `pageSampleSignals`，在页面摘要开启时会损失摘要信息。现在粗分和 cleanup 都使用压缩摘要信号。
 - cleanup 请求曾经重复携带完整 `pageSample` 行。现在只给 cleanup 请求发送精简 tab 行和压缩摘要信号，减少重复输入。
 - cleanup 子请求曾经使用 medium 思考强度。实测对大清单非常慢，改为 low 后 300 tabs 从 190.1s 降到 69.9s。

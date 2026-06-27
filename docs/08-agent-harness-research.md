@@ -3,7 +3,7 @@
 Date: 2026-06-26
 
 This document records how current public agent-harness patterns should map to
-Tab Tidy. The product is a bounded tab-classification workflow, not an
+TabRecap. The product is a bounded tab-classification workflow, not an
 open-ended autonomous agent.
 
 ## Sources Checked
@@ -29,7 +29,7 @@ Use a cheap first pass to determine the shape of the work:
 - uncertain/review-heavy inventory;
 - cleanup-heavy stale tabs.
 
-Tab Tidy already has a coarse planner. The next step is to make routing
+TabRecap already has a coarse planner. The next step is to make routing
 measurable: every route must record request count, latency, coverage, pairwise
 precision, pairwise recall, and pairwise F1.
 
@@ -44,7 +44,7 @@ only when they improve measured quality, latency, or completion reliability.
 
 ### Evaluator / Repair
 
-Use an evaluator when there is a clear success criterion. Tab Tidy has objective
+Use an evaluator when there is a clear success criterion. TabRecap has objective
 local checks:
 
 - every eligible tab appears exactly once;
@@ -58,7 +58,7 @@ coarse/refined plan and repair only bad slices."
 
 ### Tracing And Evidence
 
-Agent runs need inspectable traces. Tab Tidy should preserve:
+Agent runs need inspectable traces. TabRecap should preserve:
 
 - raw benchmark JSON;
 - request counts and elapsed time;
@@ -70,9 +70,9 @@ Agent runs need inspectable traces. Tab Tidy should preserve:
 This mirrors the tracing/evaluation emphasis in current agent tooling without
 adding a heavy external framework.
 
-## Decision For Tab Tidy
+## Decision For TabRecap
 
-Keep Tab Tidy as a small local harness:
+Keep TabRecap as a small local harness:
 
 1. Coarse route.
 2. Worker refinement for mixed/large/uncertain slices.

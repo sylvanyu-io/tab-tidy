@@ -380,7 +380,7 @@ function buildTimeRecapSystemPrompt(settings) {
 
 function buildTimeRecapUserPrompt(input) {
   return [
-    "Tab Tidy local time-recap input follows. Page rows are already privacy-reduced.",
+    "TabRecap local time-recap input follows. Page rows are already privacy-reduced.",
     JSON.stringify(input)
   ].join("\n");
 }

@@ -1,4 +1,4 @@
-name = "tab-tidy-gateway"
+name = "tab-recap-gateway"
 main = "src/index.js"
 compatibility_date = "2026-06-24"
 workers_dev = false

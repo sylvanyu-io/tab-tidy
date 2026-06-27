@@ -240,10 +240,10 @@ export function gatewayHeaders(settings, requestMeta = {}) {
     headers.authorization = `Bearer ${settings.gatewayApiKey}`;
   }
   if (!settings.gatewayBaseUrl && requestMeta.installId) {
-    headers["x-tab-tidy-install-id"] = requestMeta.installId;
+    headers["x-tab-recap-install-id"] = requestMeta.installId;
   }
   if (!settings.gatewayBaseUrl && requestMeta.hasPageSamples) {
-    headers["x-tab-tidy-page-summary"] = "1";
+    headers["x-tab-recap-page-summary"] = "1";
   }
   return headers;
 }

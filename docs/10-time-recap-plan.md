@@ -2,11 +2,11 @@
 
 Status: implementation in progress. The current codebase now has a core recap input builder, gateway recap planner, local fallback, runtime message, side-panel entry, and focused unit coverage. Remaining work is UI smoke coverage, real-browser verification, and benchmark evidence before release.
 
-This document records the product plan for "summarize what I did during a time period" and the acceptance checks needed before treating it as release-ready. Tab Tidy already records useful local signals; the feature turns those signals into a user-facing recap instead of a developer activity dump.
+This document records the product plan for "summarize what I did during a time period" and the acceptance checks needed before treating it as release-ready. TabRecap already records useful local signals; the feature turns those signals into a user-facing recap instead of a developer activity dump.
 
 ## Product Goal
 
-Tab Tidy should help a user answer:
+TabRecap should help a user answer:
 
 - "What have I mainly been working on recently?"
 - "Which research or project threads are still open?"

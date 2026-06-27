@@ -38,7 +38,7 @@ test("time recap gateway request parses fenced JSON and keeps page references va
         choices: [
           {
             message: {
-              content: "```json\n{\"schema\":\"tab_tidy_time_recap_v1\",\"language\":\"en-US\",\"headline\":\"Extension work dominated the week.\",\"summary\":\"Most useful signals point to Tab Tidy release and browser extension research.\",\"themes\":[{\"title\":\"Extension release work\",\"description\":\"Release and side panel pages form one thread.\",\"confidence\":\"high\",\"ids\":[1,999],\"evidence\":[\"release\"]}],\"timeline\":[{\"label\":\"This week\",\"description\":\"Mostly extension work.\",\"ids\":[1]}],\"followUps\":[{\"title\":\"Finish release QA\",\"reason\":\"The release checklist is still open.\",\"ids\":[1]}],\"reviewCandidates\":[{\"id\":2,\"priority\":\"medium\",\"reason\":\"This looks like an older research page.\",\"evidence\":[\"older\"]}],\"coverageNote\":\"Used local signals.\"}\n```"
+              content: "```json\n{\"schema\":\"tab_tidy_time_recap_v1\",\"language\":\"en-US\",\"headline\":\"Extension work dominated the week.\",\"summary\":\"Most useful signals point to TabRecap release and browser extension research.\",\"themes\":[{\"title\":\"Extension release work\",\"description\":\"Release and side panel pages form one thread.\",\"confidence\":\"high\",\"ids\":[1,999],\"evidence\":[\"release\"]}],\"timeline\":[{\"label\":\"This week\",\"description\":\"Mostly extension work.\",\"ids\":[1]}],\"followUps\":[{\"title\":\"Finish release QA\",\"reason\":\"The release checklist is still open.\",\"ids\":[1]}],\"reviewCandidates\":[{\"id\":2,\"priority\":\"medium\",\"reason\":\"This looks like an older research page.\",\"evidence\":[\"older\"]}],\"coverageNote\":\"Used local signals.\"}\n```"
             }
           }
         ]
@@ -116,7 +116,7 @@ function seededRecapChrome() {
         tabs: [
           {
             id: 10,
-            title: "Tab Tidy release checklist",
+            title: "TabRecap release checklist",
             url: "https://github.com/acme/SECRET123456789012?token=secret#release",
             active: true,
             groupId: 77
@@ -141,7 +141,7 @@ function seededRecapChrome() {
     entries: {
       release: {
         key: "release",
-        title: "Tab Tidy release checklist",
+        title: "TabRecap release checklist",
         hostname: "github.com",
         sanitizedUrl: "https://github.com/acme",
         firstSeenAt: "2026-06-25T02:00:00.000Z",
@@ -196,7 +196,7 @@ function seededRecapChrome() {
         tabId: 10,
         windowId: 1,
         index: 0,
-        title: "Tab Tidy release checklist",
+        title: "TabRecap release checklist",
         hostname: "github.com",
         sanitizedUrl: "https://github.com/acme",
         urlKey: "release",

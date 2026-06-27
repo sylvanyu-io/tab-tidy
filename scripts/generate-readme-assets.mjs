@@ -55,7 +55,7 @@ async function renderPanelShot(filename, { preview }) {
   await waitForPrimaryActionPaint(page, "#analyzeBtn");
 
   if (preview) {
-    await page.getByRole("button", { name: "生成方案" }).click();
+    await page.locator("#analyzeBtn").click();
     await page.locator("#previewSection").waitFor({ state: "visible" });
     await focusCapturePage(page);
     await waitForPrimaryActionPaint(page, "#applyBtn");
@@ -78,12 +78,9 @@ async function focusCapturePage(page) {
 }
 
 async function waitForPrimaryActionPaint(page, selector) {
-  await page.waitForFunction((targetSelector) => {
-    const button = document.querySelector(targetSelector);
-    if (!button) return false;
-    const style = getComputedStyle(button);
-    return style.backgroundColor === "rgb(31, 85, 255)" && style.color === "rgb(255, 255, 255)";
-  }, selector);
+  const button = page.locator(selector);
+  await button.waitFor({ state: "visible" });
+  await page.waitForTimeout(160);
 }
 
 async function renderShowcase() {
@@ -206,27 +203,27 @@ async function renderShowcase() {
       <body>
         <main class="showcase">
           <section class="copy">
-            <img class="logo" src="${baseUrl}/docs/assets/logo.svg" alt="Tab Tidy" />
-            <h1>AI 自动归类标签页</h1>
-            <p>攒了数不清的标签页、乱成一锅粥？点一下按钮，自动归类整理好。</p>
-            <div class="principles" aria-label="Tab Tidy principles">
+            <img class="logo" src="${baseUrl}/docs/assets/logo.svg" alt="TabRecap" />
+            <h1>AI 标签整理与工作回顾</h1>
+            <p>整理混乱标签页，再从本地活动线索回顾最近主要在忙什么。</p>
+            <div class="principles" aria-label="TabRecap principles">
               <div class="principle" style="--tone:#d94a32">
                 <i aria-hidden="true"></i>
-                <div><strong>自动归类</strong><span>工作、论文、工具、购物，不混在一起</span></div>
+                <div><strong>自动整理</strong><span>按任务、主题和项目归类标签页</span></div>
               </div>
               <div class="principle" style="--tone:#c9ff4a">
                 <i aria-hidden="true"></i>
-                <div><strong>方案先看</strong><span>组名、数量、待分类，确认后再动</span></div>
+                <div><strong>回顾线索</strong><span>今天、7 天、30 天，看看主要在做什么</span></div>
               </div>
               <div class="principle" style="--tone:#1f55ff">
                 <i aria-hidden="true"></i>
-                <div><strong>撤销兜底</strong><span>不满意就回退，拿不准的先留着</span></div>
+                <div><strong>确认后再动</strong><span>先预览方案，不满意就回退</span></div>
               </div>
             </div>
           </section>
-          <section class="shots" aria-label="Tab Tidy screenshots">
-            <img class="shot" src="${baseUrl}/docs/assets/readme-panel.png" alt="Tab Tidy setup panel" />
-            <img class="shot" src="${baseUrl}/docs/assets/readme-preview.png" alt="Tab Tidy preview panel" />
+          <section class="shots" aria-label="TabRecap screenshots">
+            <img class="shot" src="${baseUrl}/docs/assets/readme-panel.png" alt="TabRecap setup panel" />
+            <img class="shot" src="${baseUrl}/docs/assets/readme-preview.png" alt="TabRecap preview panel" />
           </section>
         </main>
       </body>
@@ -282,6 +279,8 @@ async function installChromeMock(page) {
       finishedAt: new Date().toISOString()
     };
     const job = {
+      operationId: activeJob.operationId,
+      status: "complete",
       settings,
       validation: { ok: true, warnings: [] },
       preview: {
@@ -312,6 +311,7 @@ async function installChromeMock(page) {
         warnings: []
       }
     };
+    window.__analysisStarted = false;
 
     window.chrome = {
       permissions: {
@@ -332,8 +332,11 @@ async function installChromeMock(page) {
         sendMessage: async (message) => {
           if (message.type === "settings:get") return { ok: true, result: settings };
           if (message.type === "settings:save") return { ok: true, result: { ...settings, ...message.settings } };
-          if (message.type === "tabs:startAnalyze") return { ok: true, result: { operationId: activeJob.operationId } };
-          if (message.type === "tabs:getActiveJob") return { ok: true, result: activeJob };
+          if (message.type === "tabs:startAnalyze") {
+            window.__analysisStarted = true;
+            return { ok: true, result: { operationId: activeJob.operationId } };
+          }
+          if (message.type === "tabs:getActiveJob") return { ok: true, result: window.__analysisStarted ? activeJob : null };
           if (message.type === "tabs:getLastJob") return { ok: true, result: job };
           if (message.type === "progressCopy:generate") return { ok: true, result: { messages: [] } };
           return { ok: true, result: null };

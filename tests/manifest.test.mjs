@@ -17,7 +17,7 @@ test("extension uses a native side panel", async () => {
 });
 
 test("store extension build strips content-reading permissions", async () => {
-  const tempDist = await mkdtemp(join(tmpdir(), "tab-tidy-store-build-"));
+  const tempDist = await mkdtemp(join(tmpdir(), "tab-recap-store-build-"));
   try {
     const result = spawnSync(process.execPath, ["scripts/build-extension.mjs"], {
       encoding: "utf8",

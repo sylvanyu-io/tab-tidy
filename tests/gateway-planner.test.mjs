@@ -1060,8 +1060,8 @@ test("AI gateway planner uses the default free gateway without exposing authoriz
   const fetchImpl = async (url, options) => {
     assert.equal(url, "https://cliproxy.sylvanyu.io/v1/chat/completions");
     assert.equal(options.headers.authorization, undefined);
-    assert.equal(options.headers["x-tab-tidy-install-id"], "install-test");
-    assert.equal(options.headers["x-tab-tidy-page-summary"], "1");
+    assert.equal(options.headers["x-tab-recap-install-id"], "install-test");
+    assert.equal(options.headers["x-tab-recap-page-summary"], "1");
     return {
       ok: true,
       async json() {
@@ -1105,7 +1105,7 @@ test("AI gateway planner uses the default free gateway without exposing authoriz
 test("AI gateway planner ignores stale user keys for the built-in free gateway", async () => {
   const fetchImpl = async (_url, options) => {
     assert.equal(options.headers.authorization, undefined);
-    assert.equal(options.headers["x-tab-tidy-install-id"], "install-test");
+    assert.equal(options.headers["x-tab-recap-install-id"], "install-test");
     return {
       ok: true,
       async json() {

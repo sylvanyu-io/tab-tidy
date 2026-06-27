@@ -1,6 +1,6 @@
 # Agent Planner Optimization Notes
 
-This note captures the direction for making Tab Tidy's AI planner faster and
+This note captures the direction for making TabRecap's AI planner faster and
 more reliable at 200-400 tabs.
 
 ## What Other Agent Harnesses Suggest
@@ -21,7 +21,7 @@ Useful external patterns:
   inspect and improve agent workflows:
   https://openai.github.io/openai-agents-python/tracing/
 
-Tab Tidy should borrow the workflow patterns, not the framework weight. This is
+TabRecap should borrow the workflow patterns, not the framework weight. This is
 not an open-ended coding agent. It is a bounded classification and recommendation
 pipeline over a known tab inventory.
 

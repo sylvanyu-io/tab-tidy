@@ -18,7 +18,7 @@ for (const size of [16, 32, 48, 128]) {
 console.log(`Generated icons in ${outDir}`);
 
 function makeIconSvg() {
-  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" role="img" aria-label="Tab Tidy">
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" role="img" aria-label="TabRecap">
   <rect x="0" y="0" width="32" height="32" rx="9" fill="#1c1914"/>
   <rect x="6" y="6" width="8" height="8" rx="2.7" fill="#c9ff4a"/>
   <rect x="18" y="6" width="8" height="8" rx="2.7" fill="#1f55ff"/>
@@ -29,14 +29,14 @@ function makeIconSvg() {
 }
 
 function makeLogoSvg() {
-  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 560 132" role="img" aria-label="Tab Tidy">
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 560 132" role="img" aria-label="TabRecap">
   <rect x="10" y="18" width="88" height="88" rx="24" fill="#1c1914"/>
   <rect x="29" y="37" width="20" height="20" rx="7" fill="#c9ff4a"/>
   <rect x="59" y="37" width="20" height="20" rx="7" fill="#1f55ff"/>
   <rect x="29" y="67" width="20" height="20" rx="7" fill="#d94a32"/>
   <rect x="59" y="67" width="20" height="20" rx="7" fill="#fffaf0" opacity="0.72"/>
-  <text x="124" y="65" fill="#1c1914" font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Avenir Next', 'Segoe UI', sans-serif" font-size="48" font-weight="900" letter-spacing="0">Tab Tidy</text>
-  <text x="126" y="96" fill="#706755" font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Avenir Next', 'Segoe UI', sans-serif" font-size="21" font-weight="750" letter-spacing="0">AI 自动归类标签页</text>
+  <text x="124" y="65" fill="#1c1914" font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Avenir Next', 'Segoe UI', sans-serif" font-size="48" font-weight="900" letter-spacing="0">TabRecap</text>
+  <text x="126" y="96" fill="#706755" font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Avenir Next', 'Segoe UI', sans-serif" font-size="21" font-weight="750" letter-spacing="0">AI 标签整理与工作回顾</text>
 </svg>
 `;
 }

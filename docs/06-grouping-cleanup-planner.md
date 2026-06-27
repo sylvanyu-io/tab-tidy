@@ -4,7 +4,7 @@ Date: 2026-06-26
 
 ## Product decision
 
-Tab Tidy should treat organization and cleanup as one AI analysis pass.
+TabRecap should treat organization and cleanup as one AI analysis pass.
 
 Before this change, grouping and cleanup were separate product paths:
 
@@ -45,8 +45,8 @@ This is primarily a UX and reliability decision: the user starts one analysis an
 
 The product-default planner path is adaptive:
 
-- Below the measured hierarchical threshold, Tab Tidy uses one full-detail AI request.
-- At or above the threshold, Tab Tidy uses a coarse pass followed by bounded parallel bucket refinements.
+- Below the measured hierarchical threshold, TabRecap uses one full-detail AI request.
+- At or above the threshold, TabRecap uses a coarse pass followed by bounded parallel bucket refinements.
 - The coarse pass only creates broad grouping buckets.
 - Each refinement worker can return both refined groups and cleanup candidates for its bucket.
 - The runtime merges worker outputs deterministically by tab id, original tab order, bucket id, and cleanup priority.
@@ -62,7 +62,7 @@ Functional checks:
 - `npx playwright test tests/ui-smoke.spec.mjs`: 24/24 passing.
 - `npm test`: 134/134 passing.
 - `npm run scan:secrets`: no provider-key patterns found.
-- `npm run build:extension`: built `dist/tab-tidy-0.1.5.zip`.
+- `npm run build:extension`: built `dist/tab-recap-0.1.5.zip`.
 - `npm run release:check`: passed Node tests, UI smoke, current/history secret scans, dev build, and store build.
 
 New regression coverage:

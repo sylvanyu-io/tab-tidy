@@ -1,4 +1,4 @@
-# Tab Tidy Docs
+# TabRecap Docs
 
 这里保留长期有用的产品、架构、权限、测试和发布文档。一次性实验记录放在 `benchmarks/archive/`，当前可读结论放在 `benchmarks/README.md`。
 
@@ -11,7 +11,7 @@
 5. [Multi-window feasibility](05-multi-window-feasibility.md) - 跨窗口整理的 API 可行性和边界。
 6. [Grouping and cleanup planner](06-grouping-cleanup-planner.md) - 分组推荐与清理推荐的合并 planner。
 7. [Planner optimization](07-planner-optimization.md) - 模型路由、并行化和性能优化方向。
-8. [Agent harness research](08-agent-harness-research.md) - 外部 agent harness 模式如何映射到 Tab Tidy。
+8. [Agent harness research](08-agent-harness-research.md) - 外部 agent harness 模式如何映射到 TabRecap。
 9. [Release readiness](09-release-readiness.md) - 发布前检查清单和残余风险。
 10. [Time recap plan](10-time-recap-plan.md) - 基于本地活动和页面摘要生成时间段回顾的开发计划与落地状态。
 

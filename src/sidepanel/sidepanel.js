@@ -6,7 +6,7 @@ const UI_LANGUAGE_STORAGE_KEY = "tabTidy.uiLanguage";
 const UI_LANGUAGES = Object.freeze(["zh-CN", "en-US"]);
 const UI_COPY = Object.freeze({
   "zh-CN": {
-    "document.title": "Tab Tidy",
+    "document.title": "TabRecap",
     "status.default": "AI 标签页整理",
     "status.saved": "偏好已保存",
     "status.requestingPageSummaryPermission": "正在请求页面摘要权限",
@@ -221,7 +221,7 @@ const UI_COPY = Object.freeze({
     "aiWait.retrying": ["修正校验问题", "补齐遗漏标签", "移除重复分配", "重新检查结构"]
   },
   "en-US": {
-    "document.title": "Tab Tidy",
+    "document.title": "TabRecap",
     "status.default": "AI tab organizer",
     "status.saved": "Preferences saved",
     "status.requestingPageSummaryPermission": "Requesting page-summary access",
@@ -289,7 +289,7 @@ const UI_COPY = Object.freeze({
     "sampling.aria": "Page summary details",
     "continuous.title": "Build page memory",
     "continuous.subtitle": "Saves short local summaries for better future runs",
-    "continuous.tooltip": "Chrome will ask for page-reading access. After that, Tab Tidy saves short summaries for opened, awake, non-incognito pages in the background. Related summaries are sent to AI during organization. It will not wake sleeping tabs.",
+    "continuous.tooltip": "Chrome will ask for page-reading access. After that, TabRecap saves short summaries for opened, awake, non-incognito pages in the background. Related summaries are sent to AI during organization. It will not wake sleeping tabs.",
     "continuous.aria": "Accumulated summary details",
     "activity.focused": "Tab focused",
     "activity.focusFailed": "The tab may already be closed. Refresh suggestions.",
@@ -2704,7 +2704,7 @@ function mockTimeRecap() {
       coverage: { includedPages: 18, sampledEntries: 7, currentOpenTabs: 24 },
       pages: [
         { id: 1, tabId: 31, windowId: 1, title: "Chrome extensions side panel docs", hostname: "developer.chrome.com", open: true },
-        { id: 2, tabId: 32, windowId: 1, title: "Tab Tidy release checklist", hostname: "github.com", open: true },
+        { id: 2, tabId: 32, windowId: 1, title: "TabRecap release checklist", hostname: "github.com", open: true },
         { id: 3, tabId: 33, windowId: 1, title: "AI planner benchmark notes", hostname: "github.com", open: true }
       ]
     },
@@ -2714,8 +2714,8 @@ function mockTimeRecap() {
       headline: uiLanguage === "en-US" ? "Recent work centered on extension polish and planner evaluation." : "最近主要在打磨扩展体验和验证 AI 整理策略。",
       summary:
         uiLanguage === "en-US"
-          ? "The active thread is productizing Tab Tidy: side panel behavior, release readiness, and planner benchmark evidence."
-          : "主线是把 Tab Tidy 做成可发布产品：侧边栏体验、发布检查和整理策略的基准对比。",
+          ? "The active thread is productizing TabRecap: side panel behavior, release readiness, and planner benchmark evidence."
+          : "主线是把 TabRecap 做成可发布产品：侧边栏体验、发布检查和整理策略的基准对比。",
       themes: [
         {
           title: uiLanguage === "en-US" ? "Extension product polish" : "扩展产品打磨",

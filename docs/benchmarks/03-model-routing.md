@@ -2,12 +2,12 @@
 
 Date: 2026-06-26
 
-This document records why Tab Tidy should not route every planning step through
+This document records why TabRecap should not route every planning step through
 the largest/highest-effort model.
 
 ## Product Workload
 
-Tab Tidy planning is a bounded classification task:
+TabRecap planning is a bounded classification task:
 
 - input: tab ids, window ids, titles, sanitized URLs, original tab order, optional
   short page summaries, and local activity signals;

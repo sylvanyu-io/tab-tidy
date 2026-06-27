@@ -37,7 +37,7 @@ const server = createServer((request, response) => {
 await new Promise((resolveListen) => server.listen(0, "127.0.0.1", resolveListen));
 const baseUrl = `http://127.0.0.1:${server.address().port}`;
 const urls = pages.map((page) => `${baseUrl}/page/${page.id}`);
-const userDataDir = await mkdtemp(join(tmpdir(), "tab-tidy-stress-"));
+const userDataDir = await mkdtemp(join(tmpdir(), "tab-recap-stress-"));
 const runtimeExtensionDir = await prepareStressExtension(extensionDir, baseUrl);
 
 const results = [];
@@ -296,7 +296,7 @@ async function openExtensionControl(context) {
 }
 
 async function prepareStressExtension(sourceDir, baseUrl) {
-  const targetDir = await mkdtemp(join(tmpdir(), "tab-tidy-extension-"));
+  const targetDir = await mkdtemp(join(tmpdir(), "tab-recap-extension-"));
   await cp(sourceDir, targetDir, { recursive: true });
 
   const manifestPath = join(targetDir, "manifest.json");

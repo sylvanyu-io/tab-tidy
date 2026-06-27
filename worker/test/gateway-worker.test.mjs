@@ -78,7 +78,7 @@ test("worker keeps the spark progress-copy cap while allowing spark planner shap
   assert.equal(sparkPlanner.status, 200);
 });
 
-test("worker only accepts Tab Tidy request shapes", async () => {
+test("worker only accepts TabRecap request shapes", async () => {
   const env = envWithKv();
   const streamRequest = await handle(chatRequest({ stream: true }), env);
   assert.equal(streamRequest.status, 400);
@@ -112,7 +112,7 @@ test("worker rejects oversized bodies using content length", async () => {
     headers: {
       "content-type": "application/json",
       "content-length": String(body.length),
-      "x-tab-tidy-install-id": "install-a"
+      "x-tab-recap-install-id": "install-a"
     },
     body
   });
@@ -154,26 +154,44 @@ test("worker forwards with upstream secret and strips client authorization", asy
 
 test("worker applies install id, ip, global, and page-summary quotas", async () => {
   const installLimited = envWithKv({ INSTALL_DAILY_REQUESTS: "1" });
-  assert.equal((await handle(chatRequest(undefined, { "x-tab-tidy-install-id": "install-a" }), installLimited)).status, 200);
-  assert.equal((await handle(chatRequest(undefined, { "x-tab-tidy-install-id": "install-a" }), installLimited)).status, 429);
-  assert.equal((await handle(chatRequest(undefined, { "x-tab-tidy-install-id": "install-b" }), installLimited)).status, 200);
+  assert.equal((await handle(chatRequest(undefined, { "x-tab-recap-install-id": "install-a" }), installLimited)).status, 200);
+  assert.equal((await handle(chatRequest(undefined, { "x-tab-recap-install-id": "install-a" }), installLimited)).status, 429);
+  assert.equal((await handle(chatRequest(undefined, { "x-tab-recap-install-id": "install-b" }), installLimited)).status, 200);
 
   const ipLimited = envWithKv({ IP_HOURLY_REQUESTS: "1" });
   assert.equal((await handle(chatRequest(undefined, { "cf-connecting-ip": "203.0.113.9" }), ipLimited)).status, 200);
   assert.equal((await handle(chatRequest(undefined, { "cf-connecting-ip": "203.0.113.9" }), ipLimited)).status, 429);
 
   const globalLimited = envWithKv({ GLOBAL_DAILY_REQUESTS: "1" });
-  assert.equal((await handle(chatRequest(undefined, { "x-tab-tidy-install-id": "install-a" }), globalLimited)).status, 200);
-  assert.equal((await handle(chatRequest(undefined, { "x-tab-tidy-install-id": "install-b" }), globalLimited)).status, 429);
+  assert.equal((await handle(chatRequest(undefined, { "x-tab-recap-install-id": "install-a" }), globalLimited)).status, 200);
+  assert.equal((await handle(chatRequest(undefined, { "x-tab-recap-install-id": "install-b" }), globalLimited)).status, 429);
 
   const pageSummaryLimited = envWithKv({ INSTALL_DAILY_PAGE_SUMMARY_REQUESTS: "1" });
   assert.equal(
-    (await handle(chatRequest(undefined, { "x-tab-tidy-install-id": "install-a", "x-tab-tidy-page-summary": "1" }), pageSummaryLimited))
+    (await handle(chatRequest(undefined, { "x-tab-recap-install-id": "install-a", "x-tab-recap-page-summary": "1" }), pageSummaryLimited))
       .status,
     200
   );
   assert.equal(
-    (await handle(chatRequest(undefined, { "x-tab-tidy-install-id": "install-a", "x-tab-tidy-page-summary": "1" }), pageSummaryLimited))
+    (await handle(chatRequest(undefined, { "x-tab-recap-install-id": "install-a", "x-tab-recap-page-summary": "1" }), pageSummaryLimited))
+      .status,
+    429
+  );
+});
+
+test("worker accepts legacy Tab Tidy gateway quota headers", async () => {
+  const installLimited = envWithKv({ INSTALL_DAILY_REQUESTS: "1" });
+  assert.equal((await handle(legacyHeaderRequest({ "x-tab-tidy-install-id": "install-legacy" }), installLimited)).status, 200);
+  assert.equal((await handle(legacyHeaderRequest({ "x-tab-tidy-install-id": "install-legacy" }), installLimited)).status, 429);
+
+  const pageSummaryLimited = envWithKv({ INSTALL_DAILY_PAGE_SUMMARY_REQUESTS: "1" });
+  assert.equal(
+    (await handle(legacyHeaderRequest({ "x-tab-tidy-install-id": "install-legacy", "x-tab-tidy-page-summary": "1" }), pageSummaryLimited))
+      .status,
+    200
+  );
+  assert.equal(
+    (await handle(legacyHeaderRequest({ "x-tab-tidy-install-id": "install-legacy", "x-tab-tidy-page-summary": "1" }), pageSummaryLimited))
       .status,
     429
   );
@@ -181,9 +199,9 @@ test("worker applies install id, ip, global, and page-summary quotas", async () 
 
 test("page-summary quota failures do not consume the general install quota", async () => {
   const env = envWithKv({ INSTALL_DAILY_REQUESTS: "2", INSTALL_DAILY_PAGE_SUMMARY_REQUESTS: "1" });
-  assert.equal((await handle(chatRequest(undefined, { "x-tab-tidy-install-id": "install-a", "x-tab-tidy-page-summary": "1" }), env)).status, 200);
-  assert.equal((await handle(chatRequest(undefined, { "x-tab-tidy-install-id": "install-a", "x-tab-tidy-page-summary": "1" }), env)).status, 429);
-  assert.equal((await handle(chatRequest(undefined, { "x-tab-tidy-install-id": "install-a" }), env)).status, 200);
+  assert.equal((await handle(chatRequest(undefined, { "x-tab-recap-install-id": "install-a", "x-tab-recap-page-summary": "1" }), env)).status, 200);
+  assert.equal((await handle(chatRequest(undefined, { "x-tab-recap-install-id": "install-a", "x-tab-recap-page-summary": "1" }), env)).status, 429);
+  assert.equal((await handle(chatRequest(undefined, { "x-tab-recap-install-id": "install-a" }), env)).status, 200);
 });
 
 test("worker CORS is limited to extension and local debug origins", async () => {
@@ -200,7 +218,19 @@ function chatRequest(overrides = {}, headers = {}) {
     method: "POST",
     headers: {
       "content-type": "application/json",
-      "x-tab-tidy-install-id": "install-a",
+      "x-tab-recap-install-id": "install-a",
+      "cf-connecting-ip": "203.0.113.1",
+      ...headers
+    },
+    body: JSON.stringify(validBody(overrides))
+  });
+}
+
+function legacyHeaderRequest(headers = {}, overrides = {}) {
+  return new Request("https://cliproxy.example/v1/chat/completions", {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
       "cf-connecting-ip": "203.0.113.1",
       ...headers
     },

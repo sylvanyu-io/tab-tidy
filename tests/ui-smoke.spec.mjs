@@ -86,7 +86,7 @@ test("page sampler extracts forum discussion content instead of page chrome", as
 test("control surface renders settings and mock preview", async ({ page }) => {
   await page.goto(`${baseUrl}/src/sidepanel/index.html`);
 
-  await expect(page.getByRole("heading", { name: "Tab Tidy" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "TabRecap" })).toBeVisible();
   await expect(page.locator(".app-shell")).toHaveCSS("border-top-width", "0px");
   await expect(page.locator(".app-shell")).not.toHaveCSS("box-shadow", "none");
   await expect(page.locator(".topbar")).toHaveCSS("border-bottom-width", "0px");

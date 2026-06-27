@@ -4,7 +4,7 @@ Date: 2026-06-26
 
 ## Problem
 
-Tab Tidy benchmark requests for `gpt-5.4` and `gpt-5.4-mini` failed through the
+TabRecap benchmark requests for `gpt-5.4` and `gpt-5.4-mini` failed through the
 default product-facing gateway:
 
 - `https://cliproxy.sylvanyu.io/v1/chat/completions`
@@ -77,7 +77,7 @@ Any future model-availability failure should first compare:
 4. product-facing Worker.
 
 If only the product-facing Worker rejects a model, check the deployed
-`ALLOWED_MODELS` binding and redeploy the Worker before changing Tab Tidy's model
+`ALLOWED_MODELS` binding and redeploy the Worker before changing TabRecap's model
 list or planner logic.
 
 ## Follow-up: Custom Model Names on the Built-in Gateway
@@ -85,7 +85,7 @@ list or planner logic.
 Date: 2026-06-26
 
 The built-in gateway is not a third-party generic LLM proxy. It is the user's
-local CLIProxyAPI exposed through the origin tunnel and guarded by the Tab Tidy
+local CLIProxyAPI exposed through the origin tunnel and guarded by the TabRecap
 Worker. A later model probe checked the broader model list exposed by
 CLIProxyAPI and found that the rejecting layer was again the product-facing
 Worker allowlist, not the local gateway or Cloudflare Tunnel.
@@ -105,7 +105,7 @@ Live minimal chat-completions probe:
 | `claude-haiku-4-5-20251001` | 200 | 200 | 400 `model_not_allowed` | Add to Worker text-model allowlist for custom model names. |
 | `codex-auto-review` | 200 | 200 | 400 `model_not_allowed` | Add to Worker text-model allowlist for custom model names. |
 | `gpt-5.3-codex-spark` | 200 | 200 | 400 `spark_shape_required` with planner shape | Keep only for progress-copy requests. |
-| `gpt-image-2` | 503, image endpoint only | 503, image endpoint only | 400 `model_not_allowed` | Do not allow for Tab Tidy planning; Worker only exposes chat completions. |
+| `gpt-image-2` | 503, image endpoint only | 503, image endpoint only | 400 `model_not_allowed` | Do not allow for TabRecap planning; Worker only exposes chat completions. |
 | `gpt-5.34` | 502 unknown provider | Cloudflare 502 page from origin path | 400 `model_not_allowed` | Do not add; this is not a known origin model. |
 
 Changes made from this probe:
@@ -144,7 +144,7 @@ Post-deploy product-facing checks:
 
 Important nuance: the 200 status above proves routing and Worker allowlist
 support, not planner quality. Some Claude CLI-facing models may answer with
-generic assistant text when given only a tiny synthetic prompt. Tab Tidy's actual
+generic assistant text when given only a tiny synthetic prompt. TabRecap's actual
 planner still relies on strict product prompts plus local JSON validation and
 retry handling.
 
@@ -184,7 +184,7 @@ Matched text and image models on the local/origin gateway included:
 - Claude Opus/Sonnet/Haiku variants currently listed by CLIProxyAPI;
 - `gpt-image-1.5`, `gpt-image-2`.
 
-Product Worker chat smoke with a Tab Tidy planner-shaped request:
+Product Worker chat smoke with a TabRecap planner-shaped request:
 
 | Request | Status | Notes |
 | --- | --- | --- |
@@ -195,7 +195,7 @@ Product Worker chat smoke with a Tab Tidy planner-shaped request:
 | planner, `claude-opus-4-8` | 200 | content was JSON wrapped in a markdown code fence |
 | planner, `codex-auto-review` | 200 | routed through Worker |
 | planner, `gpt-5.3-codex-spark` | 400 `spark_shape_required` | intentionally progress-copy only |
-| planner, `gpt-image-2` | 400 `model_not_allowed` | intentionally excluded from Tab Tidy planner gateway |
+| planner, `gpt-image-2` | 400 `model_not_allowed` | intentionally excluded from TabRecap planner gateway |
 | progress copy, `gpt-5.3-codex-spark` | 200 | expected progress-copy route |
 
 Conclusion:
@@ -203,9 +203,9 @@ Conclusion:
 - The local CLIProxyAPI service and Cloudflare Tunnel can see the requested
   models.
 - The product Worker is intentionally not a general OpenAI proxy. It exposes only
-  Tab Tidy chat/planner-shaped requests, plus the bounded progress-copy route.
+  TabRecap chat/planner-shaped requests, plus the bounded progress-copy route.
 - Image models are visible on the origin gateway but are not usable through the
-  product Worker because Tab Tidy does not need image generation.
+  product Worker because TabRecap does not need image generation.
 - Claude planner calls route successfully, but these models often wrap JSON in
   markdown fences. The extension parser now also tolerates a compatible gateway
   returning a raw fenced JSON body instead of an OpenAI-compatible JSON envelope.
@@ -230,7 +230,7 @@ Current health:
 | local API-only proxy `127.0.0.1:18317/healthz` | 200 |
 | origin tunnel `cliproxy-origin.sylvanyu.io/healthz` | 200 |
 | product Worker `cliproxy.sylvanyu.io/healthz` | 200 |
-| product Worker Tab Tidy smoke, `gpt-5.5` | 200 |
+| product Worker TabRecap smoke, `gpt-5.5` | 200 |
 
 Current `/v1/models` with upstream auth:
 
@@ -240,7 +240,7 @@ Current `/v1/models` with upstream auth:
 | origin tunnel `cliproxy-origin.sylvanyu.io` | 200 | 20 |
 | product Worker `/v1/models` | 404 | not exposed by design |
 
-Matched local/origin models included the Tab Tidy text presets, progress-copy
+Matched local/origin models included the TabRecap text presets, progress-copy
 model, review model, and image models:
 
 - `gpt-5.5`, `gpt-5.4`, `gpt-5.4-mini`;
@@ -264,8 +264,8 @@ Boundary checks:
 | --- | --- | --- |
 | `codex-auto-review` | 200 | allowed as a text chat model; upstream currently routed the probe to `gpt-5.4` |
 | `gpt-5.3-codex-spark` with planner shape | 400 `spark_shape_required` | reserved for progress-copy prompts |
-| `gpt-image-1.5` | 400 `model_not_allowed` | image endpoint/model is not exposed through the Tab Tidy planner Worker |
-| `gpt-image-2` | 400 `model_not_allowed` | image endpoint/model is not exposed through the Tab Tidy planner Worker |
+| `gpt-image-1.5` | 400 `model_not_allowed` | image endpoint/model is not exposed through the TabRecap planner Worker |
+| `gpt-image-2` | 400 `model_not_allowed` | image endpoint/model is not exposed through the TabRecap planner Worker |
 | `gpt-5.34` | 400 `model_not_allowed` | not a verified local/origin model |
 
 Cloudflare Tunnel logs still showed intermittent QUIC stream resets and
@@ -284,7 +284,7 @@ Conclusion:
   suspect a stale loaded extension/service worker first; the current source and
   current `dist` package include fenced-JSON tolerance.
 - Image models are available upstream but intentionally unavailable through the
-  Tab Tidy planner gateway.
+  TabRecap planner gateway.
 
 ## Follow-up: Local Tunnel Recheck After Runtime Failures
 
