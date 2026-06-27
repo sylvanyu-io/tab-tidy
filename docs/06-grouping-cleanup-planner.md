@@ -57,13 +57,11 @@ The product idea remains one analysis job. It is not a requirement that the impl
 
 Functional checks:
 
-- `node --test tests/gateway-planner.test.mjs tests/controller.test.mjs`: 72/72 passing.
-- `node --test tests/gateway-planner.test.mjs tests/controller.test.mjs tests/planner-benchmark-fixtures.test.mjs`: 80/80 passing after removing the standalone cleanup LLM path.
-- `npx playwright test tests/ui-smoke.spec.mjs`: 24/24 passing.
-- `npm test`: 134/134 passing.
+- `node --test tests/*.test.mjs worker/test/*.test.mjs`: 150/150 passing.
+- `npx playwright test tests/ui-smoke.spec.mjs`: 29/29 passing.
 - `npm run scan:secrets`: no provider-key patterns found.
-- `npm run build:extension`: built `dist/tab-recap-0.1.5.zip`.
-- `npm run release:check`: passed Node tests, UI smoke, current/history secret scans, dev build, and store build.
+- `npm run scan:secrets:history`: no provider-key patterns found in git history.
+- `npm run release:check`: passed Node tests, UI smoke, current/history secret scans, and built local plus store packages.
 
 New regression coverage:
 

@@ -1,6 +1,6 @@
 # Time Recap Development Plan / 时间段回顾开发计划
 
-Status: implemented in the current dev build. The codebase now has a recap input builder, gateway recap planner, local fallback, cancelable runtime message, side-panel Recap mode, shared bottom progress controls, scoped advanced AI settings, and Node plus Playwright coverage. Remaining work is product expansion, not first-use viability: recap history, direct recap-to-organize actions, manual close controls inside recap review candidates, and larger real-browser benchmark evidence.
+Status: implemented in the current build. The codebase now has a recap input builder, gateway recap planner, local fallback, cancelable runtime message, side-panel Recap mode, shared bottom progress controls, scoped advanced AI settings, and Node plus Playwright coverage. Remaining work is product expansion, not first-use viability: recap history, direct recap-to-organize actions, manual close controls inside recap review candidates, and larger real-browser benchmark evidence.
 
 This document records the product plan for "summarize what I did during a time period" and the acceptance checks needed before treating it as release-ready. TabRecap already records useful local signals; the feature turns those signals into a user-facing recap instead of a developer activity dump.
 
