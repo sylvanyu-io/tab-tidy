@@ -230,7 +230,8 @@ const UI_COPY = Object.freeze({
     "aiWait.coarse_planning": ["快速扫一遍", "寻找跨窗口主题", "拆出主题方向", "标记模糊标签"],
     "aiWait.refining": ["拆开过大的组", "复核模糊边界", "合并同一任务", "保留原始顺序"],
     "aiWait.cleanup_planning": ["排序清理清单", "比较新旧任务", "挑出低价值页面", "保留手动决定权"],
-    "aiWait.retrying": ["修正校验问题", "补齐遗漏标签", "移除重复分配", "重新检查结构"]
+    "aiWait.retrying": ["修正校验问题", "补齐遗漏标签", "移除重复分配", "重新检查结构"],
+    "aiWait.recapping": ["梳理时间线索", "合并本机活动", "对齐页面摘要", "提炼阶段重点", "保留人工判断"]
   },
   "en-US": {
     "document.title": "TabRecap",
@@ -457,7 +458,8 @@ const UI_COPY = Object.freeze({
     "aiWait.coarse_planning": ["Scanning the tab set", "Finding cross-window topics", "Shaping topic lanes", "Marking fuzzy tabs"],
     "aiWait.refining": ["Breaking up large groups", "Reviewing fuzzy edges", "Merging one task", "Keeping tab order"],
     "aiWait.cleanup_planning": ["Ranking cleanup checklist", "Comparing old tasks", "Finding low-value pages", "Keeping you in control"],
-    "aiWait.retrying": ["Fixing validation issues", "Filling missing tabs", "Removing duplicates", "Checking structure again"]
+    "aiWait.retrying": ["Fixing validation issues", "Filling missing tabs", "Removing duplicates", "Checking structure again"],
+    "aiWait.recapping": ["Reading the timeline", "Merging local activity", "Aligning page summaries", "Finding key phases", "Keeping review manual"]
   }
 });
 
@@ -511,7 +513,7 @@ const settingSwitches = [
   }
 ];
 
-const AI_WAIT_PHASES = new Set(["planning", "coarse_planning", "refining", "retrying"]);
+const AI_WAIT_PHASES = new Set(["planning", "coarse_planning", "refining", "retrying", "recapping"]);
 const AI_WAIT_RAMP_MS = 45000;
 const AI_WAIT_COPY_INTERVAL_SECONDS = 4;
 const ACTIVE_JOB_POLL_MS = 600;
@@ -544,7 +546,6 @@ const nodes = {
   gatewayCustomModelField: document.querySelector("#gatewayCustomModelField"),
   timeRecapPanel: document.querySelector("#timeRecapPanel"),
   recapCustomRange: document.querySelector("#recapCustomRange"),
-  recapGenerateBtn: document.querySelector("#recapGenerateBtn"),
   recapResult: document.querySelector("#recapResult"),
   recapDetailsRoot: document.querySelector("#recapDetailsRoot"),
   recapDetailsText: document.querySelector("#recapDetailsText"),
@@ -565,6 +566,8 @@ const canceledRecapOperations = new Set();
 let pageSamplingOriginCache = { origins: [], refreshedAt: 0 };
 let pageSamplingOriginRefreshTimer = null;
 let progressPollTimer = null;
+let recapProgressTimer = null;
+let recapProgressJob = null;
 let mockActiveJob = null;
 let mockLastJob = null;
 let panelWindowId = null;
@@ -646,12 +649,11 @@ function bindEvents() {
     button.addEventListener("click", () => setAnalysisMode(button.dataset.analysisMode || "both", { persist: true }));
   }
 
-  nodes.analyzeBtn.addEventListener("click", handleAnalyzeClick);
-  nodes.cancelBtn.addEventListener("click", cancelAnalyze);
+  nodes.analyzeBtn.addEventListener("click", handlePrimaryAction);
+  nodes.cancelBtn.addEventListener("click", handleCancelAction);
   nodes.applyBtn.addEventListener("click", applyLastPlan);
   nodes.undoBtn.addEventListener("click", undoLastApply);
   nodes.uiLanguageToggle?.addEventListener("click", toggleUiLanguage);
-  nodes.recapGenerateBtn?.addEventListener("click", generateTimeRecap);
   for (const button of nodes.recapQuickButtons || []) {
     button.addEventListener("click", () => setRecapPreset(button.dataset.recapPreset || "7d"));
   }
@@ -754,7 +756,6 @@ function applyUiLanguage() {
   setText('[data-recap-preset="thisWeek"]', t("recap.thisWeek"));
   setText('[data-recap-preset="thisMonth"]', t("recap.thisMonth"));
   updateRecapRangeHint();
-  setButtonLabel(nodes.recapGenerateBtn, t("recap.generate"));
   setText("#recapDetailsRoot > summary", t("recap.evidence"));
   setAttribute("#gatewayCustomModel", "placeholder", t("placeholder.customModel"));
   setAttribute("#gatewayBaseUrl", "placeholder", t("placeholder.gatewayUrl"));
@@ -866,6 +867,7 @@ function effectiveResultLanguageMode(languageMode) {
 function setPanelMode(mode) {
   currentPanelMode = mode === "recap" ? "recap" : "organize";
   applyPanelMode();
+  syncActionState();
 }
 
 function applyPanelMode() {
@@ -1132,6 +1134,22 @@ function updateConditionalUi() {
   schedulePageSamplingOriginRefresh();
 }
 
+async function handlePrimaryAction() {
+  if (currentPanelMode === "recap") {
+    await generateTimeRecap();
+    return;
+  }
+  await handleAnalyzeClick();
+}
+
+async function handleCancelAction() {
+  if (currentPanelMode === "recap") {
+    await cancelTimeRecap();
+    return;
+  }
+  await cancelAnalyze();
+}
+
 async function handleAnalyzeClick() {
   if (lastPreview) {
     await clearAnalysisState();
@@ -1189,15 +1207,16 @@ async function generateTimeRecap() {
   }
   const operationId = createClientOperationId("recap");
   activeRecapOperationId = operationId;
-  setRecapBusy(true);
-  setStatusKey("status.recapPreparing");
+  setBusy(true, t("status.recapPreparing"), { cancelable: true, progress: 6 });
   try {
     const settings = readSettings({ effectiveForAnalysis: true });
     settings.languageMode = effectiveResultLanguageMode(settings.languageMode);
     validateGatewaySettingsForAnalyze(settings);
+    updateLocalProgress(t("status.checkingPermissions"), 10);
     await ensurePlannerHostPermission(settings);
 
-    setStatusKey("status.recapGenerating");
+    updateLocalProgress(t("status.recapGenerating"), 28);
+    startRecapProgress(operationId, settings);
     const result = await sendMessage({
       type: "activity:generateTimeRecap",
       operationId,
@@ -1218,10 +1237,11 @@ async function generateTimeRecap() {
     setStatus(message, true);
     renderTimeRecapError(message);
   } finally {
+    stopRecapProgress();
     canceledRecapOperations.delete(operationId);
     if (activeRecapOperationId === operationId) {
       activeRecapOperationId = null;
-      setRecapBusy(false);
+      setBusy(false);
     }
   }
 }
@@ -1230,7 +1250,9 @@ async function cancelTimeRecap() {
   const operationId = activeRecapOperationId;
   if (!operationId) return;
   canceledRecapOperations.add(operationId);
-  setRecapBusy(true, { canceling: true });
+  stopRecapProgress();
+  setBusy(true, t("status.recapCanceling"), { cancelable: true, progress: currentProgressValue() || 92 });
+  nodes.cancelBtn.disabled = true;
   setStatusKey("status.recapCanceling");
   try {
     await sendMessage({ type: "activity:cancelTimeRecap", operationId });
@@ -1239,7 +1261,7 @@ async function cancelTimeRecap() {
   } finally {
     if (activeRecapOperationId === operationId) {
       activeRecapOperationId = null;
-      setRecapBusy(false);
+      setBusy(false);
     }
     setStatusKey("status.recapCanceled");
   }
@@ -1269,12 +1291,6 @@ function dateTimeInputIso(value, boundary = "start") {
   if (!match) return "";
   const [, year, month, day, hour, minute] = match.map((part) => Number(part));
   return new Date(year, month - 1, day, hour, minute, 0, 0).toISOString();
-}
-
-function setRecapBusy(isBusy, options = {}) {
-  if (!nodes.recapGenerateBtn) return;
-  nodes.recapGenerateBtn.disabled = Boolean(options.canceling);
-  nodes.recapGenerateBtn.textContent = t(isBusy ? (options.canceling ? "status.recapCanceling" : "recap.cancel") : "recap.generate");
 }
 
 function renderTimeRecap(result) {
@@ -2201,6 +2217,44 @@ function updateLocalProgress(label, progress) {
   setStatus(label);
 }
 
+function startRecapProgress(operationId, settings = {}) {
+  stopRecapProgress();
+  recapProgressJob = {
+    operationId,
+    status: "running",
+    phase: "recapping",
+    progress: 38,
+    message: "正在生成近期回顾",
+    tabCount: 0,
+    windowCount: 0,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+    settings
+  };
+  updateProgressFromJob(recapProgressJob);
+  recapProgressTimer = setInterval(() => {
+    if (!recapProgressJob || activeRecapOperationId !== operationId) {
+      stopRecapProgress();
+      return;
+    }
+    updateProgressFromJob(recapProgressJob);
+  }, ACTIVE_JOB_POLL_MS);
+}
+
+function stopRecapProgress() {
+  if (recapProgressTimer) {
+    clearInterval(recapProgressTimer);
+    recapProgressTimer = null;
+  }
+  recapProgressJob = null;
+}
+
+function currentProgressValue() {
+  const rawWidth = nodes.progressFill?.style?.width || "";
+  const value = Number.parseFloat(rawWidth);
+  return Number.isFinite(value) ? value : 0;
+}
+
 function displayProgressForJob(job) {
   const baseProgress = clampProgress(job.progress);
   if (!isLiveAiWait(job)) return baseProgress;
@@ -2222,6 +2276,7 @@ function optimisticProgressCap(job, baseProgress) {
   if (job.phase === "coarse_planning") return Math.max(baseProgress, 54);
   if (job.phase === "refining") return Math.max(baseProgress, Math.min(85, baseProgress + 12));
   if (job.phase === "retrying") return Math.max(baseProgress, 93);
+  if (job.phase === "recapping") return Math.max(baseProgress, 88);
   return Math.max(baseProgress, 80);
 }
 
@@ -2353,7 +2408,12 @@ function localizeKnownMessage(message = "") {
     ["正在细分不确定标签页", "Refining uncertain tabs"],
     ["不确定标签页已细分", "Uncertain tabs refined"],
     ["正在合并精分结果", "Merging refined results"],
-    ["正在取消整理", t("status.canceling")]
+    ["正在取消整理", t("status.canceling")],
+    ["正在准备回顾", t("status.recapPreparing")],
+    ["正在生成近期回顾", t("status.recapGenerating")],
+    ["正在停止生成回顾", t("status.recapCanceling")],
+    ["回顾已生成", t("status.recapReady")],
+    ["已停止生成回顾。", t("status.recapCanceled")]
   ]);
   if (exact.has(text)) return exact.get(text);
 
@@ -2387,11 +2447,25 @@ function syncChoiceGroups() {
 
 function syncActionState() {
   nodes.appShell.dataset.flowState = lastPreview || lastError ? "preview" : "setup";
+  if (currentPanelMode === "recap") {
+    nodes.actions.dataset.state = "recap";
+    nodes.actions.dataset.canUndo = "false";
+    nodes.applyBtn.hidden = true;
+    nodes.undoBtn.hidden = true;
+    nodes.applyBtn.dataset.role = "";
+    nodes.analyzeBtn.dataset.role = "primary";
+    setButtonLabel(nodes.analyzeBtn, t("recap.generate"));
+    setButtonLabel(nodes.cancelBtn, t("recap.cancel"));
+    return;
+  }
+
   nodes.actions.dataset.state = lastPreview ? "preview" : lastError ? "error" : "idle";
   nodes.actions.dataset.canUndo = canUndo ? "true" : "false";
   nodes.applyBtn.hidden = !lastPreview || lastPreview.analysisFeatures?.grouping === false;
   nodes.undoBtn.hidden = !canUndo;
+  nodes.analyzeBtn.dataset.role = "";
   setButtonLabel(nodes.analyzeBtn, t(lastPreview ? "button.regenerate" : "button.generate"));
+  setButtonLabel(nodes.cancelBtn, t("button.cancel"));
   nodes.applyBtn.dataset.role = canApplyCurrentPreview() ? "primary" : "";
 }
 

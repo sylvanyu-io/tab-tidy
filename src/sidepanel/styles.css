@@ -146,15 +146,13 @@ h2,
   overflow: hidden;
 }
 
-.app-shell[data-flow-state="preview"] .launch-panel,
-.app-shell[data-flow-state="preview"] .advanced-settings {
+.app-shell[data-panel-mode="organize"][data-flow-state="preview"] .launch-panel,
+.app-shell[data-panel-mode="organize"][data-flow-state="preview"] .advanced-settings {
   display: none;
 }
 
 .app-shell[data-panel-mode="recap"] .launch-panel,
-.app-shell[data-panel-mode="recap"] .advanced-settings,
-.app-shell[data-panel-mode="recap"] .preview,
-.app-shell[data-panel-mode="recap"] .actions {
+.app-shell[data-panel-mode="recap"] .preview {
   display: none;
 }
 
@@ -504,22 +502,6 @@ h2 {
   font-size: 11px;
   font-weight: 720;
   line-height: 1.35;
-}
-
-.recap-controls .secondary-action {
-  min-height: 40px;
-  color: var(--primary);
-  background: var(--primary-soft);
-  border: 1px solid color-mix(in srgb, var(--primary) 28%, var(--line));
-  border-radius: var(--radius-md);
-  box-shadow: var(--control-shadow);
-  font-weight: 860;
-  cursor: pointer;
-}
-
-.recap-controls .secondary-action:disabled {
-  opacity: 0.55;
-  cursor: not-allowed;
 }
 
 .recap-result {
@@ -1469,6 +1451,14 @@ details[open] > summary::before {
 }
 
 .actions[data-state="idle"][data-can-undo="false"] #analyzeBtn {
+  grid-column: 1 / -1;
+}
+
+.actions[data-state="recap"] {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.actions[data-state="recap"] #analyzeBtn {
   grid-column: 1 / -1;
 }
 

@@ -276,7 +276,13 @@ test("time recap mode renders a first-class recap surface", async ({ page }) => 
   await page.getByRole("button", { name: "回顾" }).click();
   await expect(page.locator("#timeRecapPanel")).toBeVisible();
   await expect(page.locator(".launch-panel")).toBeHidden();
-  await expect(page.locator(".actions")).toBeHidden();
+  await expect(page.locator(".actions")).toBeVisible();
+  await expect(page.locator(".advanced-settings")).toBeVisible();
+  await expect(page.locator("#gatewayModel")).toHaveValue("gpt-5.4");
+  await expect(page.locator("#gatewayAuxiliaryModel")).toHaveValue("gpt-5.3-codex-spark");
+  await expect(page.locator("#gatewayThinkingIntensity")).toHaveValue("high");
+  await expect(page.getByRole("button", { name: "生成回顾" })).toBeVisible();
+  await expect(page.locator(".actions #progressBar")).toBeHidden();
   await expect(page.getByText("看看最近主要在忙什么")).toBeVisible();
   await expect(page.locator("#recapRangePreset")).toHaveValue("7d");
   await expect(page.locator("#recapCustomRange")).toBeVisible();
@@ -295,6 +301,7 @@ test("time recap mode renders a first-class recap surface", async ({ page }) => 
   await page.getByRole("button", { name: "生成回顾" }).click();
 
   await expect(page.locator("#statusText")).toHaveText("回顾已生成");
+  await expect(page.locator(".actions #progressBar")).toBeHidden();
   await expect(page.locator(".recap-summary-card")).toContainText("最近主要在打磨扩展体验和验证 AI 整理策略。");
   await expect(page.locator(".recap-section-title").first()).toHaveText("时间轴");
   await expect(page.locator(".recap-card").getByText("扩展产品打磨", { exact: true })).toBeVisible();
@@ -306,6 +313,91 @@ test("time recap mode renders a first-class recap surface", async ({ page }) => 
   await expect(page.locator("#timeRecapPanel")).toBeHidden();
   await expect(page.locator(".launch-panel")).toBeVisible();
   await expect(page.getByRole("button", { name: "生成方案" })).toBeVisible();
+});
+
+test("time recap generation uses the shared bottom progress controls", async ({ page }) => {
+  await page.addInitScript(() => {
+    const settings = {
+      organizeMode: "current_window",
+      targetWindowMode: "current_window",
+      existingGroupMode: "preserve_existing_groups",
+      reviewGroupMode: "create_review_group",
+      undoTargetWindowMode: "leave_empty_target_window",
+      pageContextMode: "off",
+      hostPermissionRequestMode: "never",
+      pageSamplingConsentMode: "not_acknowledged",
+      urlPrivacyMode: "sanitized_url",
+      includePinnedTabs: false,
+      includeIncognitoTabs: false,
+      collapseGroupsAfterApply: true,
+      analyzeGrouping: true,
+      analyzeCleanup: true,
+      minConfidenceToApply: 0.65,
+      maxTabsPerGroup: 40,
+      languageMode: "auto",
+      promptPreset: "conservative",
+      groupingGranularity: "balanced",
+      plannerProvider: "gateway",
+      rememberProviderKeys: false,
+      gatewayBaseUrl: "",
+      gatewayModel: "gpt-5.4",
+      gatewayAuxiliaryModel: "gpt-5.3-codex-spark",
+      gatewayCustomModel: "",
+      gatewayThinkingIntensity: "high",
+      gatewayApiKey: "",
+      customPrompt: ""
+    };
+    window.__recapMessages = [];
+    window.__recapPromise = new Promise((resolve) => {
+      window.__resolveRecap = resolve;
+    });
+    window.chrome = {
+      runtime: {
+        sendMessage: async (message) => {
+          window.__recapMessages.push(message.type);
+          if (message.type === "settings:get") return { ok: true, result: settings };
+          if (message.type === "settings:save") return { ok: true, result: message.settings };
+          if (message.type === "tabs:getActiveJob") return { ok: true, result: null };
+          if (message.type === "tabs:canUndo") return { ok: true, result: { canUndo: false } };
+          if (message.type === "progressCopy:generate") {
+            return { ok: true, result: { messages: ["梳理时间线索", "合并本机活动"] } };
+          }
+          if (message.type === "activity:generateTimeRecap") return { ok: true, result: await window.__recapPromise };
+          return { ok: true, result: null };
+        }
+      }
+    };
+  });
+
+  await page.goto(`${baseUrl}/src/sidepanel/index.html`);
+  await page.getByRole("button", { name: "回顾" }).click();
+  await page.getByRole("button", { name: "生成回顾" }).click();
+
+  await expect(page.locator(".actions #progressBar")).toBeVisible();
+  await expect(page.getByRole("button", { name: "停止生成" })).toBeVisible();
+  await expect(page.locator("#progressPercent")).not.toHaveText("0%");
+
+  await page.evaluate(() => {
+    window.__resolveRecap({
+      source: "ai",
+      input: { pages: [], coverage: { includedPages: 12 } },
+      recap: {
+        schema: "tab_tidy_time_recap_v1",
+        headline: "这段时间主要在打磨回顾功能。",
+        summary: "回顾流程正在接入统一进度条和底部按钮。",
+        timeline: [{ label: "刚才", description: "验证回顾生成进度。", pageIds: [] }],
+        themes: [],
+        followUps: [],
+        reviewCandidates: [],
+        coverageNote: "已参考本机活动。"
+      }
+    });
+  });
+
+  await expect(page.locator("#statusText")).toHaveText("回顾已生成");
+  await expect(page.locator(".actions #progressBar")).toBeHidden();
+  await expect(page.locator(".recap-summary-card")).toContainText("这段时间主要在打磨回顾功能。");
+  await expect.poll(() => page.evaluate(() => window.__recapMessages.includes("progressCopy:generate"))).toBe(true);
 });
 
 test("cleanup candidates are returned with the generated plan and can be closed manually", async ({ page }) => {
