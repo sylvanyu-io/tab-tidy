@@ -46,6 +46,8 @@ Implemented pieces:
   - Builds compact recap input from local activity, summaries, lifecycle sessions, and current tabs.
   - Sends the recap request through the same chat-completions-compatible gateway.
   - Parses fenced JSON, validates returned IDs, drops invalid references, and falls back to a local recap if AI is unavailable.
+- `src/shared/task-constants.js`
+  - Keeps the long AI timeout shared between the side panel and core recap planner, so UI requests and background execution cannot drift back to different limits.
 - `src/sidepanel/sidepanel.js`
   - Provides a top-level `回顾` / `Recap` mode.
   - Supports past 24 hours, today, last 7 days, last 30 days, this week, this month, and custom date-time ranges.
@@ -59,10 +61,10 @@ Implemented pieces:
 
 Current verification:
 
-- `npm test`: 149 passed on 2026-06-27.
-- `npm run test:ui`: 28 passed on 2026-06-27.
-- `npm run build:extension`: built `dist/tab-recap-0.2.1.zip` on 2026-06-27.
-- Visual smoke screenshots were inspected for recap advanced settings and shared progress controls.
+- `npm test`: 151 passed on 2026-06-28.
+- `npm run test:ui`: 29 passed on 2026-06-28.
+- `npm run build:extension`: built `dist/tab-recap-0.2.1.zip` on 2026-06-28.
+- Visual smoke screenshot inspected: `/tmp/tab-recap-recap-progress-20260628.png` for recap progress, bottom controls, and shared action layout.
 
 ## User Experience
 
