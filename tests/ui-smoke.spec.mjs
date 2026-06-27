@@ -754,7 +754,7 @@ test("auto-selects English UI and can manually switch back", async ({ page }) =>
 
   await page.goto(`${baseUrl}/src/sidepanel/index.html`);
 
-  await expect(page.locator("#statusText")).toHaveText("AI tab organizer");
+  await expect(page.locator("#statusText")).toHaveText("AI tab organizer & recap");
   await expect(page.getByText("Scope", { exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "Generate plan" })).toBeVisible();
   await expect(page.locator("#customPrompt")).toHaveAttribute(
@@ -785,7 +785,7 @@ test("auto-selects English UI and can manually switch back", async ({ page }) =>
   await expect(page.locator("#closeWindowBtn")).toHaveCount(0);
 
   await page.locator("#uiLanguageToggle").click();
-  await expect(page.locator("#statusText")).toHaveText("AI 标签页整理");
+  await expect(page.locator("#statusText")).toHaveText("AI 标签页整理与回顾");
   await expect(page.getByRole("button", { name: "生成方案" })).toBeVisible();
   await expect(page.locator("#uiLanguageToggle")).toHaveText("");
 });

@@ -8,7 +8,7 @@ const UI_LANGUAGES = Object.freeze(["zh-CN", "en-US"]);
 const UI_COPY = Object.freeze({
   "zh-CN": {
     "document.title": "TabRecap",
-    "status.default": "AI 标签页整理",
+    "status.default": "AI 标签页整理与回顾",
     "status.saved": "偏好已保存",
     "status.requestingPageSummaryPermission": "正在请求页面摘要权限",
     "status.pageSummaryEnabled": "页面摘要已开启",
@@ -245,7 +245,7 @@ const UI_COPY = Object.freeze({
   },
   "en-US": {
     "document.title": "TabRecap",
-    "status.default": "AI tab organizer",
+    "status.default": "AI tab organizer & recap",
     "status.saved": "Preferences saved",
     "status.requestingPageSummaryPermission": "Requesting page-summary access",
     "status.pageSummaryEnabled": "Page summaries enabled",
@@ -1186,16 +1186,9 @@ async function analyze() {
   setBusy(true, t("status.preparing"), { cancelable: true, progress: 4 });
   try {
     const persistedSettings = readSettings();
-    const settings = readSettings({ effectiveForAnalysis: true });
-    settings.languageMode = effectiveResultLanguageMode(settings.languageMode);
-    validateGatewaySettingsForAnalyze(settings);
-    updateLocalProgress(t("status.checkingPermissions"), 8);
-    await ensurePlannerHostPermission(settings);
-    if (settings.pageContextMode !== "off" && settings.pageSamplingConsentMode !== "not_acknowledged") {
-      updateLocalProgress(t("status.checkingPageSummaryPermissions"), 12);
-      await ensurePageSamplingPermissions(settings, { requestMissing: false });
-      settings.hostPermissionRequestMode = "never";
-    }
+    const settings = readEffectiveRunSettings();
+    await ensureGatewayPermissionForRun(settings, 8);
+    await ensurePageSummaryPermissionsForRun(settings, 12);
     updateLocalProgress(t("status.resolvingWindow"), 14);
     const windowId = await resolveInvocationWindowId();
     updateLocalProgress(t("status.startingBackground"), 16);
@@ -1231,11 +1224,8 @@ async function generateTimeRecap() {
   activeRecapOperationId = operationId;
   setBusy(true, t("status.recapPreparing"), { cancelable: true, progress: 6 });
   try {
-    const settings = readSettings({ effectiveForAnalysis: true });
-    settings.languageMode = effectiveResultLanguageMode(settings.languageMode);
-    validateGatewaySettingsForAnalyze(settings);
-    updateLocalProgress(t("status.checkingPermissions"), 10);
-    await ensurePlannerHostPermission(settings);
+    const settings = readEffectiveRunSettings();
+    await ensureGatewayPermissionForRun(settings, 10);
 
     updateLocalProgress(t("status.recapGenerating"), 28);
     startRecapProgress(operationId, settings);
@@ -1287,6 +1277,25 @@ async function cancelTimeRecap() {
   sendMessage({ type: "activity:cancelTimeRecap", operationId }).catch(() => {
     // The UI should still stop waiting if the background context has already gone away.
   });
+}
+
+function readEffectiveRunSettings() {
+  const settings = readSettings({ effectiveForAnalysis: true });
+  settings.languageMode = effectiveResultLanguageMode(settings.languageMode);
+  validateGatewaySettingsForAnalyze(settings);
+  return settings;
+}
+
+async function ensureGatewayPermissionForRun(settings, progress) {
+  updateLocalProgress(t("status.checkingPermissions"), progress);
+  await ensurePlannerHostPermission(settings);
+}
+
+async function ensurePageSummaryPermissionsForRun(settings, progress) {
+  if (settings.pageContextMode === "off" || settings.pageSamplingConsentMode === "not_acknowledged") return;
+  updateLocalProgress(t("status.checkingPageSummaryPermissions"), progress);
+  await ensurePageSamplingPermissions(settings, { requestMissing: false });
+  settings.hostPermissionRequestMode = "never";
 }
 
 function readRecapRange() {
