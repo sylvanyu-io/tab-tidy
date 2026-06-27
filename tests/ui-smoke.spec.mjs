@@ -372,6 +372,9 @@ test("time recap generation uses the shared bottom progress controls", async ({ 
       window.__resolveRecap = resolve;
     });
     window.chrome = {
+      windows: {
+        get: async (windowId) => ({ id: windowId, type: "normal" })
+      },
       runtime: {
         sendMessage: async (message) => {
           window.__recapMessages.push(message);
@@ -389,7 +392,7 @@ test("time recap generation uses the shared bottom progress controls", async ({ 
     };
   });
 
-  await page.goto(`${baseUrl}/src/sidepanel/index.html`);
+  await page.goto(`${baseUrl}/src/sidepanel/index.html?sourceWindowId=42`);
   await page.getByRole("button", { name: "回顾" }).click();
   await page.locator(".advanced-settings > summary").click();
   await page.locator("#languageMode").selectOption("en-US");
@@ -433,6 +436,7 @@ test("time recap generation uses the shared bottom progress controls", async ({ 
       page.evaluate(() => {
         const message = window.__recapMessages.find((item) => item.type === "activity:generateTimeRecap");
         return {
+          windowId: message?.windowId,
           languageMode: message?.languageMode,
           gatewayModel: message?.settings?.gatewayModel,
           gatewayAuxiliaryModel: message?.settings?.gatewayAuxiliaryModel,
@@ -441,6 +445,7 @@ test("time recap generation uses the shared bottom progress controls", async ({ 
       })
     )
     .toEqual({
+      windowId: 42,
       languageMode: "en-US",
       gatewayModel: "claude-sonnet-4-6",
       gatewayAuxiliaryModel: "same_as_primary",
@@ -485,6 +490,9 @@ test("time recap cancellation restores the shared bottom controls immediately", 
     window.__recapPromise = new Promise(() => {});
     window.__cancelRecapPromise = new Promise(() => {});
     window.chrome = {
+      windows: {
+        get: async (windowId) => ({ id: windowId, type: "normal" })
+      },
       runtime: {
         sendMessage: async (message) => {
           window.__recapMessages.push(message);
@@ -501,7 +509,7 @@ test("time recap cancellation restores the shared bottom controls immediately", 
     };
   });
 
-  await page.goto(`${baseUrl}/src/sidepanel/index.html`);
+  await page.goto(`${baseUrl}/src/sidepanel/index.html?sourceWindowId=43`);
   await page.getByRole("button", { name: "回顾" }).click();
   await page.getByRole("button", { name: "生成回顾" }).click();
   await expect(page.locator(".actions #progressBar")).toBeVisible();
@@ -511,7 +519,7 @@ test("time recap cancellation restores the shared bottom controls immediately", 
   await expect(page.locator(".actions #progressBar")).toBeHidden();
   await expect(page.getByRole("button", { name: "生成回顾" })).toBeVisible();
   await expect
-    .poll(() => page.evaluate(() => window.__recapMessages.some((message) => message.type === "activity:cancelTimeRecap")))
+    .poll(() => page.evaluate(() => window.__recapMessages.some((message) => message.type === "activity:cancelTimeRecap" && message.windowId === 43)))
     .toBe(true);
 });
 
