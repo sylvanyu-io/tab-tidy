@@ -222,7 +222,7 @@ async function closeCleanupCandidatesLocked(chromeApi, message = {}) {
 
   const requestedIds = uniqueNumbers(asArray(message.tabIds).map((value) => Number(value)));
   if (!requestedIds.length) {
-    throw new Error(localizedText(message.languageMode || "zh-CN", "请选择要关闭的标签页。", "Select tabs to close first."));
+    throw new Error(localizedText(message.languageMode || "zh-CN", "这个标签页现在无法关闭，请重新生成后再试。", "This tab cannot be closed right now. Regenerate the plan and try again."));
   }
 
   const candidateIds = new Set((job.plan?.cleanup?.candidates || job.preview?.cleanup?.candidates || []).map((tab) => tab.tabId));
