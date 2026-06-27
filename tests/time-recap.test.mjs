@@ -142,6 +142,97 @@ test("time recap gateway request parses fenced JSON and keeps page references va
   assert.equal(result.recap.reviewCandidates[0].pageId, 2);
 });
 
+test("time recap model copy is normalized away from implementation field names", async () => {
+  const chrome = seededRecapChrome();
+  const fetchImpl = async () =>
+    new Response(
+      JSON.stringify({
+        choices: [
+          {
+            message: {
+              content: JSON.stringify({
+                schema: "tab_tidy_time_recap_v1",
+                language: "zh-CN",
+                headline: "pageId 1",
+                summary: "activeCount 为0、pageId 1、sampleable false，但 ageDays 约 12。",
+                themes: [
+                  {
+                    title: "currentGroupTitle 里的发布工作",
+                    description: "tabId 10 和 sequenceIndex 3 指向同一条线索，hostname 是 github.com。",
+                    confidence: "high",
+                    ids: [1],
+                    evidence: ["activeCount=3", "pageId:1", "sampleable false"]
+                  }
+                ],
+                timeline: [
+                  {
+                    label: "activeCount 上午线索",
+                    description: "windowId 1 的页面 lastSeenAt 很近。",
+                    ids: [1]
+                  }
+                ],
+                followUps: [
+                  {
+                    title: "复查 sampleable false 页面",
+                    reason: "tabId 11 暂时没有摘要。",
+                    ids: [2]
+                  }
+                ],
+                reviewCandidates: [
+                  {
+                    id: 2,
+                    priority: "medium",
+                    reason: "activeCount=0，pageId 2 可以复查。",
+                    evidence: ["ageDays 14", "tabId 11"]
+                  }
+                ],
+                coverageNote: "seenCount 和 idleDays 已参考。"
+              })
+            }
+          }
+        ]
+      }),
+      { status: 200, headers: { "content-type": "application/json" } }
+    );
+
+  const result = await generateTimeRecap(
+    chrome,
+    {
+      ...DEFAULT_SETTINGS,
+      plannerProvider: PLANNER_PROVIDERS.GATEWAY,
+      gatewayBaseUrl: "http://127.0.0.1:8317/v1",
+      gatewayApiKey: "test-key",
+      languageMode: "zh-CN"
+    },
+    {
+      range: { preset: "7d" },
+      now: NOW,
+      fetchImpl
+    }
+  );
+
+  const visibleText = [
+    result.recap.headline,
+    result.recap.summary,
+    result.recap.coverageNote,
+    result.recap.themes[0].title,
+    result.recap.themes[0].description,
+    ...result.recap.themes[0].evidence,
+    result.recap.timeline[0].label,
+    result.recap.timeline[0].description,
+    result.recap.followUps[0].title,
+    result.recap.followUps[0].reason,
+    result.recap.reviewCandidates[0].reason,
+    ...result.recap.reviewCandidates[0].evidence
+  ].join("\n");
+
+  assert.notEqual(result.recap.headline, "");
+  assert.doesNotMatch(visibleText, /\b(?:activeCount|seenCount|ageDays|idleDays|sampleable|tabId|pageId|windowId|sequenceIndex|currentGroupTitle|hostname)\b/i);
+  assert.match(visibleText, /打开次数/);
+  assert.match(visibleText, /现有分组/);
+  assert.match(visibleText, /保留天数/);
+});
+
 test("time recap runtime message returns local fallback without mutating tabs", async () => {
   const chrome = seededRecapChrome();
 

@@ -413,29 +413,31 @@ function buildTimeRecapUserPrompt(input) {
 function normalizeTimeRecap(parsed, input, settings) {
   const source = parsed?.recap || parsed?.result || parsed?.data || parsed || {};
   const pagesById = new Map((input.pages || []).map((page) => [page.id, page]));
+  const text = (value, maxLength) => productRecapText(value, settings, maxLength);
   const normalizeIds = (value) => uniqueNumbers(value?.ids || value?.pageIds || value?.pages || value?.tabIds)
     .map((id) => (pagesById.has(id) ? id : pageIdForTabId(input, id)))
     .filter((id) => pagesById.has(id));
   const themes = asArray(source.themes).slice(0, 8).map((theme, index) => {
     const ids = normalizeIds(theme).slice(0, 16);
+    const title = text(theme?.title, 80) || localizedText(settings.languageMode, `主题 ${index + 1}`, `Theme ${index + 1}`);
     return {
-      title: String(theme?.title || localizedText(settings.languageMode, `主题 ${index + 1}`, `Theme ${index + 1}`)).slice(0, 80),
-      description: String(theme?.description || theme?.summary || "").slice(0, 360),
+      title,
+      description: text(theme?.description || theme?.summary || "", 360),
       confidence: normalizeConfidence(theme?.confidence),
       pageIds: ids,
-      evidence: asArray(theme?.evidence).map(compactText).filter(Boolean).slice(0, 4)
+      evidence: asArray(theme?.evidence).map((item) => text(item, 120)).filter(Boolean).slice(0, 4)
     };
   }).filter((theme) => theme.title && (theme.description || theme.pageIds.length));
 
   const timeline = asArray(source.timeline).slice(0, 8).map((item) => ({
-    label: String(item?.label || "").slice(0, 80),
-    description: String(item?.description || item?.summary || "").slice(0, 300),
+    label: text(item?.label || "", 80),
+    description: text(item?.description || item?.summary || "", 300),
     pageIds: normalizeIds(item).slice(0, 12)
   })).filter((item) => item.label || item.description);
 
   const followUps = asArray(source.followUps || source.nextSteps).slice(0, 8).map((item) => ({
-    title: String(item?.title || "").slice(0, 80),
-    reason: String(item?.reason || item?.description || "").slice(0, 260),
+    title: text(item?.title || "", 80),
+    reason: text(item?.reason || item?.description || "", 260),
     pageIds: normalizeIds(item).slice(0, 12)
   })).filter((item) => item.title || item.reason);
 
@@ -448,8 +450,8 @@ function normalizeTimeRecap(parsed, input, settings) {
       tabId: page.tabId,
       windowId: page.windowId,
       priority: normalizePriority(item?.priority),
-      reason: String(item?.reason || "").slice(0, 260),
-      evidence: asArray(item?.evidence).map(compactText).filter(Boolean).slice(0, 4)
+      reason: text(item?.reason || "", 260),
+      evidence: asArray(item?.evidence).map((entry) => text(entry, 120)).filter(Boolean).slice(0, 4)
     };
   }).filter(Boolean);
 
@@ -457,13 +459,13 @@ function normalizeTimeRecap(parsed, input, settings) {
   return {
     schema: "tab_tidy_time_recap_v1",
     language: settings.languageMode === "en-US" ? "en-US" : "zh-CN",
-    headline: String(source.headline || local.headline).slice(0, 120),
-    summary: String(source.summary || local.summary).slice(0, 700),
+    headline: text(source.headline, 120) || text(local.headline, 120),
+    summary: text(source.summary, 700) || text(local.summary, 700),
     themes: themes.length ? themes : local.themes,
     timeline: timeline.length ? timeline : local.timeline,
     followUps: followUps.length ? followUps : local.followUps,
     reviewCandidates: reviewCandidates.length ? reviewCandidates : local.reviewCandidates,
-    coverageNote: String(source.coverageNote || local.coverageNote).slice(0, 300)
+    coverageNote: text(source.coverageNote, 300) || text(local.coverageNote, 300)
   };
 }
 
@@ -776,8 +778,52 @@ function asArray(value) {
   return Array.isArray(value) ? value : [];
 }
 
-function compactText(value) {
-  return String(value || "").trim().replace(/\s+/g, " ").slice(0, 120);
+function productRecapText(value, settings, maxLength = 120) {
+  const languageMode = settings?.languageMode === "en-US" ? "en-US" : "zh-CN";
+  const labels =
+    languageMode === "en-US"
+      ? {
+          activeCount: "times opened",
+          seenCount: "times seen",
+          ageDays: "days kept",
+          idleDays: "days idle",
+          firstSeenAt: "first seen",
+          lastSeenAt: "last active",
+          lastActivatedAt: "last used",
+          closedAt: "closed",
+          currentGroupTitle: "current group",
+          hostname: "site"
+        }
+      : {
+          activeCount: "打开次数",
+          seenCount: "记录次数",
+          ageDays: "保留天数",
+          idleDays: "闲置天数",
+          firstSeenAt: "首次看到",
+          lastSeenAt: "最近活跃",
+          lastActivatedAt: "最近使用",
+          closedAt: "已关闭时间",
+          currentGroupTitle: "现有分组",
+          hostname: "网站"
+        };
+  let text = String(value || "").trim().replace(/\s+/g, " ");
+  if (!text) return "";
+
+  text = text
+    .replace(/\b(?:tabId|pageId|windowId|sequenceIndex)\s*(?:为|=|is|:)?\s*["'#]?[A-Za-z0-9_.-]+["']?/gi, "")
+    .replace(/\b(?:tabId|pageId|windowId|sequenceIndex)\b/gi, "")
+    .replace(/\b(?:sampleable|discarded|pinned|audible)\s*(?:为|=|is|:)?\s*(?:true|false|yes|no|是|否)\b/gi, "");
+
+  for (const [raw, label] of Object.entries(labels)) {
+    text = text.replace(new RegExp(`\\b${raw}\\b`, "gi"), label);
+  }
+
+  return text
+    .replace(/\s+([,.;:!?，。；：！？])/g, "$1")
+    .replace(/([,，;；:：])\s*([,，;；:：])/g, "$1")
+    .replace(/^[,，;；:：\s]+|[,，;；:：\s]+$/g, "")
+    .replace(/\s+/g, " ")
+    .slice(0, maxLength);
 }
 
 function stableHash(value) {
