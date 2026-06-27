@@ -1040,14 +1040,20 @@ test("side panel restores a background planning error after reopening", async ({
   });
 
   await page.goto(`${baseUrl}/src/sidepanel/index.html`);
-  await expect(page.locator("#statusText")).toHaveText("This model is not available on the free gateway.");
+  await expect(page.locator("#statusText")).toHaveText("默认 AI 服务暂时不支持这个模型。请稍后再试，或在更多选项里切换模型。");
   await expect(page.locator("#previewSection")).toBeVisible();
   await expect(page.locator(".preview .step-label")).toHaveText("出错");
   await expect(page.locator(".preview .section-heading h2")).toHaveText("生成失败");
-  await expect(page.locator(".error-panel")).toContainText("This model is not available on the free gateway.");
+  await expect(page.locator(".error-panel")).toContainText("默认 AI 服务暂时不支持这个模型。");
+  await expect(page.locator(".error-panel")).not.toContainText("free gateway");
+  await expect(page.locator("#detailsText")).toContainText("This model is not available on the free gateway.");
   await expect(page.locator(".launch-panel")).toBeHidden();
   await expect(page.getByText("整理预览")).toBeHidden();
   await expect(page.getByRole("button", { name: "生成方案" })).toBeEnabled();
+  await page.locator("#uiLanguageToggle").click();
+  await expect(page.locator("#statusText")).toHaveText("The default AI service does not support this model right now. Try again later, or switch models in More options.");
+  await expect(page.locator(".error-panel")).toContainText("The default AI service does not support this model right now.");
+  await expect(page.locator(".error-panel")).not.toContainText("free gateway");
 });
 
 test("preview keeps review-like groups at the bottom", async ({ page }) => {

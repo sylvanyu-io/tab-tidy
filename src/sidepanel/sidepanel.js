@@ -47,6 +47,8 @@ const UI_COPY = Object.freeze({
     "status.noRollback": "还没有可回退的记录。",
     "status.invalidPlan": "当前方案不可用，请重新生成。",
     "status.progressCopyFailed": "提示文案生成失败，请稍后重试。",
+    "status.gatewayUnsupportedModel": "默认 AI 服务暂时不支持这个模型。请稍后再试，或在更多选项里切换模型。",
+    "status.gatewayInvalidOutput": "AI 服务这次返回格式异常。请重新生成，或在更多选项里切换模型。",
     "button.generate": "生成方案",
     "button.regenerate": "重新生成",
     "button.cancel": "取消",
@@ -282,6 +284,8 @@ const UI_COPY = Object.freeze({
     "status.noRollback": "No rollback snapshot is available yet.",
     "status.invalidPlan": "This plan is not ready to apply. Generate a new one.",
     "status.progressCopyFailed": "Progress captions could not be generated. Try again later.",
+    "status.gatewayUnsupportedModel": "The default AI service does not support this model right now. Try again later, or switch models in More options.",
+    "status.gatewayInvalidOutput": "The AI service returned an unexpected format. Regenerate, or switch models in More options.",
     "button.generate": "Generate plan",
     "button.regenerate": "Regenerate",
     "button.cancel": "Cancel",
@@ -591,7 +595,7 @@ let panelWindowId = null;
 const generatedCopyByOperation = new Map();
 const generatedCopyRequests = new Set();
 
-init().catch((error) => setStatus(error.message, true));
+init().catch((error) => setErrorStatus(error));
 
 async function init() {
   applyUiLanguage();
@@ -634,7 +638,7 @@ function bindEvents() {
         fields.hostPermissionRequestMode.value = "never";
         updateConditionalUi();
         await persistSettings();
-        setStatus(error.message, true);
+        setErrorStatus(error);
         return;
       }
       await persistSettings();
@@ -650,7 +654,7 @@ function bindEvents() {
       } catch (error) {
         fields.continuousPageSummaries.checked = false;
         await persistSettings();
-        setStatus(error.message, true);
+        setErrorStatus(error);
         return;
       }
     }
@@ -1108,7 +1112,7 @@ function setAnalysisMode(mode, options = {}) {
   fields.analyzeGrouping.checked = normalized !== "cleanup";
   fields.analyzeCleanup.checked = normalized !== "grouping";
   syncAnalysisModeControl();
-  if (options.persist) persistSettings().catch((error) => setStatus(friendlyErrorMessage(error), true));
+  if (options.persist) persistSettings().catch((error) => setErrorStatus(error));
 }
 
 function syncAnalysisModeControl() {
@@ -1209,8 +1213,8 @@ async function analyze() {
       setStatusKey("status.canceled");
     } else {
       const message = friendlyErrorMessage(error);
-      setStatus(message, true);
-      renderError(new Error(message));
+      setErrorStatus(error, message);
+      renderError(error);
     }
   } finally {
     stopProgressPolling();
@@ -1254,7 +1258,7 @@ async function generateTimeRecap() {
       return;
     }
     const message = friendlyErrorMessage(error);
-    setStatus(message, true);
+    setErrorStatus(error, message);
     renderTimeRecapError(error);
   } finally {
     stopRecapProgress();
@@ -1549,6 +1553,12 @@ function friendlyErrorMessage(error) {
   if (/Cannot apply an invalid plan/i.test(message)) return t("status.invalidPlan");
   if (/Progress copy generation returned invalid JSON/i.test(message)) return t("status.progressCopyFailed");
   if (/AI gateway time recap timed out/i.test(message)) return t("status.recapAiUnavailable");
+  if (/model.*not available.*free gateway|free gateway.*model.*not available|model_not_allowed/i.test(message)) {
+    return t("status.gatewayUnsupportedModel");
+  }
+  if (/AI gateway planner returned invalid JSON|Unexpected token|is not valid JSON|invalid JSON/i.test(message)) {
+    return t("status.gatewayInvalidOutput");
+  }
   return message;
 }
 
@@ -1564,7 +1574,7 @@ async function cancelAnalyze() {
       setStatusKey("status.canceled");
     }
   } catch (error) {
-    setStatus(friendlyErrorMessage(error), true);
+    setErrorStatus(error);
     nodes.cancelBtn.disabled = false;
   }
 }
@@ -1614,7 +1624,7 @@ async function applyLastPlan() {
     resetToSetup();
     setStatus(status);
   } catch (error) {
-    setStatus(friendlyErrorMessage(error), true);
+    setErrorStatus(error);
   } finally {
     setBusy(false);
   }
@@ -1663,7 +1673,7 @@ async function undoLastApply() {
     setStatus(t("status.undoDone", { count: result.restoredTabs || 0 }));
     renderDetails({ undoResult: result });
   } catch (error) {
-    setStatus(friendlyErrorMessage(error), true);
+    setErrorStatus(error);
   } finally {
     setBusy(false);
   }
@@ -2075,7 +2085,7 @@ async function closeCleanupTabs(tabIds) {
     renderPreview({ preview: lastPreview, validation: result.validation, settings: { languageMode: currentResultLanguageMode() } });
     setStatusKey("cleanup.closed", { count: result.closedTabIds?.length || 0 });
   } catch (error) {
-    setStatus(friendlyErrorMessage(error), true);
+    setErrorStatus(error);
   } finally {
     setBusy(false);
   }
@@ -2103,7 +2113,7 @@ function renderError(error) {
   nodes.previewRoot.className = "error-panel";
   nodes.previewRoot.replaceChildren(errorPanelContent(lastError));
   nodes.detailsRoot.hidden = false;
-  nodes.detailsText.textContent = JSON.stringify({ error: lastError.message }, null, 2);
+  nodes.detailsText.textContent = JSON.stringify({ error: lastError.message, visibleError: visibleErrorMessage(lastError) }, null, 2);
   syncActionState();
 }
 
@@ -2126,7 +2136,7 @@ async function focusActivityTab(tab) {
     await sendMessage({ type: "activity:focusTab", tabId: tab.tabId, windowId: tab.windowId, languageMode: uiLanguage });
     setStatusKey("activity.focused");
   } catch (error) {
-    setStatus(friendlyErrorMessage(error) || t("activity.focusFailed"), true);
+    setErrorStatus(error, t("activity.focusFailed"));
   }
 }
 
@@ -2148,11 +2158,15 @@ function resetToSetup() {
 function errorPanelContent(error) {
   const wrapper = document.createElement("div");
   const message = document.createElement("strong");
-  message.textContent = String(error?.message || t("status.previousFailed"));
+  message.textContent = visibleErrorMessage(error);
   const hint = document.createElement("small");
   hint.textContent = t("error.retryHint");
   wrapper.append(message, hint);
   return wrapper;
+}
+
+function visibleErrorMessage(error) {
+  return friendlyErrorMessage(error) || t("status.previousFailed");
 }
 
 async function clearAnalysisState() {
@@ -2234,9 +2248,10 @@ function restoreTerminalJob(job = {}) {
   stopProgressPolling();
   setBusy(false);
   const isError = job.status === "error";
-  const message = job.message || t(isError ? "status.previousFailed" : "status.previousCanceled");
+  const message = job.error || job.message || t(isError ? "status.previousFailed" : "status.previousCanceled");
+  const error = new Error(message);
   setStatus(message, isError);
-  if (isError) renderError(new Error(message));
+  if (isError) renderError(error);
 }
 
 function startProgressPolling() {
@@ -2495,8 +2510,16 @@ function setStatus(text, isError = false) {
   renderStatus();
 }
 
+function setErrorStatus(error, fallback = t("status.previousFailed")) {
+  setStatus(String(error?.message || error || fallback), true);
+}
+
 function renderStatus() {
-  const text = currentStatus.key ? t(currentStatus.key, currentStatus.params) : localizeKnownMessage(currentStatus.text);
+  const text = currentStatus.key
+    ? t(currentStatus.key, currentStatus.params)
+    : currentStatus.isError
+      ? visibleErrorMessage(new Error(currentStatus.text))
+      : localizeKnownMessage(currentStatus.text);
   nodes.statusText.textContent = text;
   nodes.statusText.dataset.tone = currentStatus.isError ? "error" : "";
 }
