@@ -2,7 +2,7 @@
 
 这里保留长期有用的产品、架构、权限、测试和发布文档。一次性实验记录放在 `benchmarks/archive/`，当前可读结论放在 `benchmarks/README.md`。
 
-## 01-09 稳定文档
+## 01-10 稳定文档
 
 1. [Product analysis](01-product-analysis.md) - 产品方向、核心风险和 MVP 边界。
 2. [Agent contract](02-agent-contract.md) - AI planner 可用信息、工具能力和执行限制。
@@ -13,6 +13,7 @@
 7. [Planner optimization](07-planner-optimization.md) - 模型路由、并行化和性能优化方向。
 8. [Agent harness research](08-agent-harness-research.md) - 外部 agent harness 模式如何映射到 Tab Tidy。
 9. [Release readiness](09-release-readiness.md) - 发布前检查清单和残余风险。
+10. [Time recap plan](10-time-recap-plan.md) - 基于本地活动和页面摘要生成时间段回顾的开发计划与落地状态。
 
 ## Benchmark 入口
 
