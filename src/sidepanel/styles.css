@@ -1553,8 +1553,7 @@ details[open] > summary::before {
 
 .cleanup-preview-header {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: 10px;
+  gap: 2px;
   align-items: start;
 }
 
@@ -1568,21 +1567,18 @@ details[open] > summary::before {
   font-weight: 850;
 }
 
-.cleanup-preview-header small,
-.cleanup-selected-count {
+.cleanup-preview-header small {
   color: var(--muted);
   font-size: 11.5px;
   line-height: 1.35;
 }
 
-.cleanup-preview-actions,
 .cleanup-row-actions {
   display: flex;
   gap: 5px;
   align-items: center;
 }
 
-.cleanup-preview-actions button,
 .cleanup-row-actions button {
   display: inline-flex;
   align-items: center;
@@ -1612,19 +1608,6 @@ details[open] > summary::before {
   transform: translateY(-0.5px);
 }
 
-.cleanup-preview-actions button:disabled {
-  color: var(--faint);
-  background: color-mix(in srgb, var(--surface-soft) 55%, transparent);
-  border-color: color-mix(in srgb, var(--line) 20%, transparent);
-  cursor: default;
-}
-
-.cleanup-preview-actions button[aria-pressed="true"] {
-  color: #fff;
-  background: var(--primary);
-  border-color: color-mix(in srgb, var(--primary) 76%, var(--line));
-}
-
 .cleanup-row-actions button:last-child {
   color: var(--muted);
   background: color-mix(in srgb, var(--surface-soft) 76%, transparent);
@@ -1639,7 +1622,7 @@ details[open] > summary::before {
 .cleanup-preview-row {
   position: relative;
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr);
   gap: 9px;
   align-items: start;
   padding: 10px;
@@ -1649,13 +1632,6 @@ details[open] > summary::before {
   box-shadow:
     0 8px 18px rgba(42, 38, 31, 0.06),
     inset 0 1px 0 color-mix(in srgb, #ffffff 34%, transparent);
-}
-
-.cleanup-select {
-  width: 18px;
-  height: 18px;
-  margin: 3px 0 0;
-  accent-color: var(--primary);
 }
 
 .cleanup-preview-body {

@@ -232,14 +232,14 @@ test("control surface renders settings and mock preview", async ({ page }) => {
   await expect(page.locator(".cleanup-preview").getByText("建议先检查", { exact: true })).toBeVisible();
   await expect(page.locator(".cleanup-preview").getByText("旧方案对比笔记")).toBeVisible();
   await expect(page.locator(".cleanup-row-actions .icon-action").first()).toBeVisible();
-  await expect(page.locator(".cleanup-preview-actions .icon-action")).toHaveText("全选");
   await expect(page.locator(".cleanup-row-actions").first().locator(".icon-action")).toHaveText(["定位", "关闭"]);
+  await expect(page.locator(".cleanup-preview-actions")).toHaveCount(0);
+  await expect(page.locator(".cleanup-select")).toHaveCount(0);
   await expect(page.getByText("待确认")).toHaveCount(0);
   await expect(page.locator(".preview-stats")).toHaveCount(0);
   await expect(page.locator(".stat-chip")).toHaveCount(0);
   await page.locator("#uiLanguageToggle").click();
   await expect(page.locator("#previewCount")).toHaveText("3 groups");
-  await expect(page.locator(".cleanup-preview-actions .icon-action")).toHaveText("Select all");
   await expect(page.locator(".cleanup-row-actions").first().locator(".icon-action")).toHaveText(["Find", "Close"]);
   await expect(
     page
@@ -324,18 +324,11 @@ test("cleanup candidates are returned with the generated plan and can be closed 
   await expect(page.locator(".cleanup-preview")).not.toContainText("ageDays");
   await expect(page.locator(".cleanup-preview")).not.toContainText("标题为");
 
-  const selectAllAction = page.locator(".cleanup-preview-actions .icon-action");
-  const idleSelectAllBackground = await selectAllAction.evaluate((element) => getComputedStyle(element).backgroundColor);
-  await page.locator(".cleanup-preview").getByRole("button", { name: "全选清理建议" }).click();
-  await expect(page.locator(".cleanup-selected-count")).toHaveText("已选 2 个");
-  await expect(selectAllAction).toHaveAttribute("aria-pressed", "true");
-  await expect
-    .poll(() => selectAllAction.evaluate((element) => getComputedStyle(element).backgroundColor))
-    .not.toBe(idleSelectAllBackground);
-  await expect(page.locator(".cleanup-preview").getByRole("button", { name: "取消全选清理建议" })).toBeVisible();
-  await page.locator(".cleanup-preview").getByRole("button", { name: "取消全选清理建议" }).click();
-  await expect(page.locator(".cleanup-selected-count")).toHaveText("已选 0 个");
-  await expect(selectAllAction).toHaveAttribute("aria-pressed", "false");
+  await expect(page.locator(".cleanup-preview-actions")).toHaveCount(0);
+  await expect(page.locator(".cleanup-select")).toHaveCount(0);
+  await expect(page.locator(".cleanup-selected-count")).toHaveCount(0);
+  await expect(page.locator(".cleanup-preview").getByRole("button", { name: "全选清理建议" })).toHaveCount(0);
+  await expect(page.locator(".cleanup-preview").getByRole("button", { name: "取消全选清理建议" })).toHaveCount(0);
   await expect(page.locator(".cleanup-preview").getByRole("button", { name: "关闭选中的标签页" })).toHaveCount(0);
   await page.locator(".cleanup-preview").getByRole("button", { name: "关闭这个标签页" }).first().click();
   await page.locator(".cleanup-preview").getByRole("button", { name: "关闭这个标签页" }).first().click();
@@ -360,7 +353,8 @@ test("cleanup-only mode renders cleanup copy without fake grouping", async ({ pa
   await expect(page.locator("#previewRoot")).not.toContainText("本次按要求不自动分组");
   await expect(page.locator(".preview .group-row")).toHaveCount(0);
   await expect(page.getByRole("button", { name: "开始整理" })).toBeHidden();
-  await expect(page.locator(".cleanup-preview").getByRole("button", { name: "全选清理建议" })).toBeVisible();
+  await expect(page.locator(".cleanup-preview-actions")).toHaveCount(0);
+  await expect(page.locator(".cleanup-select")).toHaveCount(0);
   await expect(page.locator(".cleanup-preview").getByRole("button", { name: "关闭选中的标签页" })).toHaveCount(0);
 });
 
