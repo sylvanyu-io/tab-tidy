@@ -1829,7 +1829,8 @@ function cleanupPreviewRow(candidate) {
   close.addEventListener("click", () => closeCleanupTabs([candidate.tabId]));
   actions.append(focus, close);
 
-  row.append(body, actions);
+  body.prepend(actions);
+  row.append(body);
   return row;
 }
 
