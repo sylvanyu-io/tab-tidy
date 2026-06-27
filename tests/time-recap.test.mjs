@@ -88,6 +88,21 @@ test("time recap runtime message returns local fallback without mutating tabs", 
   assert.equal((await chrome.tabs.query({})).length, 3);
 });
 
+test("time recap local themes do not use existing browser groups as the primary axis", async () => {
+  const chrome = seededRecapChrome();
+
+  const result = await generateTimeRecap(
+    chrome,
+    { ...DEFAULT_SETTINGS, plannerProvider: PLANNER_PROVIDERS.FAKE, languageMode: "zh-CN" },
+    { range: { preset: "7d" }, now: NOW }
+  );
+
+  assert.equal(result.source, "local");
+  assert.equal(result.recap.themes.some((theme) => theme.title === "Extension release"), false);
+  assert.equal(result.recap.timeline.length > 0, true);
+  assert.match(result.recap.summary, /打开次数/);
+});
+
 test("time recap custom range is capped and validates ordering", () => {
   const range = normalizeTimeRecapRange(
     {
@@ -104,6 +119,12 @@ test("time recap custom range is capped and validates ordering", () => {
     () => normalizeTimeRecapRange({ preset: "custom", from: "2026-06-28T00:00:00.000Z", to: "2026-06-27T00:00:00.000Z" }, NOW),
     /after the start/
   );
+});
+
+test("time recap preset ranges support quick range buttons", () => {
+  assert.equal(normalizeTimeRecapRange({ preset: "1d" }, NOW).label, "1d");
+  assert.equal(normalizeTimeRecapRange({ preset: "thisWeek" }, NOW).label, "thisWeek");
+  assert.equal(normalizeTimeRecapRange({ preset: "thisMonth" }, NOW).label, "thisMonth");
 });
 
 function seededRecapChrome() {

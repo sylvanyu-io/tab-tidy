@@ -165,22 +165,26 @@
           </div>
 
           <div class="recap-controls">
-            <div class="field setting-select-row">
-              <label for="recapRangePreset">时间范围</label>
-              <select id="recapRangePreset">
-                <option value="today">今天</option>
-                <option value="7d" selected>最近 7 天</option>
-                <option value="30d">最近 30 天</option>
-                <option value="custom">自定义</option>
-              </select>
+            <div class="recap-range-head">
+              <span id="recapRangeLabel">时间范围</span>
+              <div class="recap-range-shortcuts" aria-label="快捷时间范围">
+                <button type="button" data-recap-preset="1d">最近 1 天</button>
+                <button type="button" data-recap-preset="7d" aria-pressed="true">最近 7 天</button>
+                <button type="button" data-recap-preset="30d">最近 30 天</button>
+                <button type="button" data-recap-preset="today">今天</button>
+                <button type="button" data-recap-preset="thisWeek">本周</button>
+                <button type="button" data-recap-preset="thisMonth">本月</button>
+              </div>
             </div>
 
-            <div id="recapCustomRange" class="recap-custom-range" hidden>
-              <div class="field setting-input-row">
+            <input id="recapRangePreset" type="hidden" value="7d" />
+            <div id="recapCustomRange" class="recap-date-range">
+              <div class="date-field">
                 <label for="recapFromDate">开始日期</label>
                 <input id="recapFromDate" type="date" />
               </div>
-              <div class="field setting-input-row">
+              <span class="date-range-separator" aria-hidden="true">-</span>
+              <div class="date-field">
                 <label for="recapToDate">结束日期</label>
                 <input id="recapToDate" type="date" />
               </div>

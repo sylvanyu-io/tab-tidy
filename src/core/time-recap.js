@@ -246,11 +246,28 @@ export function normalizeTimeRecapRange(rawRange = {}, now = Date.now()) {
   let from = Number.NaN;
   let to = Number.NaN;
 
-  if (preset === "custom") {
+  if (rawRange.from || rawRange.to || rawRange.fromIso || rawRange.toIso) {
     from = Date.parse(rawRange.from || rawRange.fromIso || "");
     to = Date.parse(rawRange.to || rawRange.toIso || "");
   } else if (preset === "today") {
     const start = new Date(nowMs);
+    start.setHours(0, 0, 0, 0);
+    from = start.getTime();
+    to = nowMs;
+  } else if (preset === "1d") {
+    from = nowMs - DAY_MS;
+    to = nowMs;
+  } else if (preset === "thisWeek") {
+    const start = new Date(nowMs);
+    const day = start.getDay();
+    const diffToMonday = day === 0 ? 6 : day - 1;
+    start.setDate(start.getDate() - diffToMonday);
+    start.setHours(0, 0, 0, 0);
+    from = start.getTime();
+    to = nowMs;
+  } else if (preset === "thisMonth") {
+    const start = new Date(nowMs);
+    start.setDate(1);
     start.setHours(0, 0, 0, 0);
     from = start.getTime();
     to = nowMs;
@@ -273,7 +290,7 @@ export function normalizeTimeRecapRange(rawRange = {}, now = Date.now()) {
   }
 
   return {
-    preset: ["today", "7d", "30d", "custom"].includes(preset) ? preset : "7d",
+    preset: ["1d", "today", "7d", "30d", "thisWeek", "thisMonth", "custom"].includes(preset) ? preset : "7d",
     from: new Date(from).toISOString(),
     to: new Date(to).toISOString(),
     rangeMs: to - from,
@@ -369,6 +386,9 @@ function buildTimeRecapSystemPrompt(settings) {
     "Return exactly one JSON object. Do not include markdown, prose, comments, or explanations outside JSON.",
     "Summarize what the user appears to have been working on during the requested time range using only the provided local tab activity and page summaries.",
     "This is not browser history. Be honest about weak evidence without using scary coverage language.",
+    "Use time as the primary structure: explain what happened across the selected range before naming topical clusters.",
+    "currentGroupTitle is only a weak context clue from existing browser groups. Do not turn existing group names into the main recap unless page titles, summaries, and activity also support it.",
+    "Use closed pages and still-open pages equally when their activity falls inside the range.",
     "Write user-facing product copy. Do not expose raw implementation terms such as activeCount, ageDays, idleDays, pageId, tabId, sampleable, sequenceIndex, cache, lifecycle, or hostname as labels.",
     "Do not say tabs will be deleted. Review candidates are manual suggestions only.",
     "Required JSON shape: {schema:\"tab_tidy_time_recap_v1\",language:\"zh-CN\"|\"en-US\",headline:string,summary:string,themes:[{title:string,description:string,confidence:\"high\"|\"medium\"|\"low\",ids:number[],evidence:string[]}],timeline:[{label:string,description:string,ids:number[]}],followUps:[{title:string,reason:string,ids:number[]}],reviewCandidates:[{id:number,priority:\"high\"|\"medium\"|\"low\",reason:string,evidence:string[]}],coverageNote:string}.",
@@ -525,7 +545,7 @@ function pageScore(page, range) {
   let score = 0;
   if (page.open) score += 80;
   if (page.summary) score += 32;
-  if (page.currentGroupTitle) score += 8;
+  if (page.currentGroupTitle) score += 3;
   if (page.activeCount) score += Math.min(24, page.activeCount * 4);
   if (page.seenCount) score += Math.min(18, page.seenCount * 3);
   if (page.discarded) score -= 6;
@@ -537,7 +557,7 @@ function pageScore(page, range) {
 function localThemeBuckets(pages) {
   const buckets = new Map();
   for (const page of pages) {
-    const key = page.currentGroupTitle || page.summary?.contentKind || dominantToken(page) || page.hostname || "other";
+    const key = dominantToken(page) || page.summary?.contentKind || page.hostname || "other";
     const title = titleForBucket(key, page);
     if (!buckets.has(key)) buckets.set(key, { key, title, pages: [] });
     buckets.get(key).pages.push(page);
@@ -551,19 +571,20 @@ function localHeadline(themes, input, settings) {
   if (!input.pages.length) {
     return localizedText(settings.languageMode, "这段时间还没有足够的本地线索", "Not enough local signals yet");
   }
-  const names = themes.slice(0, 3).map((theme) => theme.title).filter(Boolean);
+  const topDays = localTimeline(input.pages, input, settings).slice(0, 2).map((item) => item.label).filter(Boolean);
+  const names = themes.slice(0, 2).map((theme) => theme.title).filter(Boolean);
   return localizedText(
     settings.languageMode,
-    `最近主要围绕 ${names.join("、") || "几个分散主题"}。`,
-    `Recent work centered on ${names.join(", ") || "a few separate threads"}.`
+    `${topDays.length ? `${topDays.join("、")} 的活动最集中` : "这段时间有连续活动"}，主题线索包括 ${names.join("、") || "几个分散方向"}。`,
+    `${topDays.length ? `${topDays.join(" and ")} had the most activity` : "The range has steady activity"}, with topic clues around ${names.join(", ") || "several separate threads"}.`
   );
 }
 
 function localSummary(themes, pages, input, settings) {
   return localizedText(
     settings.languageMode,
-    `已梳理 ${pages.length} 个本地页面线索，其中 ${input.coverage.sampledEntries} 个带页面摘要。这个回顾会优先参考仍打开、最近活跃和有摘要的页面。`,
-    `Reviewed ${pages.length} local page signals, including ${input.coverage.sampledEntries} with page summaries. This recap favors still-open, recently active, and summarized pages.`
+    `已梳理 ${pages.length} 个本地页面线索，结合最近活跃、打开次数、保留时长、是否仍打开、现有分组和 ${input.coverage.sampledEntries} 个页面摘要来还原这段时间的工作脉络。`,
+    `Reviewed ${pages.length} local page signals, combining recent activity, open counts, tab age, open/closed state, existing groups, and ${input.coverage.sampledEntries} page summaries to reconstruct the work pattern.`
   );
 }
 
@@ -580,9 +601,21 @@ function localTimeline(pages, input, settings) {
     .slice(0, 5)
     .map(([day, dayPages]) => ({
       label: day,
-      description: localizedText(settings.languageMode, `${dayPages.length} 个页面有活动记录。`, `${dayPages.length} pages had activity.`),
+      description: timelineDescription(dayPages, settings),
       pageIds: dayPages.slice(0, 10).map((page) => page.id)
     }));
+}
+
+function timelineDescription(dayPages, settings) {
+  const activePages = dayPages.filter((page) => page.activeCount > 0).length;
+  const summarized = dayPages.filter((page) => page.summary).length;
+  const closed = dayPages.filter((page) => page.closedAt).length;
+  const topics = localThemeBuckets(dayPages).slice(0, 3).map((bucket) => bucket.title).filter(Boolean);
+  return localizedText(
+    settings.languageMode,
+    `${dayPages.length} 个页面留下活动线索${activePages ? `，其中 ${activePages} 个被切回查看` : ""}${summarized ? `，${summarized} 个带页面摘要` : ""}${closed ? `，${closed} 个后来已关闭` : ""}。主要涉及 ${topics.join("、") || "几个分散方向"}。`,
+    `${dayPages.length} pages left activity signals${activePages ? `, ${activePages} were revisited` : ""}${summarized ? `, ${summarized} have page summaries` : ""}${closed ? `, ${closed} were later closed` : ""}. Main clues: ${topics.join(", ") || "several separate threads"}.`
+  );
 }
 
 function localFollowUps(pages, settings) {
@@ -599,8 +632,8 @@ function localFollowUps(pages, settings) {
 function coverageNote(input, settings) {
   return localizedText(
     settings.languageMode,
-    `已结合 ${input.coverage.includedPages} 个本机页面线索、${input.coverage.sampledEntries} 个页面摘要和当前打开标签页状态。`,
-    `Used ${input.coverage.includedPages} local page signals, ${input.coverage.sampledEntries} page summaries, and current open-tab state.`
+    `已结合 ${input.coverage.includedPages} 个本机页面线索、${input.coverage.sampledEntries} 个页面摘要、打开/关闭状态和活动记录。`,
+    `Used ${input.coverage.includedPages} local page signals, ${input.coverage.sampledEntries} page summaries, open/closed state, and activity records.`
   );
 }
 
@@ -689,7 +722,10 @@ function ageMs(value, nowValue) {
 }
 
 function rangeLabel(rangeMs, preset) {
+  if (preset === "1d") return "1d";
   if (preset === "today") return "today";
+  if (preset === "thisWeek") return "thisWeek";
+  if (preset === "thisMonth") return "thisMonth";
   const days = Math.max(1, Math.round(rangeMs / DAY_MS));
   return `${days}d`;
 }
@@ -709,8 +745,7 @@ function titleTokens(text) {
 }
 
 function titleForBucket(key, page) {
-  if (page.currentGroupTitle) return page.currentGroupTitle;
-  if (page.summary?.contentKind) return page.summary.contentKind;
+  if (page.summary?.contentKind && key === page.summary.contentKind) return page.summary.contentKind;
   if (key === page.hostname) return page.hostname;
   return key.replace(/[-_]+/g, " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
 }

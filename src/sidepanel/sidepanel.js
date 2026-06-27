@@ -112,19 +112,22 @@ const UI_COPY = Object.freeze({
     "cleanup.selectedCount": "已选 {count} 个",
     "recap.step": "近期回顾",
     "recap.heading": "看看最近主要在忙什么",
-    "recap.subtitle": "根据本机活动、标题、网址和可用页面摘要生成，不会自动关闭标签页。",
+    "recap.subtitle": "结合最近活跃、打开次数、保留时长、标题、网址、现有分组和可用页面摘要生成，不会自动关闭标签页。",
     "recap.range": "时间范围",
-    "recap.today": "今天",
+    "recap.1d": "最近 1 天",
+    "recap.today": "本日",
     "recap.7d": "最近 7 天",
     "recap.30d": "最近 30 天",
-    "recap.custom": "自定义",
+    "recap.thisWeek": "本周",
+    "recap.thisMonth": "本月",
+    "recap.shortcuts": "快捷时间范围",
     "recap.from": "开始日期",
     "recap.to": "结束日期",
     "recap.generate": "生成回顾",
     "recap.generating": "正在生成…",
     "recap.empty": "还没有回顾。",
-    "recap.themes": "主要方向",
-    "recap.timeline": "时间线索",
+    "recap.themes": "主题线索",
+    "recap.timeline": "时间轴",
     "recap.followUps": "下次继续",
     "recap.review": "值得复查",
     "recap.evidence": "证据详情",
@@ -327,19 +330,22 @@ const UI_COPY = Object.freeze({
     "cleanup.selectedCount": "{count} selected",
     "recap.step": "Recent recap",
     "recap.heading": "See what you have been working on",
-    "recap.subtitle": "Built from local activity, titles, URLs, and available page summaries. It never closes tabs automatically.",
+    "recap.subtitle": "Uses recent activity, open counts, age, titles, URLs, existing groups, and available page summaries. It never closes tabs automatically.",
     "recap.range": "Time range",
+    "recap.1d": "Last 1 day",
     "recap.today": "Today",
     "recap.7d": "Last 7 days",
     "recap.30d": "Last 30 days",
-    "recap.custom": "Custom",
+    "recap.thisWeek": "This week",
+    "recap.thisMonth": "This month",
+    "recap.shortcuts": "Quick ranges",
     "recap.from": "Start date",
     "recap.to": "End date",
     "recap.generate": "Generate recap",
     "recap.generating": "Generating...",
     "recap.empty": "No recap yet.",
-    "recap.themes": "Main threads",
-    "recap.timeline": "Timeline clues",
+    "recap.themes": "Topic clues",
+    "recap.timeline": "Timeline",
     "recap.followUps": "Continue next",
     "recap.review": "Worth reviewing",
     "recap.evidence": "Evidence details",
@@ -521,7 +527,8 @@ const nodes = {
   recapGenerateBtn: document.querySelector("#recapGenerateBtn"),
   recapResult: document.querySelector("#recapResult"),
   recapDetailsRoot: document.querySelector("#recapDetailsRoot"),
-  recapDetailsText: document.querySelector("#recapDetailsText")
+  recapDetailsText: document.querySelector("#recapDetailsText"),
+  recapQuickButtons: document.querySelectorAll("[data-recap-preset]")
 };
 
 let uiLanguage = readStoredUiLanguage() || browserUiLanguage();
@@ -619,7 +626,11 @@ function bindEvents() {
   nodes.undoBtn.addEventListener("click", undoLastApply);
   nodes.uiLanguageToggle?.addEventListener("click", toggleUiLanguage);
   nodes.recapGenerateBtn?.addEventListener("click", generateTimeRecap);
-  fields.recapRangePreset?.addEventListener("change", syncRecapRangeUi);
+  for (const button of nodes.recapQuickButtons || []) {
+    button.addEventListener("click", () => setRecapPreset(button.dataset.recapPreset || "7d"));
+  }
+  fields.recapFromDate?.addEventListener("change", markRecapRangeCustom);
+  fields.recapToDate?.addEventListener("change", markRecapRangeCustom);
   for (const button of nodes.modeTabs || []) {
     button.addEventListener("click", () => setPanelMode(button.dataset.panelMode || "organize"));
   }
@@ -702,13 +713,16 @@ function applyUiLanguage() {
   setText(".recap-intro .step-label", t("recap.step"));
   setText(".recap-intro h2", t("recap.heading"));
   setText(".recap-intro p:not(.step-label)", t("recap.subtitle"));
-  setText('label[for="recapRangePreset"]', t("recap.range"));
+  setText("#recapRangeLabel", t("recap.range"));
   setText('label[for="recapFromDate"]', t("recap.from"));
   setText('label[for="recapToDate"]', t("recap.to"));
-  setOptionText("#recapRangePreset", "today", t("recap.today"));
-  setOptionText("#recapRangePreset", "7d", t("recap.7d"));
-  setOptionText("#recapRangePreset", "30d", t("recap.30d"));
-  setOptionText("#recapRangePreset", "custom", t("recap.custom"));
+  setAttribute(".recap-range-shortcuts", "aria-label", t("recap.shortcuts"));
+  setText('[data-recap-preset="1d"]', t("recap.1d"));
+  setText('[data-recap-preset="today"]', t("recap.today"));
+  setText('[data-recap-preset="7d"]', t("recap.7d"));
+  setText('[data-recap-preset="30d"]', t("recap.30d"));
+  setText('[data-recap-preset="thisWeek"]', t("recap.thisWeek"));
+  setText('[data-recap-preset="thisMonth"]', t("recap.thisMonth"));
   setButtonLabel(nodes.recapGenerateBtn, t("recap.generate"));
   setText("#recapDetailsRoot > summary", t("recap.evidence"));
   setAttribute("#gatewayCustomModel", "placeholder", t("placeholder.customModel"));
@@ -834,17 +848,57 @@ function applyPanelMode() {
 
 function initializeRecapDates() {
   if (!fields.recapFromDate || !fields.recapToDate) return;
-  const now = new Date();
-  const sevenDaysAgo = new Date(now.getTime() - 6 * 24 * 60 * 60 * 1000);
-  fields.recapFromDate.value = dateInputValue(sevenDaysAgo);
-  fields.recapToDate.value = dateInputValue(now);
-  syncRecapRangeUi();
+  setRecapPreset(fields.recapRangePreset?.value || "7d", { silent: true });
 }
 
 function syncRecapRangeUi() {
-  if (nodes.recapCustomRange && fields.recapRangePreset) {
-    nodes.recapCustomRange.hidden = fields.recapRangePreset.value !== "custom";
+  const preset = fields.recapRangePreset?.value || "custom";
+  for (const button of nodes.recapQuickButtons || []) {
+    button.setAttribute("aria-pressed", button.dataset.recapPreset === preset ? "true" : "false");
   }
+}
+
+function setRecapPreset(preset, options = {}) {
+  const normalized = normalizeRecapPreset(preset);
+  if (fields.recapRangePreset) fields.recapRangePreset.value = normalized;
+  if (normalized !== "custom") {
+    const range = dateRangeForRecapPreset(normalized);
+    fields.recapFromDate.value = dateInputValue(range.from);
+    fields.recapToDate.value = dateInputValue(range.to);
+  }
+  syncRecapRangeUi();
+  if (!options.silent) fields.recapRangePreset?.dispatchEvent(new Event("change", { bubbles: true }));
+}
+
+function markRecapRangeCustom() {
+  if (fields.recapRangePreset) fields.recapRangePreset.value = "custom";
+  syncRecapRangeUi();
+}
+
+function normalizeRecapPreset(value) {
+  return ["1d", "7d", "30d", "today", "thisWeek", "thisMonth", "custom"].includes(value) ? value : "7d";
+}
+
+function dateRangeForRecapPreset(preset) {
+  const now = new Date();
+  const from = new Date(now);
+  const to = new Date(now);
+  if (preset === "today") {
+    from.setHours(0, 0, 0, 0);
+  } else if (preset === "thisWeek") {
+    const day = from.getDay();
+    const diffToMonday = day === 0 ? 6 : day - 1;
+    from.setDate(from.getDate() - diffToMonday);
+    from.setHours(0, 0, 0, 0);
+  } else if (preset === "thisMonth") {
+    from.setDate(1);
+    from.setHours(0, 0, 0, 0);
+  } else {
+    const days = preset === "1d" ? 1 : preset === "30d" ? 30 : 7;
+    from.setDate(from.getDate() - days + 1);
+    from.setHours(0, 0, 0, 0);
+  }
+  return { from, to };
 }
 
 function dateInputValue(date) {
@@ -1081,9 +1135,6 @@ async function generateTimeRecap() {
 }
 
 function readRecapRange() {
-  const preset = fields.recapRangePreset.value || "7d";
-  if (preset !== "custom") return { preset };
-
   const fromValue = fields.recapFromDate.value;
   const toValue = fields.recapToDate.value;
   const from = dateInputStartIso(fromValue);
@@ -1091,7 +1142,11 @@ function readRecapRange() {
   if (!from || !to || Date.parse(to) < Date.parse(from)) {
     throw new Error(t("status.recapRangeInvalid"));
   }
-  return { preset: "custom", from, to };
+  return {
+    preset: normalizeRecapPreset(fields.recapRangePreset?.value || "custom"),
+    from,
+    to
+  };
 }
 
 function dateInputStartIso(value) {
@@ -1139,8 +1194,8 @@ function renderTimeRecap(result) {
   }
 
   const children = [summary];
-  children.push(...recapSection(t("recap.themes"), recap.themes, pagesById));
   children.push(...recapSection(t("recap.timeline"), recap.timeline, pagesById, { labelKey: "label" }));
+  children.push(...recapSection(t("recap.themes"), recap.themes, pagesById));
   children.push(...recapSection(t("recap.followUps"), recap.followUps, pagesById, { descriptionKey: "reason" }));
   children.push(...recapReviewSection(recap.reviewCandidates, pagesById));
 

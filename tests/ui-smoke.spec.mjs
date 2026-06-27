@@ -269,15 +269,18 @@ test("time recap mode renders a first-class recap surface", async ({ page }) => 
   await expect(page.locator(".actions")).toBeHidden();
   await expect(page.getByText("看看最近主要在忙什么")).toBeVisible();
   await expect(page.locator("#recapRangePreset")).toHaveValue("7d");
-  await expect(page.locator("#recapCustomRange")).toBeHidden();
-
-  await page.locator("#recapRangePreset").selectOption("custom");
   await expect(page.locator("#recapCustomRange")).toBeVisible();
-  await page.locator("#recapRangePreset").selectOption("7d");
+  await expect(page.locator("#recapFromDate")).toBeVisible();
+  await expect(page.locator("#recapToDate")).toBeVisible();
+
+  await page.getByRole("button", { name: "最近 1 天" }).click();
+  await expect(page.locator("#recapRangePreset")).toHaveValue("1d");
+  await page.getByRole("button", { name: "最近 7 天" }).click();
   await page.getByRole("button", { name: "生成回顾" }).click();
 
   await expect(page.locator("#statusText")).toHaveText("回顾已生成");
   await expect(page.locator(".recap-summary-card")).toContainText("最近主要在打磨扩展体验和验证 AI 整理策略。");
+  await expect(page.locator(".recap-section-title").first()).toHaveText("时间轴");
   await expect(page.locator(".recap-card").getByText("扩展产品打磨", { exact: true })).toBeVisible();
   await expect(page.locator(".recap-card").getByText("整理策略验证", { exact: true })).toBeVisible();
   await expect(page.locator(".recap-card").getByText("发布完成后，这个检查清单可能可以关闭。", { exact: true })).toBeVisible();
