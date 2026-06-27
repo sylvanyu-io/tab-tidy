@@ -1619,6 +1619,12 @@ details[open] > summary::before {
   cursor: default;
 }
 
+.cleanup-preview-actions button[aria-pressed="true"] {
+  color: #fff;
+  background: var(--primary);
+  border-color: color-mix(in srgb, var(--primary) 76%, var(--line));
+}
+
 .cleanup-row-actions button:last-child {
   color: var(--muted);
   background: color-mix(in srgb, var(--surface-soft) 76%, transparent);

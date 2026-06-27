@@ -324,11 +324,18 @@ test("cleanup candidates are returned with the generated plan and can be closed 
   await expect(page.locator(".cleanup-preview")).not.toContainText("ageDays");
   await expect(page.locator(".cleanup-preview")).not.toContainText("标题为");
 
+  const selectAllAction = page.locator(".cleanup-preview-actions .icon-action");
+  const idleSelectAllBackground = await selectAllAction.evaluate((element) => getComputedStyle(element).backgroundColor);
   await page.locator(".cleanup-preview").getByRole("button", { name: "全选清理建议" }).click();
   await expect(page.locator(".cleanup-selected-count")).toHaveText("已选 2 个");
+  await expect(selectAllAction).toHaveAttribute("aria-pressed", "true");
+  await expect
+    .poll(() => selectAllAction.evaluate((element) => getComputedStyle(element).backgroundColor))
+    .not.toBe(idleSelectAllBackground);
   await expect(page.locator(".cleanup-preview").getByRole("button", { name: "取消全选清理建议" })).toBeVisible();
   await page.locator(".cleanup-preview").getByRole("button", { name: "取消全选清理建议" }).click();
   await expect(page.locator(".cleanup-selected-count")).toHaveText("已选 0 个");
+  await expect(selectAllAction).toHaveAttribute("aria-pressed", "false");
   await expect(page.locator(".cleanup-preview").getByRole("button", { name: "关闭选中的标签页" })).toHaveCount(0);
   await page.locator(".cleanup-preview").getByRole("button", { name: "关闭这个标签页" }).first().click();
   await page.locator(".cleanup-preview").getByRole("button", { name: "关闭这个标签页" }).first().click();
