@@ -2775,16 +2775,7 @@ function sourceWindowIdFromUrl() {
   }
 }
 
-async function maybeDelayMockMessage(type) {
-  const delays = globalThis.__tabRecapMockMessageDelays;
-  const delayMs = Number(delays?.[type] || 0);
-  if (Number.isFinite(delayMs) && delayMs > 0) {
-    await new Promise((resolve) => setTimeout(resolve, delayMs));
-  }
-}
-
 async function mockMessage(message) {
-  await maybeDelayMockMessage(message.type);
   if (message.type === "settings:get") {
     return {
       organizeMode: "current_window",

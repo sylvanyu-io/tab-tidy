@@ -587,15 +587,16 @@ test("cleanup candidates are returned with the generated plan and can be closed 
   await expect(page.locator(".cleanup-preview").getByRole("button", { name: "全选清理建议" })).toHaveCount(0);
   await expect(page.locator(".cleanup-preview").getByRole("button", { name: "取消全选清理建议" })).toHaveCount(0);
   await expect(page.locator(".cleanup-preview").getByRole("button", { name: "关闭选中的标签页" })).toHaveCount(0);
-  await page.evaluate(() => {
-    window.__tabRecapMockMessageDelays = { "tabs:closeCleanupCandidates": 250 };
-  });
-  await page.locator(".cleanup-preview").getByRole("button", { name: "关闭这个标签页" }).first().click();
-  await expect(page.locator("#statusText")).toHaveText("正在关闭标签页");
+  const transientStatus = await page
+    .locator(".cleanup-preview")
+    .getByRole("button", { name: "关闭这个标签页" })
+    .first()
+    .evaluate((button) => {
+      button.click();
+      return document.querySelector("#statusText")?.textContent || "";
+    });
+  expect(transientStatus).toBe("正在关闭标签页");
   await expect(page.locator("#statusText")).toHaveText("已关闭 1 个标签页，方案已同步更新");
-  await page.evaluate(() => {
-    window.__tabRecapMockMessageDelays = {};
-  });
   await page.locator(".cleanup-preview").getByRole("button", { name: "关闭这个标签页" }).first().click();
   await expect(page.locator(".cleanup-preview").getByText("旧方案对比笔记")).toHaveCount(0);
   await expect(page.locator(".cleanup-preview").getByText("上轮调研资料")).toHaveCount(0);
