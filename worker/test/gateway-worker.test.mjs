@@ -34,6 +34,9 @@ test("worker validates models and token caps before forwarding", async () => {
   const miniPlannerModel = await handle(chatRequest({ model: "gpt-5.4-mini" }), env);
   assert.equal(miniPlannerModel.status, 200);
 
+  const timeRecapModel = await handle(chatRequest(validTimeRecapBody({ model: "gpt-5.4" })), env);
+  assert.equal(timeRecapModel.status, 200);
+
   const olderClaudePlannerModel = await handle(chatRequest({ model: "claude-opus-4-7" }), env);
   assert.equal(olderClaudePlannerModel.status, 200);
 
@@ -103,6 +106,20 @@ test("worker only accepts TabRecap request shapes", async () => {
   const markdownChat = await handle(chatRequest({ response_format: { type: "text" } }), env);
   assert.equal(markdownChat.status, 400);
   assert.equal((await markdownChat.json()).error.code, "json_required");
+
+  const malformedRecap = await handle(
+    chatRequest(
+      validTimeRecapBody({
+        messages: [
+          { role: "system", content: "You are a JSON-only time recap writer for TabRecap." },
+          { role: "user", content: "TabRecap local time-recap input follows. {}" }
+        ]
+      })
+    ),
+    env
+  );
+  assert.equal(malformedRecap.status, 400);
+  assert.equal((await malformedRecap.json()).error.code, "recap_payload_required");
 });
 
 test("worker rejects oversized bodies using content length", async () => {
@@ -282,6 +299,34 @@ function validProgressCopyBody(overrides = {}) {
     response_format: { type: "json_object" },
     max_tokens: 1200,
     reasoning_effort: undefined,
+    ...overrides
+  };
+}
+
+function validTimeRecapBody(overrides = {}) {
+  return {
+    model: "gpt-5.4",
+    messages: [
+      {
+        role: "system",
+        content: "You are a JSON-only time recap writer for a consumer Chrome tab organization product named TabRecap."
+      },
+      {
+        role: "user",
+        content: [
+          "TabRecap local time-recap input follows. Page rows are already privacy-reduced.",
+          JSON.stringify({
+            schema: "tab_tidy_time_recap_input_v1",
+            pageFields: ["id", "title", "hostname", "firstSeenAt", "lastSeenAt", "activeCount"],
+            coverage: { includedPages: 1, sampledEntries: 0 },
+            pages: [[1, "Chrome tabs API docs", "developer.chrome.com", "2026-06-27T00:00:00.000Z", "2026-06-27T01:00:00.000Z", 2]]
+          })
+        ].join("\n")
+      }
+    ],
+    response_format: { type: "json_object" },
+    max_tokens: 2048,
+    reasoning_effort: "high",
     ...overrides
   };
 }

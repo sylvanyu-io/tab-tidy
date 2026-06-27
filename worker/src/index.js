@@ -132,10 +132,16 @@ function validateChatRequest(body, env, limits) {
     if (isProgressCopyRequest(body)) {
       const sparkValidation = validateProgressCopyRequest(body);
       if (!sparkValidation.ok) return sparkValidation;
+    } else if (isTimeRecapRequest(body)) {
+      const recapValidation = validateTimeRecapRequest(body, modelAllowlist, { includeProgressModel: true });
+      if (!recapValidation.ok) return recapValidation;
     } else {
       const plannerValidation = validatePlannerRequest(body, modelAllowlist, { includeProgressModel: true });
       if (!plannerValidation.ok) return plannerValidation;
     }
+  } else if (isTimeRecapRequest(body)) {
+    const recapValidation = validateTimeRecapRequest(body, modelAllowlist);
+    if (!recapValidation.ok) return recapValidation;
   } else {
     const plannerValidation = validatePlannerRequest(body, modelAllowlist);
     if (!plannerValidation.ok) return plannerValidation;
@@ -196,6 +202,38 @@ function validatePlannerRequest(body, modelAllowlist, options = {}) {
 function isProgressCopyRequest(body) {
   const systemText = messageText(body?.messages?.[0]);
   return /AI browser-tab organization extension|loading captions/i.test(systemText);
+}
+
+function isTimeRecapRequest(body) {
+  const systemText = messageText(body?.messages?.[0]);
+  const userText = messageText(body?.messages?.[1]);
+  return /time recap writer|time-recap|work recap/i.test(systemText) || /tab_tidy_time_recap_input_v1|local time-recap input/i.test(userText);
+}
+
+function validateTimeRecapRequest(body, modelAllowlist, options = {}) {
+  const recapModels = new Set(modelAllowlist.filter((model) => options.includeProgressModel || model !== PROGRESS_COPY_MODEL));
+  if (!recapModels.has(body.model)) {
+    return { ok: false, code: "recap_model_not_allowed", message: "This model is not available for TabRecap recaps." };
+  }
+  if (body.messages.length !== 2) {
+    return { ok: false, code: "recap_shape_required", message: "Recap requests must use the TabRecap two-message shape." };
+  }
+  const [system, user] = body.messages;
+  const systemText = messageText(system);
+  const userText = messageText(user);
+  if (system?.role !== "system" || user?.role !== "user") {
+    return { ok: false, code: "recap_shape_required", message: "Recap requests must include one system message and one user message." };
+  }
+  if (!/TabRecap|time recap writer|work recap/i.test(systemText)) {
+    return { ok: false, code: "recap_shape_required", message: "Recap system prompt is not recognized as a TabRecap request." };
+  }
+  if (!/tab_tidy_time_recap_input_v1|local time-recap input/i.test(userText)) {
+    return { ok: false, code: "recap_payload_required", message: "Recap payload is not recognized as a TabRecap request." };
+  }
+  if (!/"pageFields"\s*:/.test(userText) || !/"pages"\s*:/.test(userText) || !/"coverage"\s*:/.test(userText)) {
+    return { ok: false, code: "recap_payload_required", message: "Recap payload must include compact TabRecap page fields." };
+  }
+  return { ok: true };
 }
 
 function validateProgressCopyRequest(body) {
