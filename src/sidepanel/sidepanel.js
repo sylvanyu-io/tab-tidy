@@ -111,9 +111,6 @@ const UI_COPY = Object.freeze({
     "cleanup.selectAll": "全选",
     "cleanup.closeOne": "关闭",
     "cleanup.focus": "定位",
-    "cleanup.selectAllShort": "全",
-    "cleanup.focusShort": "定",
-    "cleanup.closeOneShort": "关",
     "cleanup.selectAllAria": "全选清理建议",
     "cleanup.clearSelectionAria": "取消全选清理建议",
     "cleanup.closeOneAria": "关闭这个标签页",
@@ -345,9 +342,6 @@ const UI_COPY = Object.freeze({
     "cleanup.selectAll": "Select all",
     "cleanup.closeOne": "Close",
     "cleanup.focus": "Find",
-    "cleanup.selectAllShort": "All",
-    "cleanup.focusShort": "Go",
-    "cleanup.closeOneShort": "×",
     "cleanup.selectAllAria": "Select all cleanup suggestions",
     "cleanup.clearSelectionAria": "Clear cleanup selection",
     "cleanup.closeOneAria": "Close this tab",
@@ -1892,9 +1886,9 @@ function iconButton(icon, label) {
   const text = document.createElement("span");
   text.className = "icon-action-label";
   const labels = {
-    focus: t("cleanup.focusShort"),
-    close: t("cleanup.closeOneShort"),
-    selectAll: t("cleanup.selectAllShort")
+    focus: t("cleanup.focus"),
+    close: t("cleanup.closeOne"),
+    selectAll: t("cleanup.selectAll")
   };
   text.textContent = labels[icon] || labels.close;
   button.append(text);
