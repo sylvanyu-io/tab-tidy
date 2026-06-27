@@ -341,7 +341,8 @@ function analysisFeatureInstruction(settings) {
       "Also return top-level cleanup: {summary:string,candidates:[{id:number,priority:\"high\"|\"medium\"|\"low\",reason:string,evidence:string[]}]}.",
       "Cleanup candidates are review suggestions only. Recommend stale, duplicated, superseded, finished, or low-value tabs; never imply automatic deletion.",
       "Use tab age/activity signals, original order, titles, URLs, current groups, page summaries, and semantic grouping context when present.",
-      "Return a ranked cleanup checklist up to cleanupInstructions.actionLimit. Include high, medium, and low priority items when useful; order by review value."
+      "Return a ranked cleanup checklist up to cleanupInstructions.actionLimit. Include high, medium, and low priority items when useful; order by review value.",
+      "Cleanup reason and evidence are user-facing product copy. Do not expose raw feature names such as activeCount, ageDays, idleDays, sampleable, sequenceIndex, or tabId."
     );
   }
   return lines.join(" ");
@@ -771,7 +772,8 @@ function buildCleanupSystemPrompt(settings) {
     "This is a manual review checklist, not an automatic close command.",
     "Use high for likely stale/duplicate/superseded/finished tabs, medium for plausible cleanup items, and low for low-urgency items that still help the user review the tab set.",
     "Rank as many eligible tabs as useful up to cleanupInstructions.actionLimit. For sessions at or below that limit, include nearly all tabs unless they are clearly current, pinned, or unsafe to suggest.",
-    "Keep each candidate compact: reason should be one short clause, evidence should contain one or two short signals.",
+    "Keep each candidate compact: reason should be one short clause, evidence should contain one or two short user-facing clues.",
+    "Write evidence like \"search result\", \"old task\", \"easy to find again\", or \"rarely reopened\". Do not write raw feature names like activeCount, ageDays, idleDays, sampleable, sequenceIndex, or tabId.",
     "Use original tab order, tab age/activity, current groups, page summaries, and the proposed grouping context.",
     "Do not recommend closing pinned tabs as high priority unless evidence is very strong.",
     languageInstruction(settings.languageMode)

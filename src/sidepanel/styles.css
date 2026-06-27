@@ -361,31 +361,31 @@ h2 {
   min-height: 22px;
   padding: 2px 7px;
   color: var(--muted);
-  background: color-mix(in srgb, var(--surface-soft) 60%, transparent);
-  border: 1px solid color-mix(in srgb, var(--line) 24%, transparent);
+  background: color-mix(in srgb, var(--surface-soft) 72%, transparent);
+  border: 1px solid color-mix(in srgb, var(--line) 18%, transparent);
   border-radius: 999px;
   font-size: 10.5px;
   font-weight: 760;
 }
 
-.cleanup-candidate-meta span[data-priority="high"] {
+.cleanup-priority[data-priority="high"] {
   color: #b3261e;
   background: color-mix(in srgb, #fce8e6 76%, var(--surface));
   border-color: color-mix(in srgb, #d93025 32%, var(--line));
 }
 
-.cleanup-candidate-meta span[data-priority="medium"] {
+.cleanup-priority[data-priority="medium"] {
   color: var(--primary);
   background: var(--primary-soft);
   border-color: color-mix(in srgb, var(--primary) 24%, var(--line));
 }
 
-.cleanup-candidate-meta span[data-priority="low"] {
+.cleanup-priority[data-priority="low"] {
   color: var(--muted);
 }
 
 .cleanup-evidence span {
-  border-style: dashed;
+  border-style: solid;
 }
 
 .section-heading,
@@ -1314,21 +1314,66 @@ details[open] > summary::before {
   gap: 4px;
 }
 
-.cleanup-preview-body > strong {
+.cleanup-title-line {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  align-items: center;
+}
+
+.cleanup-title-line > strong {
+  min-width: 0;
   overflow-wrap: anywhere;
-  font-size: 12.5px;
+  color: var(--ink);
+  font-size: 13px;
   line-height: 1.28;
 }
 
-.cleanup-preview-body > small,
-.cleanup-preview-body > p {
+.cleanup-priority {
+  display: inline-flex;
+  align-items: center;
+  min-height: 22px;
+  padding: 2px 8px;
+  border: 1px solid color-mix(in srgb, var(--line) 28%, transparent);
+  border-radius: 999px;
+  background: var(--surface-soft);
+  font-size: 10.5px;
+  font-weight: 850;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.cleanup-reason,
+.cleanup-clues {
+  display: grid;
+  gap: 3px;
+  margin-top: 2px;
+}
+
+.cleanup-reason-label,
+.cleanup-clues-label {
+  color: var(--primary);
+  font-size: 10.5px;
+  font-weight: 900;
+  line-height: 1.1;
+}
+
+.cleanup-clues-label {
+  color: var(--muted);
+}
+
+.cleanup-reason p {
+  margin: 0;
+  color: var(--ink);
+  font-size: 12px;
+  font-weight: 620;
+  line-height: 1.42;
+}
+
+.cleanup-preview-body > small {
   color: var(--muted);
   font-size: 11.5px;
   line-height: 1.35;
-}
-
-.cleanup-preview-body > p {
-  margin: 0;
 }
 
 .group-swatch {

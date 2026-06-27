@@ -271,6 +271,13 @@ test("cleanup candidates are returned with the generated plan and can be closed 
   await expect(page.locator(".cleanup-preview").getByText(/Old comparison notes/)).toBeVisible();
   await expect(page.locator(".cleanup-preview").getByText("分组：Research", { exact: false })).toBeVisible();
   await expect(page.locator(".cleanup-preview").getByText("上一轮对比调研留下的页面", { exact: false })).toBeVisible();
+  await expect(page.locator(".cleanup-preview").getByText("判断", { exact: true }).first()).toBeVisible();
+  await expect(page.locator(".cleanup-preview").getByText("依据", { exact: true }).first()).toBeVisible();
+  await expect(page.locator(".cleanup-preview").getByText("基本没再打开", { exact: true })).toBeVisible();
+  await expect(page.locator(".cleanup-preview").getByText("已放约 22 天", { exact: true })).toBeVisible();
+  await expect(page.locator(".cleanup-preview")).not.toContainText("activeCount");
+  await expect(page.locator(".cleanup-preview")).not.toContainText("ageDays");
+  await expect(page.locator(".cleanup-preview")).not.toContainText("标题为");
 
   await page.locator(".cleanup-preview").getByRole("button", { name: "全选" }).click();
   await expect(page.locator(".cleanup-selected-count")).toHaveText("已选 2 个");

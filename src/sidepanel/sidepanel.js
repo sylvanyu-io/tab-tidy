@@ -74,15 +74,29 @@ const UI_COPY = Object.freeze({
     "activity.focusFailed": "标签页可能已经关闭，请刷新清理建议。",
     "activity.firstSeen": "首次见到 {age}",
     "activity.lastActive": "最近活跃 {age}",
-    "activity.seenCount": "记录 {count} 次",
     "activity.group": "分组：{group}",
     "activity.noGroup": "未分组",
-    "activity.priority.high": "优先看",
-    "activity.priority.medium": "可以看",
-    "activity.priority.low": "低优先级",
+    "activity.priority.high": "优先复查",
+    "activity.priority.medium": "稍后复查",
+    "activity.priority.low": "最后扫一眼",
     "cleanup.preview.title": "建议先检查",
     "cleanup.preview.subtitle": "这些标签页可能已经过期、重复或属于已完成任务；是否关闭由你决定。",
     "cleanup.preview.empty": "这次没有发现明显需要清理的标签页。",
+    "cleanup.reasonLabel": "判断",
+    "cleanup.cluesLabel": "依据",
+    "cleanup.clue.openCount": "打开过 {count} 次",
+    "cleanup.clue.notReopened": "基本没再打开",
+    "cleanup.clue.rarelyOpened": "很少回看",
+    "cleanup.clue.openForDays": "已放约 {days} 天",
+    "cleanup.clue.idleForDays": "闲置约 {days} 天",
+    "cleanup.clue.sleeping": "休眠页",
+    "cleanup.clue.browserPage": "浏览器设置页",
+    "cleanup.clue.searchPage": "搜索结果页",
+    "cleanup.clue.weakRelation": "和当前主线关系弱",
+    "cleanup.clue.refindable": "需要时容易找回",
+    "cleanup.clue.entryPage": "入口页",
+    "cleanup.clue.sameGroup": "同组已有更具体页面",
+    "cleanup.clue.ungrouped": "还没归类",
     "cleanup.selectAll": "全选",
     "cleanup.closeSelected": "关闭选中",
     "cleanup.closeOne": "关闭",
@@ -249,15 +263,29 @@ const UI_COPY = Object.freeze({
     "activity.focusFailed": "The tab may already be closed. Refresh suggestions.",
     "activity.firstSeen": "First seen {age}",
     "activity.lastActive": "Last active {age}",
-    "activity.seenCount": "Seen {count} times",
     "activity.group": "Group: {group}",
     "activity.noGroup": "Ungrouped",
-    "activity.priority.high": "High",
-    "activity.priority.medium": "Medium",
-    "activity.priority.low": "Low",
+    "activity.priority.high": "Review first",
+    "activity.priority.medium": "Review later",
+    "activity.priority.low": "Quick scan",
     "cleanup.preview.title": "Review first",
     "cleanup.preview.subtitle": "These tabs may be stale, duplicate, or from completed work. You decide what to close.",
     "cleanup.preview.empty": "No obvious cleanup candidates in this run.",
+    "cleanup.reasonLabel": "Suggestion",
+    "cleanup.cluesLabel": "Clues",
+    "cleanup.clue.openCount": "Opened {count} times",
+    "cleanup.clue.notReopened": "Rarely reopened",
+    "cleanup.clue.rarelyOpened": "Lightly used",
+    "cleanup.clue.openForDays": "Open for about {days} days",
+    "cleanup.clue.idleForDays": "Idle for about {days} days",
+    "cleanup.clue.sleeping": "Sleeping page",
+    "cleanup.clue.browserPage": "Browser settings page",
+    "cleanup.clue.searchPage": "Search results",
+    "cleanup.clue.weakRelation": "Weak fit with current task",
+    "cleanup.clue.refindable": "Easy to find again",
+    "cleanup.clue.entryPage": "Entry page",
+    "cleanup.clue.sameGroup": "More specific pages nearby",
+    "cleanup.clue.ungrouped": "Not yet grouped",
     "cleanup.selectAll": "Select all",
     "cleanup.closeSelected": "Close selected",
     "cleanup.closeOne": "Close",
@@ -1295,25 +1323,42 @@ function cleanupPreviewRow(candidate) {
 
   const body = document.createElement("div");
   body.className = "cleanup-preview-body";
+  const titleLine = document.createElement("div");
+  titleLine.className = "cleanup-title-line";
   const title = document.createElement("strong");
   title.textContent = candidate.title || candidate.hostname || "Untitled";
+  titleLine.append(title, cleanupPriorityChip(candidate.priority));
   const meta = document.createElement("small");
   meta.textContent = cleanupCandidateMeta(candidate);
-  body.append(title, meta);
+  body.append(titleLine, meta);
 
   if (candidate.reason) {
-    const reason = document.createElement("p");
-    reason.textContent = candidate.reason;
+    const reason = document.createElement("div");
+    reason.className = "cleanup-reason";
+    const label = document.createElement("span");
+    label.className = "cleanup-reason-label";
+    label.textContent = t("cleanup.reasonLabel");
+    const copy = document.createElement("p");
+    copy.textContent = candidate.reason;
+    reason.append(label, copy);
     body.append(reason);
   }
 
-  const chips = document.createElement("div");
-  chips.className = "cleanup-candidate-meta cleanup-evidence";
-  chips.append(cleanupPriorityChip(candidate.priority));
-  for (const item of cleanupEvidenceForPreview(candidate)) {
-    chips.append(cleanupMetaChip(item));
+  const clues = cleanupEvidenceForPreview(candidate);
+  if (clues.length) {
+    const clueBlock = document.createElement("div");
+    clueBlock.className = "cleanup-clues";
+    const clueLabel = document.createElement("span");
+    clueLabel.className = "cleanup-clues-label";
+    clueLabel.textContent = t("cleanup.cluesLabel");
+    const chips = document.createElement("div");
+    chips.className = "cleanup-candidate-meta cleanup-evidence";
+    for (const item of clues) {
+      chips.append(cleanupMetaChip(item));
+    }
+    clueBlock.append(clueLabel, chips);
+    body.append(clueBlock);
   }
-  body.append(chips);
 
   const actions = document.createElement("div");
   actions.className = "cleanup-row-actions";
@@ -1347,9 +1392,76 @@ function cleanupCandidateMeta(candidate) {
 }
 
 function cleanupEvidenceForPreview(candidate) {
-  const evidence = Array.isArray(candidate.evidence) ? [...candidate.evidence] : [];
-  if (candidate.activeCount) evidence.unshift(t("activity.seenCount", { count: candidate.activeCount }));
-  return evidence.slice(0, 4);
+  const labels = [];
+  const push = (value) => {
+    const label = String(value || "").trim();
+    if (label && !labels.includes(label)) labels.push(label);
+  };
+
+  for (const item of Array.isArray(candidate.evidence) ? candidate.evidence : []) {
+    push(cleanupEvidenceLabel(item));
+  }
+
+  if (Number(candidate.activeCount || 0) === 0) {
+    push(t("cleanup.clue.notReopened"));
+  } else if (Number(candidate.activeCount || 0) === 1) {
+    push(t("cleanup.clue.rarelyOpened"));
+  } else if (Number(candidate.activeCount || 0) > 1) {
+    push(t("cleanup.clue.openCount", { count: candidate.activeCount }));
+  }
+  if (Number(candidate.ageMs || 0) >= 24 * 60 * 60 * 1000) {
+    push(t("cleanup.clue.openForDays", { days: formatDays(candidate.ageMs) }));
+  }
+  if (Number(candidate.idleMs || 0) >= 24 * 60 * 60 * 1000) {
+    push(t("cleanup.clue.idleForDays", { days: formatDays(candidate.idleMs) }));
+  }
+  if (candidate.discarded) push(t("cleanup.clue.sleeping"));
+  if (!candidate.currentGroupTitle) push(t("cleanup.clue.ungrouped"));
+
+  return labels.slice(0, 4);
+}
+
+function cleanupEvidenceLabel(value) {
+  const text = String(value || "").trim();
+  if (!text) return "";
+
+  const activeMatch = text.match(/active\s*count\s*(?:为|=|is|:)?\s*(\d+)/i) || text.match(/activeCount\s*(?:为|=|is|:)?\s*(\d+)/i);
+  if (activeMatch) return cleanupOpenCountLabel(Number(activeMatch[1]));
+
+  const ageMatch = text.match(/age\s*days\s*(?:约|为|=|is|:)?\s*([\d.]+)/i) || text.match(/ageDays\s*(?:约|为|=|is|:)?\s*([\d.]+)/i);
+  if (ageMatch) return t("cleanup.clue.openForDays", { days: formatNumberLabel(ageMatch[1]) });
+
+  const idleMatch = text.match(/idle\s*days\s*(?:约|为|=|is|:)?\s*([\d.]+)/i) || text.match(/idleDays\s*(?:约|为|=|is|:)?\s*([\d.]+)/i);
+  if (idleMatch) return t("cleanup.clue.idleForDays", { days: formatNumberLabel(idleMatch[1]) });
+
+  if (/标签已被丢弃|discarded|休眠|sleeping/i.test(text)) return t("cleanup.clue.sleeping");
+  if (/不可采样|cannot sample|not sampleable|sampleable/i.test(text)) return "";
+  if (/chrome:\/\/extensions|浏览器.*(?:内部|设置)|扩展程序|internal page|settings page/i.test(text)) return t("cleanup.clue.browserPage");
+  if (/搜索结果|搜索页|Google 搜索|search result|search page/i.test(text)) return t("cleanup.clue.searchPage");
+  if (/标题为|title\s*(?:is|=|:)|titled/i.test(text)) return "";
+  if (/同组|same group|nearby|更具体|specific pages/i.test(text)) return t("cleanup.clue.sameGroup");
+  if (/无直接|关系弱|不相关|weak fit|unrelated|low relevance/i.test(text)) return t("cleanup.clue.weakRelation");
+  if (/重新|找回|恢复|recover|find again|refind|rerun/i.test(text)) return t("cleanup.clue.refindable");
+  if (/主页|入口|总览|列表|overview|home page|entry page|index page|repository list/i.test(text)) return t("cleanup.clue.entryPage");
+  if (/activeCount|ageDays|idleDays|sampleable|tabId|sequenceIndex|currentGroup|hostname/i.test(text)) return "";
+
+  return text.slice(0, 48);
+}
+
+function cleanupOpenCountLabel(count) {
+  if (!Number.isFinite(count) || count <= 0) return t("cleanup.clue.notReopened");
+  if (count === 1) return t("cleanup.clue.rarelyOpened");
+  return t("cleanup.clue.openCount", { count });
+}
+
+function formatDays(ms) {
+  return formatNumberLabel(Math.round((Number(ms || 0) / (24 * 60 * 60 * 1000)) * 10) / 10);
+}
+
+function formatNumberLabel(value) {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) return String(value || "").trim();
+  return String(Math.round(numeric * 10) / 10).replace(/\.0$/, "");
 }
 
 async function closeCleanupTabs(tabIds) {
@@ -1407,6 +1519,7 @@ function cleanupMetaChip(text) {
 function cleanupPriorityChip(priority) {
   const value = ["high", "medium", "low"].includes(priority) ? priority : "medium";
   const chip = cleanupMetaChip(t(`activity.priority.${value}`));
+  chip.classList.add("cleanup-priority");
   chip.dataset.priority = value;
   return chip;
 }
@@ -2316,7 +2429,7 @@ function mockAnalysisJob() {
               activeCount: 0,
               priority: "medium",
               reason: "标题显示是旧研究资料，且没有归属到当前分组。",
-              evidence: ["未分组", "长期未活跃"]
+              evidence: ["activeCount 为0", "ageDays 约22", "标题为“Previous research”"]
             }
           ]
         },
