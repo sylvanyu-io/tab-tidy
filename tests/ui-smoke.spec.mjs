@@ -460,6 +460,159 @@ test("time recap generation uses the shared bottom progress controls", async ({ 
   await expect.poll(() => page.evaluate(() => window.__recapMessages.some((message) => message.type === "progressCopy:generate"))).toBe(true);
 });
 
+test("time recap and organize generation can run in parallel", async ({ page }) => {
+  await page.addInitScript(() => {
+    const settings = {
+      organizeMode: "current_window",
+      targetWindowMode: "current_window",
+      existingGroupMode: "preserve_existing_groups",
+      reviewGroupMode: "create_review_group",
+      undoTargetWindowMode: "leave_empty_target_window",
+      pageContextMode: "off",
+      hostPermissionRequestMode: "never",
+      pageSamplingConsentMode: "not_acknowledged",
+      urlPrivacyMode: "sanitized_url",
+      includePinnedTabs: false,
+      includeIncognitoTabs: false,
+      collapseGroupsAfterApply: true,
+      analyzeGrouping: true,
+      analyzeCleanup: true,
+      minConfidenceToApply: 0.65,
+      maxTabsPerGroup: 40,
+      languageMode: "auto",
+      promptPreset: "conservative",
+      groupingGranularity: "balanced",
+      plannerProvider: "gateway",
+      rememberProviderKeys: false,
+      gatewayBaseUrl: "",
+      gatewayModel: "gpt-5.4",
+      gatewayAuxiliaryModel: "gpt-5.3-codex-spark",
+      gatewayCustomModel: "",
+      gatewayThinkingIntensity: "high",
+      gatewayApiKey: "",
+      customPrompt: ""
+    };
+    const runningJob = {
+      operationId: "parallel_analysis",
+      status: "running",
+      phase: "planning",
+      progress: 42,
+      message: "正在请求 AI 规划",
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+    const completeJob = {
+      ...runningJob,
+      status: "complete",
+      phase: "complete",
+      progress: 100,
+      message: "方案好了，可以先检查",
+      finishedAt: new Date().toISOString()
+    };
+    const completedPlan = {
+      operationId: "parallel_analysis",
+      settings,
+      validation: { ok: true, warnings: [] },
+      preview: {
+        requiresConfirmation: false,
+        groups: [{ title: "并行整理", reason: "回顾生成时仍可整理。", tabCount: 3 }],
+        totalTabsCount: 3,
+        eligibleTabsCount: 3,
+        groupedTabsCount: 3,
+        reviewTabsCount: 0,
+        reviewGroupWillBeCreated: false,
+        excludedTabsCount: 0,
+        lockedGroupsCount: 0,
+        analysisFeatures: { grouping: true, cleanup: true },
+        cleanup: { summary: "", candidateCount: 0, candidates: [] },
+        warnings: []
+      }
+    };
+    window.__messages = [];
+    window.__analysisStarted = false;
+    window.__analysisPolls = 0;
+    window.__recapPromise = new Promise((resolve) => {
+      window.__resolveRecap = resolve;
+    });
+    window.chrome = {
+      runtime: {
+        sendMessage: async (message) => {
+          window.__messages.push(message);
+          if (message.type === "settings:get") return { ok: true, result: settings };
+          if (message.type === "settings:save") return { ok: true, result: message.settings };
+          if (message.type === "tabs:canUndo") return { ok: true, result: { canUndo: false } };
+          if (message.type === "tabs:startAnalyze") {
+            window.__analysisStarted = true;
+            window.__analysisPolls = 0;
+            return { ok: true, result: { operationId: runningJob.operationId } };
+          }
+          if (message.type === "tabs:getActiveJob") {
+            if (!window.__analysisStarted) return { ok: true, result: null };
+            window.__analysisPolls += 1;
+            return { ok: true, result: window.__analysisPolls < 2 ? runningJob : completeJob };
+          }
+          if (message.type === "tabs:getLastJob") return { ok: true, result: completedPlan };
+          if (message.type === "activity:generateTimeRecap") return { ok: true, result: await window.__recapPromise };
+          if (message.type === "progressCopy:generate") return { ok: true, result: { messages: ["整理另一条任务", "回顾仍在生成"] } };
+          return { ok: true, result: null };
+        }
+      },
+      permissions: {
+        contains: async () => true,
+        request: async () => true
+      },
+      tabs: {
+        query: async () => [{ id: 1, windowId: 7, active: true }]
+      },
+      windows: {
+        get: async (windowId) => ({ id: windowId, type: "normal" }),
+        getLastFocused: async () => ({ id: 7, type: "normal" })
+      }
+    };
+  });
+
+  await page.goto(`${baseUrl}/src/sidepanel/index.html?sourceWindowId=7`);
+  await page.getByRole("button", { name: "回顾" }).click();
+  await page.getByRole("button", { name: "生成回顾" }).click();
+  await expect(page.getByRole("button", { name: "停止生成" })).toBeVisible();
+
+  await page.getByRole("button", { name: "整理" }).click();
+  await expect(page.getByRole("button", { name: "生成方案" })).toBeEnabled();
+  await page.getByRole("button", { name: "生成方案" }).click();
+  await expect(page.locator(".preview").getByText("并行整理", { exact: true })).toBeVisible();
+  await expect(page.locator("#statusText")).toHaveText("方案好了，可以先检查");
+
+  await page.getByRole("button", { name: "回顾" }).click();
+  await expect(page.getByRole("button", { name: "停止生成" })).toBeVisible();
+  await expect(page.locator("#statusText")).toContainText("回顾");
+  await page.evaluate(() => {
+    window.__resolveRecap({
+      source: "ai",
+      input: { pages: [], coverage: { includedPages: 3, sampledEntries: 0 } },
+      recap: {
+        schema: "tab_tidy_time_recap_v1",
+        headline: "回顾也完成了。",
+        summary: "整理和回顾可以同时进行。",
+        timeline: [],
+        themes: [],
+        followUps: [],
+        reviewCandidates: [],
+        coverageNote: ""
+      }
+    });
+  });
+  await expect(page.getByRole("button", { name: "重新生成回顾" })).toBeVisible();
+  await expect(page.locator(".recap-summary-card")).toContainText("整理和回顾可以同时进行。");
+  await expect
+    .poll(() =>
+      page.evaluate(() => ({
+        recap: window.__messages.filter((message) => message.type === "activity:generateTimeRecap").length,
+        analyze: window.__messages.filter((message) => message.type === "tabs:startAnalyze").length
+      }))
+    )
+    .toEqual({ recap: 1, analyze: 1 });
+});
+
 test("time recap cancellation restores the shared bottom controls immediately", async ({ page }) => {
   await page.addInitScript(() => {
     const settings = {

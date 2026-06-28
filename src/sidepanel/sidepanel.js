@@ -581,9 +581,19 @@ const nodes = {
   recapQuickButtons: document.querySelectorAll("[data-recap-preset]")
 };
 
+const PANEL_MODE_ORGANIZE = "organize";
+const PANEL_MODE_RECAP = "recap";
+
 let uiLanguage = readStoredUiLanguage() || browserUiLanguage();
-let currentPanelMode = "organize";
-let currentStatus = { key: "status.default", params: {}, text: "", isError: false };
+let currentPanelMode = PANEL_MODE_ORGANIZE;
+let statusByMode = {
+  [PANEL_MODE_ORGANIZE]: createStatusState("status.default"),
+  [PANEL_MODE_RECAP]: createStatusState("status.default")
+};
+let actionStateByMode = {
+  [PANEL_MODE_ORGANIZE]: createIdleActionState(),
+  [PANEL_MODE_RECAP]: createIdleActionState()
+};
 let lastPreview = null;
 let lastError = null;
 let lastTimeRecap = null;
@@ -602,6 +612,18 @@ let mockLastJob = null;
 let panelWindowId = null;
 const generatedCopyByOperation = new Map();
 const generatedCopyRequests = new Set();
+
+function createStatusState(key = "", params = {}, text = "", isError = false) {
+  return { key, params, text, isError };
+}
+
+function createIdleActionState() {
+  return { busy: false, label: "", progress: 0, cancelable: false, cancelDisabled: false };
+}
+
+function normalizePanelMode(mode) {
+  return mode === PANEL_MODE_RECAP ? PANEL_MODE_RECAP : PANEL_MODE_ORGANIZE;
+}
 
 init().catch((error) => setErrorStatus(error));
 
@@ -894,9 +916,10 @@ function effectiveResultLanguageMode(languageMode) {
 }
 
 function setPanelMode(mode) {
-  currentPanelMode = mode === "recap" ? "recap" : "organize";
+  currentPanelMode = normalizePanelMode(mode);
   applyPanelMode();
   syncActionState();
+  renderStatus();
 }
 
 function applyPanelMode() {
@@ -1190,15 +1213,15 @@ async function handleAnalyzeClick() {
 }
 
 async function analyze() {
-  setBusy(true, t("status.preparing"), { cancelable: true, progress: 4 });
+  setBusy(true, t("status.preparing"), { mode: PANEL_MODE_ORGANIZE, cancelable: true, progress: 4 });
   try {
     const persistedSettings = readSettings();
     const settings = readEffectiveRunSettings();
-    await ensureGatewayPermissionForRun(settings, 8);
-    await ensurePageSummaryPermissionsForRun(settings, 12);
-    updateLocalProgress(t("status.resolvingWindow"), 14);
+    await ensureGatewayPermissionForRun(settings, 8, PANEL_MODE_ORGANIZE);
+    await ensurePageSummaryPermissionsForRun(settings, 12, PANEL_MODE_ORGANIZE);
+    updateLocalProgress(t("status.resolvingWindow"), 14, PANEL_MODE_ORGANIZE);
     const windowId = await resolveInvocationWindowId();
-    updateLocalProgress(t("status.startingBackground"), 16);
+    updateLocalProgress(t("status.startingBackground"), 16, PANEL_MODE_ORGANIZE);
     const started = await sendMessage({ type: "tabs:startAnalyze", settings, persistedSettings, windowId });
     const job = await waitForAnalysisCompletion(started?.operationId);
     lastPreview = job.preview;
@@ -1207,18 +1230,18 @@ async function analyze() {
     renderDetails(job);
     nodes.applyBtn.disabled = !lastCanApply;
     syncActionState();
-    setStatusKey(job.validation?.ok ? "status.planReady" : "status.planNeedsReview", {}, !job.validation?.ok);
+    setStatusKey(job.validation?.ok ? "status.planReady" : "status.planNeedsReview", {}, !job.validation?.ok, { mode: PANEL_MODE_ORGANIZE });
   } catch (error) {
     if (isCancellationError(error)) {
-      setStatusKey("status.canceled");
+      setStatusKey("status.canceled", {}, false, { mode: PANEL_MODE_ORGANIZE });
     } else {
       const message = friendlyErrorMessage(error);
-      setErrorStatus(error, message);
+      setErrorStatus(error, message, { mode: PANEL_MODE_ORGANIZE });
       renderError(error);
     }
   } finally {
     stopProgressPolling();
-    setBusy(false);
+    setBusy(false, "", { mode: PANEL_MODE_ORGANIZE });
   }
 }
 
@@ -1229,12 +1252,12 @@ async function generateTimeRecap() {
   }
   const operationId = createClientOperationId("recap");
   activeRecapOperationId = operationId;
-  setBusy(true, t("status.recapPreparing"), { cancelable: true, progress: 6 });
+  setBusy(true, t("status.recapPreparing"), { mode: PANEL_MODE_RECAP, cancelable: true, progress: 6 });
   try {
     const settings = readEffectiveRunSettings();
-    await ensureGatewayPermissionForRun(settings, 10);
+    await ensureGatewayPermissionForRun(settings, 10, PANEL_MODE_RECAP);
 
-    updateLocalProgress(t("status.recapGenerating"), 28);
+    updateLocalProgress(t("status.recapGenerating"), 28, PANEL_MODE_RECAP);
     startRecapProgress(operationId, settings);
     const result = await sendMessage({
       type: "activity:generateTimeRecap",
@@ -1248,21 +1271,21 @@ async function generateTimeRecap() {
     lastTimeRecap = result;
     lastTimeRecapError = null;
     renderTimeRecap(result);
-    setStatusKey("status.recapReady");
+    setStatusKey("status.recapReady", {}, false, { mode: PANEL_MODE_RECAP });
   } catch (error) {
     if (canceledRecapOperations.has(operationId) || /stopped|canceled|cancelled|已停止|已取消/i.test(error?.message || "")) {
-      setStatusKey("status.recapCanceled");
+      setStatusKey("status.recapCanceled", {}, false, { mode: PANEL_MODE_RECAP });
       return;
     }
     const message = friendlyErrorMessage(error);
-    setErrorStatus(error, message);
+    setErrorStatus(error, message, { mode: PANEL_MODE_RECAP });
     renderTimeRecapError(error);
   } finally {
     stopRecapProgress();
     canceledRecapOperations.delete(operationId);
     if (activeRecapOperationId === operationId) {
       activeRecapOperationId = null;
-      setBusy(false);
+      setBusy(false, "", { mode: PANEL_MODE_RECAP });
     }
   }
 }
@@ -1273,14 +1296,14 @@ async function cancelTimeRecap() {
   canceledRecapOperations.add(operationId);
   setTimeout(() => canceledRecapOperations.delete(operationId), CANCELED_RECAP_OPERATION_TTL_MS);
   stopRecapProgress();
-  setBusy(true, t("status.recapCanceling"), { cancelable: true, progress: currentProgressValue() || 92 });
-  nodes.cancelBtn.disabled = true;
-  setStatusKey("status.recapCanceling");
+  setBusy(true, t("status.recapCanceling"), { mode: PANEL_MODE_RECAP, cancelable: true, progress: currentProgressValue(PANEL_MODE_RECAP) || 92 });
+  setCancelDisabled(PANEL_MODE_RECAP, true);
+  setStatusKey("status.recapCanceling", {}, false, { mode: PANEL_MODE_RECAP });
   if (activeRecapOperationId === operationId) {
     activeRecapOperationId = null;
-    setBusy(false);
+    setBusy(false, "", { mode: PANEL_MODE_RECAP });
   }
-  setStatusKey("status.recapCanceled");
+  setStatusKey("status.recapCanceled", {}, false, { mode: PANEL_MODE_RECAP });
   sendMessage({ type: "activity:cancelTimeRecap", operationId }).catch(() => {
     // The UI should still stop waiting if the background context has already gone away.
   });
@@ -1293,14 +1316,14 @@ function readEffectiveRunSettings() {
   return settings;
 }
 
-async function ensureGatewayPermissionForRun(settings, progress) {
-  updateLocalProgress(t("status.checkingPermissions"), progress);
+async function ensureGatewayPermissionForRun(settings, progress, mode = currentPanelMode) {
+  updateLocalProgress(t("status.checkingPermissions"), progress, mode);
   await ensurePlannerHostPermission(settings);
 }
 
-async function ensurePageSummaryPermissionsForRun(settings, progress) {
+async function ensurePageSummaryPermissionsForRun(settings, progress, mode = currentPanelMode) {
   if (settings.pageContextMode === "off" || settings.pageSamplingConsentMode === "not_acknowledged") return;
-  updateLocalProgress(t("status.checkingPageSummaryPermissions"), progress);
+  updateLocalProgress(t("status.checkingPageSummaryPermissions"), progress, mode);
   await ensurePageSamplingPermissions(settings, { requestMissing: false });
   settings.hostPermissionRequestMode = "never";
 }
@@ -1682,19 +1705,19 @@ function friendlyErrorMessage(error) {
 }
 
 async function cancelAnalyze() {
-  nodes.cancelBtn.disabled = true;
-  setStatusKey("status.canceling");
+  setCancelDisabled(PANEL_MODE_ORGANIZE, true);
+  setStatusKey("status.canceling", {}, false, { mode: PANEL_MODE_ORGANIZE });
   try {
     const result = await sendMessage(scopedWindowMessage({ type: "tabs:cancelActiveJob" }));
-    if (result?.job) updateProgressFromJob(result.job);
+    if (result?.job) updateProgressFromJob(result.job, PANEL_MODE_ORGANIZE);
     if (result?.job?.status === "canceled") {
       stopProgressPolling();
-      setBusy(false);
-      setStatusKey("status.canceled");
+      setBusy(false, "", { mode: PANEL_MODE_ORGANIZE });
+      setStatusKey("status.canceled", {}, false, { mode: PANEL_MODE_ORGANIZE });
     }
   } catch (error) {
-    setErrorStatus(error);
-    nodes.cancelBtn.disabled = false;
+    setErrorStatus(error, t("status.previousFailed"), { mode: PANEL_MODE_ORGANIZE });
+    setCancelDisabled(PANEL_MODE_ORGANIZE, false);
   }
 }
 
@@ -1706,13 +1729,13 @@ async function applyLastPlan() {
     confirmMultiWindow = true;
   }
 
-  setBusy(true, t("status.organizing"));
+  setBusy(true, t("status.organizing"), { mode: PANEL_MODE_ORGANIZE });
   try {
     let result = await sendMessage(scopedWindowMessage({ type: "tabs:applyLastPlan", confirmMultiWindow }));
     if (result?.requiresMultiWindowConfirmation) {
       const confirmed = confirm(t("confirm.applyMultiWindow"));
       if (!confirmed) {
-        setStatusKey("status.canceled");
+        setStatusKey("status.canceled", {}, false, { mode: PANEL_MODE_ORGANIZE });
         return;
       }
       confirmMultiWindow = true;
@@ -1721,10 +1744,10 @@ async function applyLastPlan() {
     if (result?.requiresChangedTabsConfirmation) {
       const confirmed = confirm(changedTabsConfirmationText(result.rebasedPlan));
       if (!confirmed) {
-        setStatusKey("status.canceled");
+        setStatusKey("status.canceled", {}, false, { mode: PANEL_MODE_ORGANIZE });
         return;
       }
-      setStatusKey("status.organizingChanged");
+      setStatusKey("status.organizingChanged", {}, false, { mode: PANEL_MODE_ORGANIZE });
       result = await sendMessage(scopedWindowMessage({
         type: "tabs:applyLastPlan",
         confirmChangedTabs: true,
@@ -1732,7 +1755,7 @@ async function applyLastPlan() {
         confirmMultiWindow
       }));
       if (result?.requiresChangedTabsConfirmation) {
-        setStatusKey("status.previousFailed", {}, true);
+        setStatusKey("status.previousFailed", {}, true, { mode: PANEL_MODE_ORGANIZE });
         renderError(new Error(changedTabsConfirmationText(result.rebasedPlan)));
         return;
       }
@@ -1741,11 +1764,11 @@ async function applyLastPlan() {
     const status = applyResultStatus(result);
     await clearAnalysisState();
     resetToSetup();
-    setStatus(status);
+    setStatus(status, false, { mode: PANEL_MODE_ORGANIZE });
   } catch (error) {
-    setErrorStatus(error);
+    setErrorStatus(error, t("status.previousFailed"), { mode: PANEL_MODE_ORGANIZE });
   } finally {
-    setBusy(false);
+    setBusy(false, "", { mode: PANEL_MODE_ORGANIZE });
   }
 }
 
@@ -1785,16 +1808,16 @@ function applyResultStatus(result) {
 }
 
 async function undoLastApply() {
-  setBusy(true, t("status.undoing"));
+  setBusy(true, t("status.undoing"), { mode: PANEL_MODE_ORGANIZE });
   try {
     const result = await sendMessage(scopedWindowMessage({ type: "tabs:undoLastApply" }));
     canUndo = false;
-    setStatus(t("status.undoDone", { count: result.restoredTabs || 0 }));
+    setStatus(t("status.undoDone", { count: result.restoredTabs || 0 }), false, { mode: PANEL_MODE_ORGANIZE });
     renderDetails({ undoResult: result });
   } catch (error) {
-    setErrorStatus(error);
+    setErrorStatus(error, t("status.previousFailed"), { mode: PANEL_MODE_ORGANIZE });
   } finally {
-    setBusy(false);
+    setBusy(false, "", { mode: PANEL_MODE_ORGANIZE });
   }
 }
 
@@ -2197,20 +2220,20 @@ function formatNumberLabel(value) {
 async function closeCleanupTabs(tabIds) {
   const ids = uniqueNumbers(tabIds);
   if (!ids.length) {
-    setStatusKey("cleanup.noneSelected", {}, true);
+    setStatusKey("cleanup.noneSelected", {}, true, { mode: PANEL_MODE_ORGANIZE });
     return;
   }
-  setBusy(true, t("status.closingTabs"));
+  setBusy(true, t("status.closingTabs"), { mode: PANEL_MODE_ORGANIZE });
   try {
     const result = await sendMessage(scopedWindowMessage({ type: "tabs:closeCleanupCandidates", tabIds: ids, languageMode: uiLanguage }));
     lastPreview = result.preview;
     lastCanApply = Boolean(result.validation?.ok);
     renderPreview({ preview: lastPreview, validation: result.validation, settings: { languageMode: currentResultLanguageMode() } });
-    setStatusKey("cleanup.closed", { count: result.closedTabIds?.length || 0 });
+    setStatusKey("cleanup.closed", { count: result.closedTabIds?.length || 0 }, false, { mode: PANEL_MODE_ORGANIZE });
   } catch (error) {
-    setErrorStatus(error);
+    setErrorStatus(error, t("status.previousFailed"), { mode: PANEL_MODE_ORGANIZE });
   } finally {
-    setBusy(false);
+    setBusy(false, "", { mode: PANEL_MODE_ORGANIZE });
   }
 }
 
@@ -2257,9 +2280,9 @@ function cleanupPriorityChip(priority) {
 async function focusActivityTab(tab) {
   try {
     await sendMessage({ type: "activity:focusTab", tabId: tab.tabId, windowId: tab.windowId, languageMode: uiLanguage });
-    setStatusKey("activity.focused");
+    setStatusKey("activity.focused", {}, false, { mode: PANEL_MODE_ORGANIZE });
   } catch (error) {
-    setErrorStatus(error, t("activity.focusFailed"));
+    setErrorStatus(error, t("activity.focusFailed"), { mode: PANEL_MODE_ORGANIZE });
   }
 }
 
@@ -2310,27 +2333,54 @@ function replacerForDetails(key, value) {
 }
 
 function setBusy(isBusy, label = "", options = {}) {
+  const mode = normalizePanelMode(options.mode || currentPanelMode);
+  if (isBusy) {
+    actionStateByMode[mode] = {
+      busy: true,
+      label: label || actionStateByMode[mode]?.label || "",
+      progress: Number.isFinite(Number(options.progress)) ? Number(options.progress) : actionStateByMode[mode]?.progress || 8,
+      cancelable: Boolean(options.cancelable),
+      cancelDisabled: false
+    };
+    if (label) setStatus(label, false, { mode });
+  } else {
+    actionStateByMode[mode] = createIdleActionState();
+  }
+  syncActionState();
+}
+
+function setCancelDisabled(mode, disabled) {
+  const normalized = normalizePanelMode(mode);
+  actionStateByMode[normalized] = {
+    ...(actionStateByMode[normalized] || createIdleActionState()),
+    cancelDisabled: Boolean(disabled)
+  };
+  if (normalized === currentPanelMode) renderCurrentActionBusyState();
+}
+
+function renderCurrentActionBusyState() {
+  const state = actionStateByMode[currentPanelMode] || createIdleActionState();
+  const isBusy = Boolean(state.busy);
   nodes.analyzeBtn.disabled = isBusy;
   nodes.undoBtn.disabled = isBusy;
   nodes.applyBtn.disabled = isBusy || !canApplyCurrentPreview();
-  nodes.cancelBtn.hidden = !(isBusy && options.cancelable);
-  nodes.cancelBtn.disabled = false;
+  nodes.cancelBtn.hidden = !(isBusy && state.cancelable);
+  nodes.cancelBtn.disabled = Boolean(state.cancelDisabled);
   nodes.actions.dataset.busy = isBusy ? "true" : "false";
   nodes.progressBar.hidden = !isBusy;
-  showProgress(isBusy ? options.progress || 8 : 0);
-  if (isBusy && label) {
-    setStatus(label);
-    setProgressLabel(label);
+  showProgress(isBusy ? state.progress || 8 : 0);
+  if (isBusy && state.label) {
+    setProgressLabel(state.label);
+    renderStatus();
   }
-  syncActionState();
 }
 
 async function hydrateActiveJob() {
   const job = await sendMessage(scopedWindowMessage({ type: "tabs:getActiveJob" })).catch(() => null);
   if (!job) return;
   if (isLiveJob(job)) {
-    updateProgressFromJob(job);
-    setBusy(true, localizeKnownMessage(job.message || t("status.organizing")), { cancelable: true, progress: job.progress || 8 });
+    updateProgressFromJob(job, PANEL_MODE_ORGANIZE);
+    setBusy(true, localizeKnownMessage(job.message || t("status.organizing")), { mode: PANEL_MODE_ORGANIZE, cancelable: true, progress: job.progress || 8 });
     startProgressPolling();
   } else if (job.status === "complete") {
     await restoreCompletedJob(job);
@@ -2349,9 +2399,9 @@ async function restoreCompletedJob(activeJob = {}) {
   const job = await sendMessage(scopedWindowMessage({ type: "tabs:getLastJob" })).catch(() => null);
   if (!job?.preview) {
     const message = t("status.generatedButMissingPreview");
-    setStatusKey("status.generatedButMissingPreview", {}, true);
+    setStatusKey("status.generatedButMissingPreview", {}, true, { mode: PANEL_MODE_ORGANIZE });
     renderError(new Error(message));
-    setBusy(false);
+    setBusy(false, "", { mode: PANEL_MODE_ORGANIZE });
     return;
   }
   if (activeJob.operationId && job.operationId && activeJob.operationId !== job.operationId) {
@@ -2363,17 +2413,17 @@ async function restoreCompletedJob(activeJob = {}) {
   renderPreview(job);
   renderDetails(job);
   nodes.applyBtn.disabled = !lastCanApply;
-  setStatusKey(job.validation?.ok ? "status.planReady" : "status.planNeedsReview", {}, !job.validation?.ok);
-  setBusy(false);
+  setStatusKey(job.validation?.ok ? "status.planReady" : "status.planNeedsReview", {}, !job.validation?.ok, { mode: PANEL_MODE_ORGANIZE });
+  setBusy(false, "", { mode: PANEL_MODE_ORGANIZE });
 }
 
 function restoreTerminalJob(job = {}) {
   stopProgressPolling();
-  setBusy(false);
+  setBusy(false, "", { mode: PANEL_MODE_ORGANIZE });
   const isError = job.status === "error";
   const message = job.error || job.message || t(isError ? "status.previousFailed" : "status.previousCanceled");
   const error = new Error(message);
-  setStatus(message, isError);
+  setStatus(message, isError, { mode: PANEL_MODE_ORGANIZE });
   if (isError) renderError(error);
 }
 
@@ -2392,7 +2442,7 @@ function stopProgressPolling() {
 async function pollActiveJob() {
   try {
     const job = await sendMessage(scopedWindowMessage({ type: "tabs:getActiveJob" }));
-    updateProgressFromJob(job);
+    updateProgressFromJob(job, PANEL_MODE_ORGANIZE);
     if (job?.status === "complete") {
       await restoreCompletedJob(job);
     } else if (job?.status === "error" || job?.status === "canceled") {
@@ -2408,7 +2458,7 @@ async function pollActiveJob() {
 async function waitForAnalysisCompletion(operationId) {
   while (true) {
     const activeJob = await sendMessage(scopedWindowMessage({ type: "tabs:getActiveJob" }));
-    updateProgressFromJob(activeJob);
+    updateProgressFromJob(activeJob, PANEL_MODE_ORGANIZE);
 
     if (!activeJob) {
       throw new Error(t("status.backgroundNotStarted"));
@@ -2429,24 +2479,34 @@ async function waitForAnalysisCompletion(operationId) {
   }
 }
 
-function updateProgressFromJob(job) {
+function updateProgressFromJob(job, mode = PANEL_MODE_ORGANIZE) {
   if (!job) return;
   requestGeneratedProgressCopy(job);
+  const normalized = normalizePanelMode(mode);
+  const previous = actionStateByMode[normalized] || createIdleActionState();
+  actionStateByMode[normalized] = {
+    ...previous,
+    busy: isLiveJob(job) || previous.busy,
+    progress: typeof job.progress === "number" ? displayProgressForJob(job) : previous.progress,
+    label: job.message ? displayMessageForJob(job) : previous.label,
+    cancelable: isLiveJob(job) ? true : previous.cancelable,
+    cancelDisabled: job.status === "canceling" ? true : previous.cancelDisabled
+  };
   if (typeof job.progress === "number") {
-    nodes.progressBar.hidden = false;
-    showProgress(displayProgressForJob(job));
+    if (normalized === currentPanelMode) {
+      nodes.progressBar.hidden = false;
+      showProgress(displayProgressForJob(job));
+    }
   }
   if (job.message) {
     const message = displayMessageForJob(job);
-    setStatus(message, job.status === "error");
-    setProgressLabel(message);
+    setStatus(message, job.status === "error", { mode: normalized });
+    if (normalized === currentPanelMode) setProgressLabel(message);
   }
-  if (job.status === "canceling") {
-    nodes.cancelBtn.hidden = false;
-    nodes.cancelBtn.disabled = true;
-  }
+  if (job.status === "canceling") setCancelDisabled(normalized, true);
   if (job.status === "canceled" || job.status === "error" || job.status === "complete") {
-    nodes.cancelBtn.hidden = true;
+    actionStateByMode[normalized] = createIdleActionState();
+    if (normalized === currentPanelMode) renderCurrentActionBusyState();
   }
 }
 
@@ -2460,11 +2520,21 @@ function setProgressLabel(text) {
   if (nodes.progressLabel) nodes.progressLabel.textContent = localizeKnownMessage(text);
 }
 
-function updateLocalProgress(label, progress) {
-  nodes.progressBar.hidden = false;
-  showProgress(progress);
-  setProgressLabel(label);
-  setStatus(label);
+function updateLocalProgress(label, progress, mode = currentPanelMode) {
+  const normalized = normalizePanelMode(mode);
+  const previous = actionStateByMode[normalized] || createIdleActionState();
+  actionStateByMode[normalized] = {
+    ...previous,
+    busy: true,
+    label,
+    progress: Number.isFinite(Number(progress)) ? Number(progress) : previous.progress || 8
+  };
+  setStatus(label, false, { mode: normalized });
+  if (normalized === currentPanelMode) {
+    nodes.progressBar.hidden = false;
+    showProgress(progress);
+    setProgressLabel(label);
+  }
 }
 
 function startRecapProgress(operationId, settings = {}) {
@@ -2477,7 +2547,7 @@ function startRecapProgress(operationId, settings = {}) {
   });
 }
 
-function startLocalAiWaitProgress({ operationId, phase, progress, message, settings = {} }) {
+function startLocalAiWaitProgress({ operationId, phase, progress, message, settings = {}, mode = PANEL_MODE_RECAP }) {
   stopRecapProgress();
   recapProgressJob = {
     operationId,
@@ -2491,13 +2561,13 @@ function startLocalAiWaitProgress({ operationId, phase, progress, message, setti
     updatedAt: new Date().toISOString(),
     settings
   };
-  updateProgressFromJob(recapProgressJob);
+  updateProgressFromJob(recapProgressJob, mode);
   recapProgressTimer = setInterval(() => {
     if (!recapProgressJob || activeRecapOperationId !== operationId) {
       stopRecapProgress();
       return;
     }
-    updateProgressFromJob(recapProgressJob);
+    updateProgressFromJob(recapProgressJob, mode);
   }, ACTIVE_JOB_POLL_MS);
 }
 
@@ -2509,7 +2579,9 @@ function stopRecapProgress() {
   recapProgressJob = null;
 }
 
-function currentProgressValue() {
+function currentProgressValue(mode = currentPanelMode) {
+  const stateProgress = actionStateByMode[normalizePanelMode(mode)]?.progress;
+  if (Number.isFinite(Number(stateProgress))) return Number(stateProgress);
   const rawWidth = nodes.progressFill?.style?.width || "";
   const value = Number.parseFloat(rawWidth);
   return Number.isFinite(value) ? value : 0;
@@ -2623,28 +2695,31 @@ function isLiveJob(job) {
   return job?.status === "running" || job?.status === "canceling";
 }
 
-function setStatusKey(key, params = {}, isError = false) {
-  currentStatus = { key, params, text: "", isError };
-  renderStatus();
+function setStatusKey(key, params = {}, isError = false, options = {}) {
+  const mode = normalizePanelMode(options.mode || currentPanelMode);
+  statusByMode[mode] = createStatusState(key, params, "", isError);
+  if (mode === currentPanelMode) renderStatus();
 }
 
-function setStatus(text, isError = false) {
-  currentStatus = { key: "", params: {}, text: String(text || ""), isError };
-  renderStatus();
+function setStatus(text, isError = false, options = {}) {
+  const mode = normalizePanelMode(options.mode || currentPanelMode);
+  statusByMode[mode] = createStatusState("", {}, String(text || ""), isError);
+  if (mode === currentPanelMode) renderStatus();
 }
 
-function setErrorStatus(error, fallback = t("status.previousFailed")) {
-  setStatus(String(error?.message || error || fallback), true);
+function setErrorStatus(error, fallback = t("status.previousFailed"), options = {}) {
+  setStatus(String(error?.message || error || fallback), true, options);
 }
 
 function renderStatus() {
-  const text = currentStatus.key
-    ? t(currentStatus.key, currentStatus.params)
-    : currentStatus.isError
-      ? visibleErrorMessage(new Error(currentStatus.text))
-      : localizeKnownMessage(currentStatus.text);
+  const status = statusByMode[currentPanelMode] || statusByMode[PANEL_MODE_ORGANIZE] || createStatusState("status.default");
+  const text = status.key
+    ? t(status.key, status.params)
+    : status.isError
+      ? visibleErrorMessage(new Error(status.text))
+      : localizeKnownMessage(status.text);
   nodes.statusText.textContent = text;
-  nodes.statusText.dataset.tone = currentStatus.isError ? "error" : "";
+  nodes.statusText.dataset.tone = status.isError ? "error" : "";
 }
 
 function localizeKnownMessage(message = "") {
@@ -2717,10 +2792,12 @@ function syncActionState() {
   nodes.appShell.dataset.flowState = lastPreview || lastError ? "preview" : "setup";
   if (currentPanelMode === "recap") {
     configureRecapActions();
+    renderCurrentActionBusyState();
     return;
   }
 
   configureOrganizeActions();
+  renderCurrentActionBusyState();
 }
 
 function configureRecapActions() {
