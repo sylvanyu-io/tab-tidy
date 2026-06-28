@@ -122,7 +122,6 @@ const UI_COPY = Object.freeze({
     "recap.step": "近期回顾",
     "recap.heading": "看看最近主要在忙什么",
     "recap.subtitle": "结合最近活跃、打开次数、保留时长、标题、网址、现有分组和可用页面摘要生成，不会自动关闭标签页。",
-    "recap.range": "时间范围",
     "recap.1d": "过去 24 小时",
     "recap.today": "本日",
     "recap.7d": "最近 7 天",
@@ -133,13 +132,18 @@ const UI_COPY = Object.freeze({
     "recap.from": "开始日期",
     "recap.to": "结束日期",
     "recap.generate": "生成回顾",
+    "recap.regenerate": "重新生成回顾",
     "recap.generating": "正在生成…",
     "recap.cancel": "停止生成",
     "recap.rangeHint24h": "按当前时间向前回看 24 小时。",
     "recap.rangeHintCalendar": "按自然日历范围回顾。",
     "recap.empty": "还没有回顾。",
+    "recap.memoHeading": "这段时间主要在忙什么",
+    "recap.memoFocus": "主要精力",
+    "recap.memoReturned": "反复回到",
+    "recap.memoContinue": "可以继续",
     "recap.themes": "主题线索",
-    "recap.timeline": "时间轴",
+    "recap.timeline": "时间线",
     "recap.followUps": "下次继续",
     "recap.review": "值得复查",
     "recap.evidence": "证据详情",
@@ -359,7 +363,6 @@ const UI_COPY = Object.freeze({
     "recap.step": "Recent recap",
     "recap.heading": "See what you have been working on",
     "recap.subtitle": "Uses recent activity, open counts, age, titles, URLs, existing groups, and available page summaries. It never closes tabs automatically.",
-    "recap.range": "Time range",
     "recap.1d": "Past 24 hours",
     "recap.today": "Today",
     "recap.7d": "Last 7 days",
@@ -370,11 +373,16 @@ const UI_COPY = Object.freeze({
     "recap.from": "Start date",
     "recap.to": "End date",
     "recap.generate": "Generate recap",
+    "recap.regenerate": "Regenerate recap",
     "recap.generating": "Generating...",
     "recap.cancel": "Stop generating",
     "recap.rangeHint24h": "Looks back 24 hours from the current time.",
     "recap.rangeHintCalendar": "Uses calendar boundaries for this range.",
     "recap.empty": "No recap yet.",
+    "recap.memoHeading": "What this period was mainly about",
+    "recap.memoFocus": "Main focus",
+    "recap.memoReturned": "Kept returning to",
+    "recap.memoContinue": "Good next steps",
     "recap.themes": "Topic clues",
     "recap.timeline": "Timeline",
     "recap.followUps": "Continue next",
@@ -766,7 +774,6 @@ function applyUiLanguage() {
   setText(".recap-intro .step-label", t("recap.step"));
   setText(".recap-intro h2", t("recap.heading"));
   setText(".recap-intro p:not(.step-label)", t("recap.subtitle"));
-  setText("#recapRangeLabel", t("recap.range"));
   setText('label[for="recapFromDate"]', t("recap.from"));
   setText('label[for="recapToDate"]', t("recap.to"));
   setAttribute(".recap-range-shortcuts", "aria-label", t("recap.shortcuts"));
@@ -1337,28 +1344,96 @@ function renderTimeRecap(result) {
     return;
   }
 
-  const summary = document.createElement("section");
-  summary.className = "recap-summary-card";
-  const headline = document.createElement("h3");
-  headline.textContent = recap.headline || t("recap.heading");
-  const copy = document.createElement("p");
-  copy.textContent = recap.summary || recap.coverageNote || "";
-  summary.append(headline, copy);
+  const summary = recapMemoCard(result);
   if (result.source === "local_fallback" || result.error) {
     const fallback = document.createElement("p");
+    fallback.className = "recap-fallback-note";
     fallback.textContent = t("recap.localFallback");
     summary.append(fallback);
   }
 
   const children = [summary];
-  children.push(...recapSection(t("recap.timeline"), recap.timeline, pagesById, { labelKey: "label" }));
-  children.push(...recapSection(t("recap.themes"), recap.themes, pagesById));
-  children.push(...recapSection(t("recap.followUps"), recap.followUps, pagesById, { descriptionKey: "reason" }));
+  children.push(...recapTimelineSection(recap.timeline, pagesById));
+  children.push(...recapSection(t("recap.themes"), recap.themes, pagesById, { sectionClass: "recap-topic-grid" }));
+  children.push(...recapSection(t("recap.followUps"), recap.followUps, pagesById, { descriptionKey: "reason", sectionClass: "recap-followup-list" }));
   children.push(...recapReviewSection(recap.reviewCandidates, pagesById));
 
   nodes.recapResult.replaceChildren(...children);
   nodes.recapDetailsRoot.hidden = false;
   nodes.recapDetailsText.textContent = recapEvidenceDetailsText(result, pagesById);
+}
+
+function recapMemoCard(result = {}) {
+  const recap = result.recap || {};
+  const card = document.createElement("section");
+  card.className = "recap-summary-card recap-memo-card";
+
+  const heading = document.createElement("h3");
+  heading.textContent = t("recap.memoHeading");
+  const lead = document.createElement("p");
+  lead.className = "recap-memo-lead";
+  lead.textContent = recap.headline || t("recap.heading");
+  card.append(heading, lead);
+
+  const rows = document.createElement("div");
+  rows.className = "recap-memo-rows";
+  for (const row of recapNarrativeRows(recap)) {
+    rows.append(recapMemoRow(row));
+  }
+  card.append(rows);
+
+  return card;
+}
+
+function recapNarrativeRows(recap = {}) {
+  const focus = recap.summary || recap.coverageNote || recap.headline || "";
+  const returned = recapThemesSentence(recap.themes) || recapTimelineSentence(recap.timeline) || recap.coverageNote || "";
+  const next = recapFollowUpSentence(recap.followUps) || recapReviewSentence(recap.reviewCandidates) || recap.coverageNote || focus;
+  return [
+    { tone: "focus", label: t("recap.memoFocus"), text: focus },
+    { tone: "returned", label: t("recap.memoReturned"), text: returned },
+    { tone: "continue", label: t("recap.memoContinue"), text: next }
+  ].filter((row) => row.text);
+}
+
+function recapThemesSentence(themes = []) {
+  const valid = asArray(themes).filter(Boolean).slice(0, 3);
+  if (!valid.length) return "";
+  const names = valid.map((theme) => theme.title).filter(Boolean).slice(0, 3).join(uiLanguage === "en-US" ? ", " : "、");
+  const description = valid.find((theme) => theme.description)?.description || "";
+  if (uiLanguage === "en-US") {
+    return [names ? `Recurring topics include ${names}.` : "", description].filter(Boolean).join(" ");
+  }
+  return [names ? `${names} 是反复出现的主题。` : "", description].filter(Boolean).join("");
+}
+
+function recapTimelineSentence(timeline = []) {
+  const item = asArray(timeline).find((entry) => entry?.description || entry?.label);
+  if (!item) return "";
+  return [item.label, item.description].filter(Boolean).join(uiLanguage === "en-US" ? ": " : "：");
+}
+
+function recapFollowUpSentence(followUps = []) {
+  const item = asArray(followUps).find((entry) => entry?.title || entry?.reason || entry?.description);
+  if (!item) return "";
+  return [item.title, item.reason || item.description].filter(Boolean).join(uiLanguage === "en-US" ? ": " : "：");
+}
+
+function recapReviewSentence(candidates = []) {
+  const item = asArray(candidates).find((entry) => entry?.reason);
+  return item?.reason || "";
+}
+
+function recapMemoRow(row) {
+  const item = document.createElement("p");
+  item.className = "recap-memo-row";
+  item.dataset.tone = row.tone;
+  const label = document.createElement("strong");
+  label.textContent = row.label;
+  const text = document.createElement("span");
+  text.textContent = row.text;
+  item.append(label, text);
+  return item;
 }
 
 function renderTimeRecapError(error) {
@@ -1401,10 +1476,45 @@ function recapSection(titleText, items = [], pagesById, options = {}) {
   const title = document.createElement("h3");
   title.className = "recap-section-title";
   title.textContent = titleText;
+  const group = document.createElement("div");
+  group.className = options.sectionClass || "recap-card-list";
+  group.append(...validItems.map((item) => recapCard(item, pagesById, options)));
   return [
     title,
-    ...validItems.map((item) => recapCard(item, pagesById, options))
+    group
   ];
+}
+
+function recapTimelineSection(items = [], pagesById) {
+  const validItems = Array.isArray(items) ? items.filter(Boolean) : [];
+  if (!validItems.length) return [];
+  const title = document.createElement("h3");
+  title.className = "recap-section-title";
+  title.textContent = t("recap.timeline");
+  const list = document.createElement("div");
+  list.className = "recap-timeline-list";
+  validItems.slice(0, 6).forEach((item, index) => list.append(recapTimelineRow(item, pagesById, index)));
+  return [title, list];
+}
+
+function recapTimelineRow(item, pagesById, index) {
+  const row = document.createElement("article");
+  row.className = "recap-timeline-row";
+  row.dataset.tone = String(index % 3);
+  const marker = document.createElement("span");
+  marker.className = "recap-timeline-marker";
+  const copy = document.createElement("div");
+  const title = document.createElement("h3");
+  title.textContent = item?.label || item?.title || "";
+  const description = document.createElement("p");
+  description.textContent = item?.description || item?.summary || "";
+  copy.append(title, description);
+  const pageCount = uniqueNumbers(item?.pageIds || item?.ids || []).map((id) => pagesById.get(id)).filter(Boolean).length;
+  const count = document.createElement("span");
+  count.className = "recap-timeline-count";
+  count.textContent = pageCount ? (uiLanguage === "en-US" ? `${pageCount} pages` : `${pageCount} 页面`) : "";
+  row.append(marker, copy, count);
+  return row;
 }
 
 function recapCard(item, pagesById, options = {}) {
@@ -1869,6 +1979,10 @@ function groupRow(group, swatchColor, languageMode = "auto") {
 function formatCount(count, noun) {
   const numeric = Number(count) || 0;
   return `${numeric} ${noun}${numeric === 1 ? "" : "s"}`;
+}
+
+function asArray(value) {
+  return Array.isArray(value) ? value : [];
 }
 
 function uniqueNumbers(values) {
@@ -2612,17 +2726,19 @@ function syncActionState() {
 function configureRecapActions() {
   nodes.actions.dataset.state = "recap";
   nodes.actions.dataset.canUndo = "false";
+  nodes.appShell.dataset.recapState = lastTimeRecap ? "ready" : lastTimeRecapError ? "error" : "idle";
   nodes.applyBtn.hidden = true;
   nodes.undoBtn.hidden = true;
   nodes.applyBtn.dataset.role = "";
   nodes.analyzeBtn.dataset.role = "primary";
-  setButtonLabel(nodes.analyzeBtn, t("recap.generate"));
+  setButtonLabel(nodes.analyzeBtn, t(lastTimeRecap ? "recap.regenerate" : "recap.generate"));
   setButtonLabel(nodes.cancelBtn, t("recap.cancel"));
 }
 
 function configureOrganizeActions() {
   nodes.actions.dataset.state = lastPreview ? "preview" : lastError ? "error" : "idle";
   nodes.actions.dataset.canUndo = canUndo ? "true" : "false";
+  nodes.appShell.dataset.recapState = "";
   nodes.applyBtn.hidden = !lastPreview || lastPreview.analysisFeatures?.grouping === false;
   nodes.undoBtn.hidden = !canUndo;
   nodes.analyzeBtn.dataset.role = "";

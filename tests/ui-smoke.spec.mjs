@@ -322,8 +322,13 @@ test("time recap mode renders a first-class recap surface", async ({ page }) => 
 
   await expect(page.locator("#statusText")).toHaveText("回顾已生成");
   await expect(page.locator(".actions #progressBar")).toBeHidden();
+  await expect(page.getByRole("button", { name: "重新生成回顾" })).toBeVisible();
+  await expect(page.locator(".recap-summary-card")).toContainText("这段时间主要在忙什么");
+  await expect(page.locator(".recap-summary-card")).toContainText("主要精力");
+  await expect(page.locator(".recap-summary-card")).toContainText("反复回到");
+  await expect(page.locator(".recap-summary-card")).toContainText("可以继续");
   await expect(page.locator(".recap-summary-card")).toContainText("最近主要在打磨扩展体验和验证 AI 整理策略。");
-  await expect(page.locator(".recap-section-title").first()).toHaveText("时间轴");
+  await expect(page.locator(".recap-section-title").first()).toHaveText("时间线");
   await expect(page.locator(".recap-card").getByText("扩展产品打磨", { exact: true })).toBeVisible();
   await expect(page.locator(".recap-card").getByText("整理策略验证", { exact: true })).toBeVisible();
   await expect(page.locator(".recap-card").getByText("发布完成后，这个检查清单可能可以关闭。", { exact: true })).toBeVisible();
@@ -425,6 +430,7 @@ test("time recap generation uses the shared bottom progress controls", async ({ 
 
   await expect(page.locator("#statusText")).toHaveText("回顾已生成");
   await expect(page.locator(".actions #progressBar")).toBeHidden();
+  await expect(page.getByRole("button", { name: "重新生成回顾" })).toBeVisible();
   await expect(page.locator(".recap-summary-card")).toContainText("这段时间主要在打磨回顾功能。");
   await expect
     .poll(() =>
@@ -680,7 +686,7 @@ test("time recap error state does not resurrect the previous recap", async ({ pa
   await page.evaluate(() => {
     window.__failNextRecap = true;
   });
-  await page.getByRole("button", { name: "生成回顾" }).click();
+  await page.getByRole("button", { name: "重新生成回顾" }).click();
   await expect(page.locator(".recap-card")).toContainText("AI 回顾暂时没有完成");
   await expect(page.locator("#timeRecapPanel")).not.toContainText("第一次回顾结果");
   await expect(page.locator("#timeRecapPanel")).not.toContainText("300 seconds");

@@ -410,15 +410,22 @@ h2 {
   gap: 9px;
 }
 
-.recap-range-head {
-  display: grid;
-  gap: 8px;
+.app-shell[data-panel-mode="recap"][data-recap-state="ready"] .time-recap-panel {
+  gap: 10px;
 }
 
-.recap-range-head > span {
-  color: var(--text);
-  font-size: 13px;
-  font-weight: 900;
+.app-shell[data-panel-mode="recap"][data-recap-state="ready"] .recap-intro {
+  gap: 2px;
+}
+
+.app-shell[data-panel-mode="recap"][data-recap-state="ready"] .recap-intro p:not(.step-label),
+.app-shell[data-panel-mode="recap"][data-recap-state="ready"] .recap-date-range,
+.app-shell[data-panel-mode="recap"][data-recap-state="ready"] .recap-range-hint {
+  display: none;
+}
+
+.app-shell[data-panel-mode="recap"][data-recap-state="ready"] .recap-controls {
+  gap: 6px;
 }
 
 .recap-range-shortcuts {
@@ -510,7 +517,7 @@ h2 {
 
 .recap-result {
   display: grid;
-  gap: 10px;
+  gap: 14px;
 }
 
 .recap-result.empty {
@@ -520,8 +527,8 @@ h2 {
 .recap-summary-card,
 .recap-card {
   display: grid;
-  gap: 7px;
-  padding: 12px;
+  gap: 8px;
+  padding: 13px;
   background: color-mix(in srgb, var(--surface) 88%, var(--surface-soft));
   border: 1px solid color-mix(in srgb, var(--line) 38%, transparent);
   border-radius: var(--radius-md);
@@ -531,9 +538,16 @@ h2 {
 }
 
 .recap-summary-card {
-  color: var(--primary);
-  background: var(--primary-soft);
-  border-color: color-mix(in srgb, var(--primary) 24%, var(--line));
+  gap: 12px;
+  padding: 16px;
+  color: var(--text);
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--surface) 96%, #ffffff), color-mix(in srgb, var(--surface) 90%, var(--surface-soft))),
+    var(--surface);
+  border-color: color-mix(in srgb, var(--line) 18%, transparent);
+  box-shadow:
+    0 14px 30px rgba(42, 38, 31, 0.08),
+    inset 0 1px 0 color-mix(in srgb, #ffffff 48%, transparent);
 }
 
 .recap-summary-card h3,
@@ -542,6 +556,12 @@ h2 {
   font-size: 14px;
   line-height: 1.25;
   font-weight: 870;
+}
+
+.recap-summary-card h3 {
+  font-size: 18px;
+  line-height: 1.22;
+  letter-spacing: 0;
 }
 
 .recap-summary-card p,
@@ -553,11 +573,158 @@ h2 {
   font-weight: 650;
 }
 
+.recap-memo-lead {
+  color: var(--text) !important;
+  font-size: 14px !important;
+  line-height: 1.55 !important;
+  font-weight: 720 !important;
+}
+
+.recap-memo-rows {
+  display: grid;
+  gap: 10px;
+}
+
+.recap-memo-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 9px;
+  align-items: start;
+  color: var(--text) !important;
+  font-size: 13.5px !important;
+  line-height: 1.62 !important;
+  font-weight: 590 !important;
+}
+
+.recap-memo-row strong {
+  min-width: 58px;
+  color: var(--primary);
+  font-weight: 900;
+}
+
+.recap-memo-row[data-tone="returned"] strong {
+  color: var(--coral);
+}
+
+.recap-memo-row[data-tone="continue"] strong {
+  color: var(--group-c);
+}
+
+.recap-fallback-note {
+  color: var(--muted) !important;
+  font-size: 11.5px !important;
+}
+
 .recap-section-title {
-  margin: 4px 0 0;
+  margin: 5px 2px -3px;
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 900;
+}
+
+.recap-card-list,
+.recap-topic-grid,
+.recap-followup-list,
+.recap-timeline-list {
+  display: grid;
+  gap: 8px;
+}
+
+.recap-topic-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+@media (max-width: 560px) {
+  .recap-topic-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.recap-topic-grid .recap-card,
+.recap-followup-list .recap-card {
+  position: relative;
+  padding-left: 15px;
+}
+
+.recap-topic-grid .recap-card::before,
+.recap-followup-list .recap-card::before {
+  content: "";
+  position: absolute;
+  top: 12px;
+  bottom: 12px;
+  left: 8px;
+  width: 3px;
+  border-radius: 999px;
+  background: var(--primary);
+}
+
+.recap-topic-grid .recap-card:nth-child(2)::before,
+.recap-followup-list .recap-card:nth-child(2)::before {
+  background: var(--coral);
+}
+
+.recap-topic-grid .recap-card:nth-child(3)::before,
+.recap-followup-list .recap-card:nth-child(3)::before {
+  background: var(--group-c);
+}
+
+.recap-timeline-list {
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--line) 18%, transparent);
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--surface) 90%, transparent);
+  box-shadow: 0 8px 18px rgba(42, 38, 31, 0.05);
+}
+
+.recap-timeline-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 9px;
+  align-items: center;
+  min-height: 48px;
+  padding: 9px 11px;
+}
+
+.recap-timeline-row + .recap-timeline-row {
+  border-top: 1px solid color-mix(in srgb, var(--line) 12%, transparent);
+}
+
+.recap-timeline-marker {
+  width: 10px;
+  height: 10px;
+  border: 2px solid var(--primary);
+  border-radius: 999px;
+  background: var(--surface);
+}
+
+.recap-timeline-row[data-tone="1"] .recap-timeline-marker {
+  border-color: var(--coral);
+}
+
+.recap-timeline-row[data-tone="2"] .recap-timeline-marker {
+  border-color: var(--group-c);
+}
+
+.recap-timeline-row h3 {
+  margin: 0;
   color: var(--text);
   font-size: 13px;
-  font-weight: 900;
+  font-weight: 880;
+}
+
+.recap-timeline-row p {
+  margin: 2px 0 0;
+  color: var(--muted);
+  font-size: 11.5px;
+  font-weight: 650;
+  line-height: 1.35;
+}
+
+.recap-timeline-count {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 760;
+  white-space: nowrap;
 }
 
 .recap-page-list {
