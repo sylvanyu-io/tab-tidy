@@ -19,8 +19,8 @@ const UI_COPY = Object.freeze({
     "status.startingBackground": "正在启动后台整理",
     "status.planReady": "方案好了，可以先检查",
     "status.planNeedsReview": "方案需要检查",
-    "status.canceled": "已取消整理。",
-    "status.canceling": "正在取消整理",
+    "status.canceled": "已停止生成。",
+    "status.canceling": "正在停止生成",
     "status.organizing": "正在整理标签页",
     "status.organizingChanged": "正在整理变化后的标签页",
     "status.closingTabs": "正在关闭标签页",
@@ -51,7 +51,7 @@ const UI_COPY = Object.freeze({
     "status.gatewayInvalidOutput": "AI 服务这次返回格式异常。请重新生成，或在更多选项里切换模型。",
     "button.generate": "生成方案",
     "button.regenerate": "重新生成",
-    "button.cancel": "取消",
+    "button.cancel": "停止生成",
     "button.apply": "开始整理",
     "button.undo": "撤销",
     "button.language": "EN",
@@ -134,7 +134,6 @@ const UI_COPY = Object.freeze({
     "recap.generate": "生成回顾",
     "recap.regenerate": "重新生成回顾",
     "recap.generating": "正在生成…",
-    "recap.cancel": "停止生成",
     "recap.rangeHint24h": "按当前时间向前回看 24 小时。",
     "recap.rangeHintCalendar": "按自然日历范围回顾。",
     "recap.empty": "还没有回顾。",
@@ -260,8 +259,8 @@ const UI_COPY = Object.freeze({
     "status.startingBackground": "Starting background organization",
     "status.planReady": "Plan ready to review",
     "status.planNeedsReview": "Plan needs review",
-    "status.canceled": "Organization canceled.",
-    "status.canceling": "Canceling organization",
+    "status.canceled": "Generation stopped.",
+    "status.canceling": "Stopping generation",
     "status.organizing": "Organizing tabs",
     "status.organizingChanged": "Organizing changed tabs",
     "status.closingTabs": "Closing tabs",
@@ -292,7 +291,7 @@ const UI_COPY = Object.freeze({
     "status.gatewayInvalidOutput": "The AI service returned an unexpected format. Regenerate, or switch models in More options.",
     "button.generate": "Generate plan",
     "button.regenerate": "Regenerate",
-    "button.cancel": "Cancel",
+    "button.cancel": "Stop generating",
     "button.apply": "Organize",
     "button.undo": "Undo",
     "button.language": "中",
@@ -375,7 +374,6 @@ const UI_COPY = Object.freeze({
     "recap.generate": "Generate recap",
     "recap.regenerate": "Regenerate recap",
     "recap.generating": "Generating...",
-    "recap.cancel": "Stop generating",
     "recap.rangeHint24h": "Looks back 24 hours from the current time.",
     "recap.rangeHintCalendar": "Uses calendar boundaries for this range.",
     "recap.empty": "No recap yet.",
@@ -1188,6 +1186,10 @@ function updateConditionalUi() {
 
 async function handlePrimaryAction() {
   if (currentPanelMode === "recap") {
+    if (lastTimeRecap || lastTimeRecapError) {
+      resetTimeRecapToSetup();
+      return;
+    }
     await generateTimeRecap();
     return;
   }
@@ -1385,6 +1387,17 @@ function renderTimeRecap(result) {
   nodes.recapResult.replaceChildren(...children);
   nodes.recapDetailsRoot.hidden = false;
   nodes.recapDetailsText.textContent = recapEvidenceDetailsText(result, pagesById);
+}
+
+function resetTimeRecapToSetup() {
+  lastTimeRecap = null;
+  lastTimeRecapError = null;
+  nodes.recapResult.className = "recap-result empty";
+  nodes.recapResult.textContent = t("recap.empty");
+  nodes.recapDetailsRoot.hidden = true;
+  nodes.recapDetailsText.textContent = "";
+  setStatusKey("status.default", {}, false, { mode: PANEL_MODE_RECAP });
+  syncActionState();
 }
 
 function recapMemoCard(result = {}) {
@@ -1685,7 +1698,7 @@ function validateGatewaySettingsForAnalyze(settings) {
 }
 
 function isCancellationError(error) {
-  return /已取消整理|Cleanup canceled|canceled/i.test(String(error?.message || ""));
+  return /已取消整理|已停止生成|Cleanup canceled|canceled|stopped/i.test(String(error?.message || ""));
 }
 
 function friendlyErrorMessage(error) {
@@ -2736,6 +2749,7 @@ function localizeKnownMessage(message = "") {
     ["方案好了，可以先检查", t("status.planReady")],
     ["方案需要检查", t("status.planNeedsReview")],
     ["已取消整理。", t("status.canceled")],
+    ["已停止生成。", t("status.canceled")],
     ["后台任务已停止，请重新生成。", t("status.previousFailed")],
     ["正在校验 AI 方案", "Checking AI plan"],
     ["方案未通过校验，正在要求 AI 修正", "Asking AI to fix the plan"],
@@ -2753,6 +2767,7 @@ function localizeKnownMessage(message = "") {
     ["不确定标签页已细分", "Uncertain tabs refined"],
     ["正在合并精分结果", "Merging refined results"],
     ["正在取消整理", t("status.canceling")],
+    ["正在停止生成", t("status.canceling")],
     ["正在准备回顾", t("status.recapPreparing")],
     ["正在生成近期回顾", t("status.recapGenerating")],
     ["正在停止生成回顾", t("status.recapCanceling")],
@@ -2809,8 +2824,8 @@ function configureRecapActions() {
   nodes.undoBtn.hidden = true;
   nodes.applyBtn.dataset.role = "";
   nodes.analyzeBtn.dataset.role = "primary";
-  setButtonLabel(nodes.analyzeBtn, t(lastTimeRecap ? "recap.regenerate" : "recap.generate"));
-  setButtonLabel(nodes.cancelBtn, t("recap.cancel"));
+  setButtonLabel(nodes.analyzeBtn, t(lastTimeRecap || lastTimeRecapError ? "recap.regenerate" : "recap.generate"));
+  setButtonLabel(nodes.cancelBtn, t("button.cancel"));
 }
 
 function configureOrganizeActions() {

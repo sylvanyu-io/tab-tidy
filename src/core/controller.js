@@ -475,7 +475,7 @@ async function runActiveAnalysis(chromeApi, rawSettings, invocation, operationId
     return storedJob;
   } catch (error) {
     const canceled = abortController.signal.aborted;
-    const message = canceled ? "已取消整理。" : error.message;
+    const message = canceled ? "已停止生成。" : error.message;
     await reportProgress({
       status: canceled ? "canceled" : "error",
       phase: canceled ? "canceled" : "error",
@@ -513,7 +513,7 @@ export async function getActiveJob(chromeApi, windowId = null) {
       ...job,
       status: job.status === "canceling" ? "canceled" : "error",
       phase: job.status === "canceling" ? "canceled" : "error",
-      message: job.status === "canceling" ? "已取消整理。" : "后台任务已停止，请重新生成。",
+      message: job.status === "canceling" ? "已停止生成。" : "后台任务已停止，请重新生成。",
       error: job.status === "canceling" ? "" : "The background worker no longer has this active analysis.",
       finishedAt: new Date().toISOString(),
       updatedAt: new Date().toISOString()
@@ -534,7 +534,7 @@ export async function cancelActiveJob(chromeApi, windowId = null) {
     ...job,
     status: "canceled",
     phase: "canceled",
-    message: "已取消整理。",
+    message: "已停止生成。",
     error: "",
     finishedAt: new Date().toISOString(),
     updatedAt: new Date().toISOString()
@@ -1259,7 +1259,7 @@ async function requestPageSampleWithTimeout(chromeApi, tab, settings, signal, re
 }
 
 function raceWithTimeoutAndAbort(promise, timeoutMs, signal) {
-  if (signal?.aborted) return Promise.reject(new Error("已取消整理。"));
+  if (signal?.aborted) return Promise.reject(new Error("已停止生成。"));
 
   let timeoutId;
   let abortHandler;
@@ -1267,7 +1267,7 @@ function raceWithTimeoutAndAbort(promise, timeoutMs, signal) {
     timeoutId = setTimeout(() => reject(new Error(`Page sampling timed out after ${timeoutMs}ms.`)), timeoutMs);
   });
   const abortPromise = new Promise((_, reject) => {
-    abortHandler = () => reject(new Error("已取消整理。"));
+    abortHandler = () => reject(new Error("已停止生成。"));
     signal?.addEventListener("abort", abortHandler, { once: true });
   });
 
@@ -1328,13 +1328,13 @@ async function updateActiveJob(chromeApi, operationId, patch, windowId = null) {
     if (nextPatch.status === "complete") {
       nextPatch.status = "canceled";
       nextPatch.phase = "canceled";
-      nextPatch.message = "已取消整理。";
+      nextPatch.message = "已停止生成。";
       nextPatch.error = "";
       nextPatch.finishedAt = nextPatch.finishedAt || new Date().toISOString();
     } else if (!ACTIVE_JOB_TERMINAL_STATUSES.has(nextPatch.status)) {
       nextPatch.status = "canceling";
       nextPatch.phase = "canceling";
-      nextPatch.message = "正在取消整理";
+      nextPatch.message = "正在停止生成";
     }
   }
   if (
@@ -1374,7 +1374,7 @@ function sanitizeActiveJob(job) {
 
 function throwIfCanceled(signal) {
   if (signal?.aborted) {
-    throw new Error("已取消整理。");
+    throw new Error("已停止生成。");
   }
 }
 

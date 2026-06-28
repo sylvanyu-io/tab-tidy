@@ -1222,8 +1222,8 @@ test("canceling during page sampling marks the job canceled immediately", async 
     const cancelResult = await cancelActiveJob(chrome);
     assert.equal(cancelResult.canceled, true);
     assert.equal(cancelResult.job.status, "canceled");
-    assert.equal(cancelResult.job.message, "已取消整理。");
-    await assert.rejects(pending, /已取消整理/);
+    assert.equal(cancelResult.job.message, "已停止生成。");
+    await assert.rejects(pending, /已停止生成/);
     assert.equal((await getActiveJob(chrome)).status, "canceled");
   } finally {
     delete globalThis.__semanticTabAgentPageSampleTimeoutMs;
@@ -1263,11 +1263,11 @@ test("active analysis exposes progress and can be canceled", async () => {
 
     const cancelResult = await cancelActiveJob(chrome);
     assert.equal(cancelResult.canceled, true);
-    await assert.rejects(pending, /已取消整理/);
+    await assert.rejects(pending, /已停止生成/);
 
     const canceledJob = await getActiveJob(chrome);
     assert.equal(canceledJob.status, "canceled");
-    assert.equal(canceledJob.message, "已取消整理。");
+    assert.equal(canceledJob.message, "已停止生成。");
   } finally {
     globalThis.fetch = originalFetch;
   }
@@ -1436,7 +1436,7 @@ test("canceling during preview cannot be overwritten by completion", async () =>
 
   assert.equal(issuedCancel, true);
   assert.equal(finalJob.status, "canceled");
-  assert.equal(finalJob.message, "已取消整理。");
+  assert.equal(finalJob.message, "已停止生成。");
   assert.equal(await getLastJob(chrome), null);
 });
 

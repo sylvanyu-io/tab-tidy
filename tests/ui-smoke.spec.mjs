@@ -326,6 +326,9 @@ test("time recap mode renders a first-class recap surface", async ({ page }) => 
   await expect(page.locator("#statusText")).toHaveText("回顾已生成");
   await expect(page.locator(".actions #progressBar")).toBeHidden();
   await expect(page.getByRole("button", { name: "重新生成回顾" })).toBeVisible();
+  await expect(page.locator(".launch-panel")).toBeHidden();
+  await expect(page.locator(".advanced-settings")).toBeHidden();
+  await expect(page.locator(".recap-controls")).toBeHidden();
   await expect(page.locator(".recap-summary-card")).toContainText("这段时间主要在忙什么");
   await expect(page.locator(".recap-summary-card")).toContainText("主要精力");
   await expect(page.locator(".recap-summary-card")).toContainText("反复回到");
@@ -348,6 +351,12 @@ test("time recap mode renders a first-class recap surface", async ({ page }) => 
       })
     )
     .toEqual({ pageFits: true, contentFits: true, topicColumns: 1 });
+
+  await page.getByRole("button", { name: "重新生成回顾" }).click();
+  await expect(page.getByRole("button", { name: "生成回顾" })).toBeVisible();
+  await expect(page.locator(".launch-panel")).toBeVisible();
+  await expect(page.locator(".recap-controls")).toBeVisible();
+  await expect(page.locator(".recap-summary-card")).toHaveCount(0);
 
   await page.getByRole("button", { name: "整理" }).click();
   await expect(page.locator("#timeRecapPanel")).toBeHidden();
@@ -987,7 +996,15 @@ test("time recap error state does not resurrect the previous recap", async ({ pa
     window.__failNextRecap = true;
   });
   await page.getByRole("button", { name: "重新生成回顾" }).click();
+  await expect(page.getByRole("button", { name: "生成回顾" })).toBeVisible();
+  await expect(page.locator(".launch-panel")).toBeVisible();
+  await expect(page.locator(".recap-summary-card")).toHaveCount(0);
+  await expect(page.locator("#timeRecapPanel")).not.toContainText("第一次回顾结果");
+  await expect(page.locator("#timeRecapPanel")).not.toContainText("300 seconds");
+
+  await page.getByRole("button", { name: "生成回顾" }).click();
   await expect(page.locator(".recap-card")).toContainText("AI 回顾暂时没有完成");
+  await expect(page.locator(".launch-panel")).toBeHidden();
   await expect(page.locator("#timeRecapPanel")).not.toContainText("第一次回顾结果");
   await expect(page.locator("#timeRecapPanel")).not.toContainText("300 seconds");
 
@@ -1524,7 +1541,7 @@ test("side panel shows optimistic progress while waiting for AI", async ({ page 
   await expect(page.locator("#progressPercent")).toContainText("%");
   const displayedProgress = await page.locator("#progressFill").evaluate((element) => Number.parseFloat(element.style.width));
   expect(displayedProgress).toBeGreaterThan(45);
-  await expect(page.getByRole("button", { name: "取消" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "停止生成" })).toBeVisible();
 });
 
 test("English UI localizes known background progress messages", async ({ page }) => {
@@ -2593,7 +2610,7 @@ test("canceling generation returns to setup without error preview", async ({ pag
       ...runningJob,
       status: "canceled",
       phase: "canceled",
-      message: "已取消整理。",
+      message: "已停止生成。",
       finishedAt: new Date().toISOString()
     };
     window.__started = false;
@@ -2624,8 +2641,8 @@ test("canceling generation returns to setup without error preview", async ({ pag
   await page.goto(`${baseUrl}/src/sidepanel/index.html`);
   await page.getByRole("button", { name: "生成方案" }).click();
   await expect(page.locator("#progressLabel")).toContainText("正在补充页面线索");
-  await page.getByRole("button", { name: "取消" }).click();
-  await expect(page.locator("#statusText")).toHaveText("已取消整理。");
+  await page.getByRole("button", { name: "停止生成" }).click();
+  await expect(page.locator("#statusText")).toHaveText("已停止生成。");
   await expect(page.locator("#cancelBtn")).toBeHidden();
   await expect(page.locator("#previewSection")).toBeHidden();
 });

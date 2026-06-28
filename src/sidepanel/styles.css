@@ -151,6 +151,13 @@ h2,
   display: none;
 }
 
+.app-shell[data-panel-mode="recap"][data-recap-state="ready"] .launch-panel,
+.app-shell[data-panel-mode="recap"][data-recap-state="ready"] .advanced-settings,
+.app-shell[data-panel-mode="recap"][data-recap-state="error"] .launch-panel,
+.app-shell[data-panel-mode="recap"][data-recap-state="error"] .advanced-settings {
+  display: none;
+}
+
 .app-shell[data-panel-mode="recap"] .preview {
   display: none;
 }
@@ -426,10 +433,11 @@ h2 {
   gap: 10px;
 }
 
-.app-shell[data-panel-mode="recap"][data-recap-state="ready"] .recap-intro {
-  gap: 2px;
-}
-
+.app-shell[data-panel-mode="recap"][data-recap-state="idle"] .recap-result.empty,
+.app-shell[data-panel-mode="recap"][data-recap-state="ready"] .recap-intro,
+.app-shell[data-panel-mode="recap"][data-recap-state="ready"] .recap-controls,
+.app-shell[data-panel-mode="recap"][data-recap-state="error"] .recap-intro,
+.app-shell[data-panel-mode="recap"][data-recap-state="error"] .recap-controls,
 .app-shell[data-panel-mode="recap"][data-recap-state="ready"] .recap-intro p:not(.step-label),
 .app-shell[data-panel-mode="recap"][data-recap-state="ready"] .recap-date-range,
 .app-shell[data-panel-mode="recap"][data-recap-state="ready"] .recap-range-hint {
