@@ -151,7 +151,6 @@ h2,
   display: none;
 }
 
-.app-shell[data-panel-mode="recap"] .launch-panel,
 .app-shell[data-panel-mode="recap"] .preview {
   display: none;
 }
@@ -393,6 +392,19 @@ h2 {
   gap: 12px;
 }
 
+.app-shell[data-panel-mode="recap"] .launch-panel {
+  padding: 12px;
+}
+
+.app-shell[data-panel-mode="recap"] .preferences-panel {
+  gap: 8px;
+  padding-top: 0;
+}
+
+.app-shell[data-panel-mode="recap"] .preferences-panel::before {
+  display: none;
+}
+
 .recap-intro {
   display: grid;
   gap: 5px;
@@ -518,6 +530,9 @@ h2 {
 .recap-result {
   display: grid;
   gap: 14px;
+  min-width: 0;
+  max-width: 100%;
+  overflow: clip;
 }
 
 .recap-result.empty {
@@ -528,6 +543,8 @@ h2 {
 .recap-card {
   display: grid;
   gap: 8px;
+  min-width: 0;
+  max-width: 100%;
   padding: 13px;
   background: color-mix(in srgb, var(--surface) 88%, var(--surface-soft));
   border: 1px solid color-mix(in srgb, var(--line) 38%, transparent);
@@ -571,6 +588,7 @@ h2 {
   font-size: 12px;
   line-height: 1.45;
   font-weight: 650;
+  overflow-wrap: anywhere;
 }
 
 .recap-memo-lead {
@@ -631,13 +649,7 @@ h2 {
 }
 
 .recap-topic-grid {
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-}
-
-@media (max-width: 560px) {
-  .recap-topic-grid {
-    grid-template-columns: 1fr;
-  }
+  grid-template-columns: minmax(0, 1fr);
 }
 
 .recap-topic-grid .recap-card,
@@ -678,7 +690,7 @@ h2 {
 
 .recap-timeline-row {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-columns: auto minmax(0, 1fr);
   gap: 9px;
   align-items: center;
   min-height: 48px;
@@ -721,6 +733,7 @@ h2 {
 }
 
 .recap-timeline-count {
+  grid-column: 2;
   color: var(--muted);
   font-size: 11px;
   font-weight: 760;
@@ -735,6 +748,7 @@ h2 {
 
 .recap-page-chip {
   max-width: 100%;
+  min-width: 0;
   min-height: 22px;
   padding: 2px 7px;
   overflow: hidden;
@@ -745,7 +759,8 @@ h2 {
   font-size: 10.5px;
   font-weight: 760;
   text-overflow: ellipsis;
-  white-space: nowrap;
+  overflow-wrap: anywhere;
+  white-space: normal;
 }
 
 .recap-review-row {

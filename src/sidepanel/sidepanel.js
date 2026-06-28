@@ -80,12 +80,12 @@ const UI_COPY = Object.freeze({
     "analysis.mode.hint.grouping": "只生成分组方案，不列清理清单。",
     "analysis.mode.hint.cleanup": "只列出值得复查的标签页，不创建分组方案。",
     "sampling.title": "需要时补读页面摘要",
-    "sampling.subtitle": "读取少量网页文字，帮助 AI 判断主题",
-    "sampling.tooltip": "会把标题、描述、标题层级和页面上的正文或讨论摘录发送给 AI 用于整理；不会读取密码、表单内容、Cookie、本地存储或完整 HTML。休眠标签页不会被唤醒。",
+    "sampling.subtitle": "读取少量网页文字，帮助 AI 理解主题和回顾脉络",
+    "sampling.tooltip": "会把标题、描述、标题层级和页面上的正文或讨论摘录发送给 AI，用于整理和回顾；不会读取密码、表单内容、Cookie、本地存储或完整 HTML。休眠标签页不会被唤醒。",
     "sampling.aria": "页面摘要说明",
     "continuous.title": "长期积累页面摘要",
     "continuous.subtitle": "本机保存短摘要，之后整理和回顾更准",
-    "continuous.tooltip": "开启后浏览器会请求网页读取权限；之后会在后台给打开过的、未休眠、非无痕页面保存短摘要。整理时，相关摘要会发送给 AI 辅助归类；不会主动唤醒标签页。",
+    "continuous.tooltip": "开启后浏览器会请求网页读取权限；之后会在后台给打开过的、未休眠、非无痕页面保存短摘要。整理和回顾时，相关摘要会发送给 AI 辅助判断；不会主动唤醒标签页。",
     "continuous.aria": "持续摘要说明",
     "activity.focused": "已定位标签页",
     "activity.focusFailed": "标签页可能已经关闭，请刷新清理建议。",
@@ -321,12 +321,12 @@ const UI_COPY = Object.freeze({
     "analysis.mode.hint.grouping": "Creates the grouping plan only, without a cleanup checklist.",
     "analysis.mode.hint.cleanup": "Ranks tabs worth reviewing, without creating groups.",
     "sampling.title": "Read page summaries when useful",
-    "sampling.subtitle": "Reads a little page text so AI can judge topics",
-    "sampling.tooltip": "Sends titles, descriptions, headings, and visible article or discussion excerpts to AI for organization. It will not read passwords, form values, cookies, local storage, or full HTML. Sleeping tabs are not awakened.",
+    "sampling.subtitle": "Reads a little page text so AI can understand topics and recaps",
+    "sampling.tooltip": "Sends titles, descriptions, headings, and visible article or discussion excerpts to AI for organization and recaps. It will not read passwords, form values, cookies, local storage, or full HTML. Sleeping tabs are not awakened.",
     "sampling.aria": "Page summary details",
     "continuous.title": "Build page memory",
     "continuous.subtitle": "Saves short local summaries for better future runs",
-    "continuous.tooltip": "Chrome will ask for page-reading access. After that, TabRecap saves short summaries for opened, awake, non-incognito pages in the background. Related summaries are sent to AI during organization. It will not wake sleeping tabs.",
+    "continuous.tooltip": "Chrome will ask for page-reading access. After that, TabRecap saves short summaries for opened, awake, non-incognito pages in the background. Related summaries are sent to AI during organization and recaps. It will not wake sleeping tabs.",
     "continuous.aria": "Accumulated summary details",
     "activity.focused": "Tab focused",
     "activity.focusFailed": "The tab may already be closed. Refresh suggestions.",
@@ -1256,6 +1256,7 @@ async function generateTimeRecap() {
   try {
     const settings = readEffectiveRunSettings();
     await ensureGatewayPermissionForRun(settings, 10, PANEL_MODE_RECAP);
+    await ensurePageSummaryPermissionsForRun(settings, 16, PANEL_MODE_RECAP);
 
     updateLocalProgress(t("status.recapGenerating"), 28, PANEL_MODE_RECAP);
     startRecapProgress(operationId, settings);

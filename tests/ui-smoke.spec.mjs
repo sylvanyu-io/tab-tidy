@@ -161,7 +161,7 @@ test("control surface renders settings and mock preview", async ({ page }) => {
 
   await page.locator("#ackSampling").check();
   await expect(page.locator("#samplingRisk")).toBeVisible();
-  await expect(page.getByText("读取少量网页文字，帮助 AI 判断主题")).toBeVisible();
+  await expect(page.getByText("读取少量网页文字，帮助 AI 理解主题和回顾脉络")).toBeVisible();
   await expect(page.locator("#pageContextMode")).toHaveValue("ambiguous_with_permission");
   await expect(page.locator("#hostPermissionRequestMode")).toHaveValue("ask_for_all_visible_origins");
   await expect(page.locator("#pageContextMode option[value='active_tab_only']")).toHaveCount(0);
@@ -279,7 +279,10 @@ test("time recap mode renders a first-class recap surface", async ({ page }) => 
 
   await page.getByRole("button", { name: "回顾" }).click();
   await expect(page.locator("#timeRecapPanel")).toBeVisible();
-  await expect(page.locator(".launch-panel")).toBeHidden();
+  await expect(page.locator(".launch-panel")).toBeVisible();
+  await expect(page.locator("#ackSampling")).toBeVisible();
+  await expect(page.locator("#continuousPageSummaries")).toBeVisible();
+  await expect(page.getByText("读取少量网页文字，帮助 AI 理解主题和回顾脉络")).toBeVisible();
   await expect(page.locator(".actions")).toBeVisible();
   await expect(page.locator(".advanced-settings")).toBeVisible();
   await expect(page.locator("#gatewayModel")).toHaveValue("gpt-5.4");
@@ -305,7 +308,7 @@ test("time recap mode renders a first-class recap surface", async ({ page }) => 
   await expect(page.locator("#createReviewGroupToggle")).toBeHidden();
   await expect(page.locator("#includePinnedTabs")).toBeHidden();
   await expect(page.locator("#collapseGroupsAfterApply")).toBeHidden();
-  await expect(page.locator("#pageContextMode")).toBeHidden();
+  await expect(page.locator("#pageContextMode")).toBeVisible();
   await expect(page.locator("#minConfidenceToApply")).toBeHidden();
   await page.locator(".advanced-settings > summary").click();
 
@@ -333,11 +336,155 @@ test("time recap mode renders a first-class recap surface", async ({ page }) => 
   await expect(page.locator(".recap-card").getByText("整理策略验证", { exact: true })).toBeVisible();
   await expect(page.locator(".recap-card").getByText("发布完成后，这个检查清单可能可以关闭。", { exact: true })).toBeVisible();
   await expect(page.locator("#recapDetailsRoot")).toBeVisible();
+  await expect
+    .poll(() =>
+      page.evaluate(() => {
+        const scrollRegion = document.querySelector(".scroll-region");
+        return {
+          pageFits: document.documentElement.scrollWidth <= window.innerWidth,
+          contentFits: scrollRegion ? scrollRegion.scrollWidth <= scrollRegion.clientWidth + 1 : false,
+          topicColumns: getComputedStyle(document.querySelector(".recap-topic-grid")).gridTemplateColumns.split(" ").length
+        };
+      })
+    )
+    .toEqual({ pageFits: true, contentFits: true, topicColumns: 1 });
 
   await page.getByRole("button", { name: "整理" }).click();
   await expect(page.locator("#timeRecapPanel")).toBeHidden();
   await expect(page.locator(".launch-panel")).toBeVisible();
   await expect(page.getByRole("button", { name: "生成方案" })).toBeVisible();
+});
+
+test("time recap exposes page summary permission controls and sends enabled summary settings", async ({ page }) => {
+  await page.addInitScript(() => {
+    let settings = {
+      organizeMode: "current_window",
+      targetWindowMode: "current_window",
+      existingGroupMode: "preserve_existing_groups",
+      reviewGroupMode: "create_review_group",
+      undoTargetWindowMode: "leave_empty_target_window",
+      pageContextMode: "off",
+      hostPermissionRequestMode: "never",
+      pageSamplingConsentMode: "not_acknowledged",
+      urlPrivacyMode: "sanitized_url",
+      includePinnedTabs: false,
+      includeIncognitoTabs: false,
+      collapseGroupsAfterApply: true,
+      continuousPageSummaries: false,
+      analyzeGrouping: true,
+      analyzeCleanup: true,
+      minConfidenceToApply: 0.65,
+      maxTabsPerGroup: 40,
+      languageMode: "auto",
+      promptPreset: "conservative",
+      groupingGranularity: "balanced",
+      plannerProvider: "gateway",
+      rememberProviderKeys: false,
+      gatewayBaseUrl: "",
+      gatewayModel: "gpt-5.4",
+      gatewayAuxiliaryModel: "gpt-5.3-codex-spark",
+      gatewayCustomModel: "",
+      gatewayThinkingIntensity: "high",
+      gatewayApiKey: "",
+      customPrompt: ""
+    };
+    window.__permissionRequests = [];
+    window.__savedSettings = [];
+    window.__recapMessages = [];
+    window.__grantedPermissions = new Set(["https://cliproxy.sylvanyu.io/*"]);
+    window.chrome = {
+      permissions: {
+        contains: async (request) => {
+          if (request.permissions?.includes("scripting") && !window.__grantedPermissions.has("scripting")) return false;
+          return (request.origins || []).every((origin) => window.__grantedPermissions.has(origin));
+        },
+        request: async (request) => {
+          window.__permissionRequests.push(request);
+          for (const permission of request.permissions || []) window.__grantedPermissions.add(permission);
+          for (const origin of request.origins || []) window.__grantedPermissions.add(origin);
+          return true;
+        }
+      },
+      windows: {
+        get: async () => ({
+          id: 17,
+          type: "normal",
+          tabs: [
+            { id: 101, windowId: 17, title: "Recap source", url: "https://example.com/thread", active: true },
+            { id: 102, windowId: 17, title: "Docs", url: "https://docs.example/page" }
+          ]
+        }),
+        getLastFocused: async () => ({ id: 17, type: "normal" })
+      },
+      runtime: {
+        getManifest: () => ({
+          optional_permissions: ["scripting"],
+          optional_host_permissions: ["https://*/*", "http://*/*"]
+        }),
+        sendMessage: async (message) => {
+          window.__recapMessages.push(message);
+          if (message.type === "settings:get") return { ok: true, result: settings };
+          if (message.type === "settings:save") {
+            settings = message.settings;
+            window.__savedSettings.push(settings);
+            return { ok: true, result: settings };
+          }
+          if (message.type === "tabs:getActiveJob") return { ok: true, result: null };
+          if (message.type === "tabs:canUndo") return { ok: true, result: { canUndo: false } };
+          if (message.type === "progressCopy:generate") return { ok: true, result: { messages: ["梳理时间线索"] } };
+          if (message.type === "activity:generateTimeRecap") {
+            return {
+              ok: true,
+              result: {
+                source: "ai",
+                input: { pages: [], coverage: { includedPages: 2, sampledEntries: 1 } },
+                recap: {
+                  schema: "tab_tidy_time_recap_v1",
+                  headline: "摘要权限已用于回顾。",
+                  summary: "回顾生成会带上页面摘要设置。",
+                  timeline: [],
+                  themes: [],
+                  followUps: [],
+                  reviewCandidates: [],
+                  coverageNote: ""
+                }
+              }
+            };
+          }
+          return { ok: true, result: null };
+        }
+      }
+    };
+  });
+
+  await page.goto(`${baseUrl}/src/sidepanel/index.html?sourceWindowId=17`);
+  await page.getByRole("button", { name: "回顾" }).click();
+  await expect(page.locator("#ackSampling")).toBeVisible();
+  await page.locator("#ackSampling").click();
+  await expect(page.locator("#ackSampling")).toBeChecked();
+  await expect.poll(() => page.evaluate(() => window.__permissionRequests.at(-1))).toEqual({
+    permissions: ["scripting"],
+    origins: ["https://example.com/*", "https://docs.example/*"]
+  });
+
+  await page.getByRole("button", { name: "生成回顾" }).click();
+  await expect(page.locator(".recap-summary-card")).toContainText("回顾生成会带上页面摘要设置。");
+  await expect
+    .poll(() =>
+      page.evaluate(() => {
+        const message = window.__recapMessages.find((item) => item.type === "activity:generateTimeRecap");
+        return {
+          pageContextMode: message?.settings?.pageContextMode,
+          pageSamplingConsentMode: message?.settings?.pageSamplingConsentMode,
+          hostPermissionRequestMode: message?.settings?.hostPermissionRequestMode
+        };
+      })
+    )
+    .toEqual({
+      pageContextMode: "ambiguous_with_permission",
+      pageSamplingConsentMode: "acknowledged_for_session",
+      hostPermissionRequestMode: "never"
+    });
 });
 
 test("time recap generation uses the shared bottom progress controls", async ({ page }) => {

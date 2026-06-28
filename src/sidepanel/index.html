@@ -31,7 +31,7 @@
 
       <div class="scroll-region">
         <section class="launch-panel">
-          <div class="analysis-mode-panel">
+          <div class="analysis-mode-panel organize-only-setting">
             <div class="control-label">
               <span>本次分析</span>
             </div>
@@ -45,7 +45,7 @@
             <input id="analyzeCleanup" type="checkbox" hidden />
           </div>
 
-          <div class="control-group">
+          <div class="control-group organize-only-setting">
             <div class="control-label">
               <span>范围</span>
             </div>
@@ -73,7 +73,7 @@
           <div class="preferences-panel">
             <label
               class="switch-row emphasis-toggle content-access-feature"
-              data-tooltip="会把标题、描述、标题层级和页面上的正文或讨论摘录发送给 AI 用于整理；不会读取密码、表单内容、Cookie、本地存储或完整 HTML。休眠标签页不会被唤醒。"
+              data-tooltip="会把标题、描述、标题层级和页面上的正文或讨论摘录发送给 AI，用于整理和回顾；不会读取密码、表单内容、Cookie、本地存储或完整 HTML。休眠标签页不会被唤醒。"
             >
               <span>
                 <strong>
@@ -83,7 +83,7 @@
                     class="help-tip content-access-feature"
                     tabindex="0"
                     aria-label="页面摘要说明"
-                    data-tooltip="会把标题、描述、标题层级和页面上的正文或讨论摘录发送给 AI 用于整理；不会读取密码、表单内容、Cookie、本地存储或完整 HTML。休眠标签页不会被唤醒。"
+                    data-tooltip="会把标题、描述、标题层级和页面上的正文或讨论摘录发送给 AI，用于整理和回顾；不会读取密码、表单内容、Cookie、本地存储或完整 HTML。休眠标签页不会被唤醒。"
                   >
                     <svg viewBox="0 0 16 16" aria-hidden="true" focusable="false">
                       <circle cx="8" cy="8" r="6.2" />
@@ -92,14 +92,14 @@
                     </svg>
                   </i>
                 </strong>
-                <small>读取少量网页文字，帮助 AI 判断主题</small>
+                <small>读取少量网页文字，帮助 AI 理解主题和回顾脉络</small>
               </span>
               <input id="ackSampling" type="checkbox" />
             </label>
 
             <label
               class="switch-row emphasis-toggle content-access-feature continuous-summary-toggle"
-              data-tooltip="开启后浏览器会请求网页读取权限；之后会在后台给打开过的、未休眠、非无痕页面保存短摘要。整理时，相关摘要会发送给 AI 辅助归类；不会主动唤醒标签页。"
+              data-tooltip="开启后浏览器会请求网页读取权限；之后会在后台给打开过的、未休眠、非无痕页面保存短摘要。整理和回顾时，相关摘要会发送给 AI 辅助判断；不会主动唤醒标签页。"
             >
               <span>
                 <strong>
@@ -109,7 +109,7 @@
                     class="help-tip content-access-feature"
                     tabindex="0"
                     aria-label="持续摘要说明"
-                    data-tooltip="开启后浏览器会请求网页读取权限；之后会在后台给打开过的、未休眠、非无痕页面保存短摘要。整理时，相关摘要会发送给 AI 辅助归类；不会主动唤醒标签页。"
+                    data-tooltip="开启后浏览器会请求网页读取权限；之后会在后台给打开过的、未休眠、非无痕页面保存短摘要。整理和回顾时，相关摘要会发送给 AI 辅助判断；不会主动唤醒标签页。"
                   >
                     <svg viewBox="0 0 16 16" aria-hidden="true" focusable="false">
                       <circle cx="8" cy="8" r="6.2" />
@@ -123,7 +123,7 @@
               <input id="continuousPageSummaries" type="checkbox" />
             </label>
 
-            <div class="field prompt-preset-field">
+            <div class="field prompt-preset-field organize-only-setting">
               <label for="promptPreset">整理方式</label>
               <select id="promptPreset">
                 <option value="conservative">智能整理</option>
@@ -133,7 +133,7 @@
               </select>
             </div>
 
-            <div class="field prompt-preset-field">
+            <div class="field prompt-preset-field organize-only-setting">
               <label for="groupingGranularity">分组数量</label>
               <select id="groupingGranularity">
                 <option value="compact">更少分组</option>
@@ -142,7 +142,7 @@
               </select>
             </div>
 
-            <div class="field prompt-field">
+            <div class="field prompt-field organize-only-setting">
               <label for="customPrompt">自定义要求</label>
               <textarea
                 id="customPrompt"
@@ -265,7 +265,7 @@
               </select>
             </div>
 
-            <div class="field setting-select-row content-access-feature organize-only-setting">
+            <div class="field setting-select-row content-access-feature">
               <label for="pageContextMode">页面摘要读取范围</label>
               <select id="pageContextMode">
                 <option value="off">不补读页面摘要</option>
@@ -274,7 +274,7 @@
               </select>
             </div>
 
-            <div id="hostPermissionField" class="field setting-select-row organize-only-setting" hidden>
+            <div id="hostPermissionField" class="field setting-select-row" hidden>
               <label for="hostPermissionRequestMode">站点授权</label>
               <select id="hostPermissionRequestMode">
                 <option value="never">整理时不弹授权</option>
