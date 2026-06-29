@@ -259,7 +259,7 @@ test("control surface renders settings and mock preview", async ({ page }) => {
   await expect(page.getByRole("button", { name: "撤销" })).toBeHidden();
   await expect(page.getByText("调整", { exact: true })).toHaveCount(0);
 
-  await page.getByRole("button", { name: "重新生成" }).click();
+  await page.getByRole("button", { name: "返回上级" }).click();
   await expect(page.locator("#previewSection")).toBeHidden();
   await expect(page.locator(".launch-panel")).toBeVisible();
   await expect(page.getByRole("button", { name: "生成方案" })).toBeVisible();
@@ -325,7 +325,7 @@ test("time recap mode renders a first-class recap surface", async ({ page }) => 
 
   await expect(page.locator("#statusText")).toHaveText("回顾已生成");
   await expect(page.locator(".actions #progressBar")).toBeHidden();
-  await expect(page.getByRole("button", { name: "重新生成回顾" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "返回上级" })).toBeVisible();
   await expect(page.locator(".launch-panel")).toBeHidden();
   await expect(page.locator(".advanced-settings")).toBeHidden();
   await expect(page.locator(".recap-controls")).toBeHidden();
@@ -352,7 +352,7 @@ test("time recap mode renders a first-class recap surface", async ({ page }) => 
     )
     .toEqual({ pageFits: true, contentFits: true, topicColumns: 1 });
 
-  await page.getByRole("button", { name: "重新生成回顾" }).click();
+  await page.getByRole("button", { name: "返回上级" }).click();
   await expect(page.getByRole("button", { name: "生成回顾" })).toBeVisible();
   await expect(page.locator(".launch-panel")).toBeVisible();
   await expect(page.locator(".recap-controls")).toBeVisible();
@@ -586,7 +586,7 @@ test("time recap generation uses the shared bottom progress controls", async ({ 
 
   await expect(page.locator("#statusText")).toHaveText("回顾已生成");
   await expect(page.locator(".actions #progressBar")).toBeHidden();
-  await expect(page.getByRole("button", { name: "重新生成回顾" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "返回上级" })).toBeVisible();
   await expect(page.locator(".recap-summary-card")).toContainText("这段时间主要在打磨回顾功能。");
   await expect
     .poll(() =>
@@ -757,7 +757,7 @@ test("time recap and organize generation can run in parallel", async ({ page }) 
       }
     });
   });
-  await expect(page.getByRole("button", { name: "重新生成回顾" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "返回上级" })).toBeVisible();
   await expect(page.locator(".recap-summary-card")).toContainText("整理和回顾可以同时进行。");
   await expect
     .poll(() =>
@@ -995,7 +995,7 @@ test("time recap error state does not resurrect the previous recap", async ({ pa
   await page.evaluate(() => {
     window.__failNextRecap = true;
   });
-  await page.getByRole("button", { name: "重新生成回顾" }).click();
+  await page.getByRole("button", { name: "返回上级" }).click();
   await expect(page.getByRole("button", { name: "生成回顾" })).toBeVisible();
   await expect(page.locator(".launch-panel")).toBeVisible();
   await expect(page.locator(".recap-summary-card")).toHaveCount(0);
@@ -1313,7 +1313,7 @@ test("side panel restores a completed background preview after reopening", async
   ).toBeVisible();
   await expect.poll(() => page.evaluate(() => window.__messageTypes.includes("tabs:startAnalyze"))).toBe(false);
 
-  await page.getByRole("button", { name: "重新生成" }).click();
+  await page.getByRole("button", { name: "返回上级" }).click();
   await expect(page.locator("#previewSection")).toBeHidden();
   await page.reload();
   await expect(page.locator("#previewSection")).toBeHidden();
