@@ -16,6 +16,25 @@ test("worker health check returns ok without upstream secrets", async () => {
   assert.deepEqual(await response.json(), { ok: true });
 });
 
+test("worker readiness check reaches the configured local origin health endpoint", async () => {
+  const calls = [];
+  const localHandle = createWorkerHandler({
+    fetchImpl: async (url, options) => {
+      calls.push({ url, options });
+      return new Response("ok", { status: 200 });
+    }
+  });
+
+  const response = await localHandle(new Request("https://cliproxy.example/readyz"), envWithKv());
+  const body = await response.json();
+
+  assert.equal(response.status, 200);
+  assert.equal(body.ok, true);
+  assert.equal(body.upstream.ok, true);
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].url, "https://raw-llm.example/healthz");
+});
+
 test("worker rejects chat requests without a rate limit store", async () => {
   const response = await handle(chatRequest());
   assert.equal(response.status, 429);
@@ -155,6 +174,7 @@ test("worker forwards with upstream secret and strips client authorization", asy
   });
 
   assert.equal(response.status, 200);
+  assert.match(response.headers.get("x-tab-recap-request-id"), /.+/);
   assert.equal(calls.length, 1);
   assert.equal(calls[0].url, "https://raw-llm.example/v1/chat/completions");
   assert.equal(calls[0].options.headers.authorization, "Bearer upstream-secret");
@@ -167,6 +187,56 @@ test("worker forwards with upstream secret and strips client authorization", asy
     "reasoning_effort",
     "response_format"
   ]);
+});
+
+test("worker echoes client request ids for gateway log correlation", async () => {
+  const response = await handle(chatRequest(undefined, { "x-tab-recap-request-id": "op_test_123" }), envWithKv());
+  assert.equal(response.status, 200);
+  assert.equal(response.headers.get("x-tab-recap-request-id"), "op_test_123");
+});
+
+test("worker retries local tunnel infrastructure failures before succeeding", async () => {
+  const calls = [];
+  const localHandle = createWorkerHandler({
+    fetchImpl: async (url, options) => {
+      calls.push({ url, options });
+      if (calls.length === 1) {
+        return new Response("error code: 1033", { status: 530, headers: { "content-type": "text/plain" } });
+      }
+      return new Response(JSON.stringify({ choices: [{ message: { content: "{}" } }] }), {
+        status: 200,
+        headers: { "content-type": "application/json" }
+      });
+    }
+  });
+
+  const response = await localHandle(chatRequest(undefined, { "x-tab-recap-request-id": "op_retry" }), {
+    ...envWithKv(),
+    UPSTREAM_RETRY_DELAY_MS: "100"
+  });
+
+  assert.equal(response.status, 200);
+  assert.equal(calls.length, 2);
+  assert.equal(response.headers.get("x-tab-recap-upstream-attempts"), "2");
+  assert.equal(response.headers.get("x-tab-recap-request-id"), "op_retry");
+});
+
+test("worker converts persistent local tunnel failures into product JSON errors", async () => {
+  const localHandle = createWorkerHandler({
+    fetchImpl: async () => new Response("error code: 1033", { status: 530, headers: { "content-type": "text/plain" } })
+  });
+
+  const response = await localHandle(chatRequest(undefined, { "x-tab-recap-request-id": "op_down" }), {
+    ...envWithKv(),
+    UPSTREAM_RETRY_ATTEMPTS: "1"
+  });
+  const body = await response.json();
+
+  assert.equal(response.status, 503);
+  assert.equal(body.error.code, "origin_tunnel_unavailable");
+  assert.equal(body.error.requestId, "op_down");
+  assert.equal(body.error.upstreamStatus, 530);
+  assert.equal(body.error.upstreamCode, "1033");
 });
 
 test("worker applies install id, ip, global, and page-summary quotas", async () => {

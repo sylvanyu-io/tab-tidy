@@ -1,4 +1,4 @@
-name = "tab-recap-gateway"
+name = "tab-tidy-gateway"
 main = "src/index.js"
 compatibility_date = "2026-06-24"
 workers_dev = false
@@ -19,3 +19,6 @@ IP_HOURLY_REQUESTS = "60"
 INSTALL_DAILY_REQUESTS = "100"
 INSTALL_DAILY_PAGE_SUMMARY_REQUESTS = "20"
 GLOBAL_DAILY_REQUESTS = "3000"
+UPSTREAM_RETRY_ATTEMPTS = "2"
+UPSTREAM_RETRY_DELAY_MS = "1200"
+UPSTREAM_READY_TIMEOUT_MS = "8000"

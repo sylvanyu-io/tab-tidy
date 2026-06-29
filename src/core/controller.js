@@ -159,6 +159,7 @@ async function generateTimeRecapForMessage(chromeApi, message = {}) {
     const options = {
       range: message.range || {},
       signal: abortController.signal,
+      operationId,
       timeoutMs: Number.isFinite(requestedTimeoutMs) && requestedTimeoutMs > 0
         ? requestedTimeoutMs
         : TIME_RECAP_GATEWAY_TIMEOUT_MS
@@ -435,7 +436,8 @@ async function runActiveAnalysis(chromeApi, rawSettings, invocation, operationId
     const planOptions = {
       signal: abortController.signal,
       onProgress: reportProgress,
-      activityOverview
+      activityOverview,
+      operationId
     };
     if (settings.plannerProvider === PLANNER_PROVIDERS.GATEWAY) {
       planOptions.installId = await getOrCreateInstallId(chromeApi);
@@ -586,7 +588,8 @@ export async function generateProgressCopy(chromeApi, request = {}) {
       method: "POST",
       headers: {
         "content-type": "application/json",
-        "x-tab-recap-install-id": installId
+        "x-tab-recap-install-id": installId,
+        "x-tab-recap-request-id": `progress_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
       },
       body: JSON.stringify(body)
     },

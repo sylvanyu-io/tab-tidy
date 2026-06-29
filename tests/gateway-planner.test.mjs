@@ -1215,7 +1215,7 @@ test("AI gateway planner maps built-in tunnel errors to retry copy", async () =>
         },
         fetchImpl
       ),
-    /默认 AI 服务暂时不可用/
+    /默认 AI 服务的本地源站暂时离线/
   );
 });
 

@@ -26,7 +26,10 @@ const DEFAULT_LIMITS = Object.freeze({
   ipHourlyRequests: 60,
   installDailyRequests: 100,
   installDailyPageSummaryRequests: 20,
-  globalDailyRequests: 3000
+  globalDailyRequests: 3000,
+  upstreamRetryAttempts: 2,
+  upstreamRetryDelayMs: 1200,
+  upstreamReadyTimeoutMs: 8000
 });
 
 export default {
@@ -41,49 +44,72 @@ export function createWorkerHandler(options = {}) {
 
 export async function handleRequest(request, env = {}, ctx = {}, options = {}) {
   const url = new URL(request.url);
-  if (request.method === "OPTIONS") return emptyResponse(204, request);
+  const requestId = requestIdFor(request);
+  if (request.method === "OPTIONS") return emptyResponse(204, request, requestId);
   if (url.pathname === "/healthz" && request.method === "GET") {
-    return jsonResponse({ ok: true }, 200, {}, request);
+    return jsonResponse({ ok: true }, 200, {}, request, requestId);
+  }
+  if (url.pathname === "/readyz" && request.method === "GET") {
+    return upstreamReadiness(request, env, options, requestId);
   }
   if (url.pathname !== "/v1/chat/completions") {
-    return jsonError("Not found.", 404, "not_found", {}, request);
+    return jsonError("Not found.", 404, "not_found", {}, request, requestId);
   }
   if (request.method !== "POST") {
-    return jsonError("Method not allowed.", 405, "method_not_allowed", {}, request);
+    return jsonError("Method not allowed.", 405, "method_not_allowed", {}, request, requestId);
   }
 
   const limits = readLimits(env);
   const bodyText = await readBodyText(request, limits.bodyBytes);
   if (!bodyText.ok) {
-    return jsonError(bodyText.message, 413, "request_too_large", {}, request);
+    return jsonError(bodyText.message, 413, "request_too_large", {}, request, requestId);
   }
 
   let body;
   try {
     body = JSON.parse(bodyText.text);
   } catch {
-    return jsonError("Request body must be valid JSON.", 400, "invalid_json", {}, request);
+    return jsonError("Request body must be valid JSON.", 400, "invalid_json", {}, request, requestId);
   }
 
   const validation = validateChatRequest(body, env, limits);
   if (!validation.ok) {
-    return jsonError(validation.message, 400, validation.code, {}, request);
+    return jsonError(validation.message, 400, validation.code, {}, request, requestId);
   }
 
   const rateLimit = await checkRateLimits(request, env, limits);
   if (!rateLimit.ok) {
-    return jsonError(rateLimit.message, 429, rateLimit.code, rateLimit.headers, request);
+    return jsonError(rateLimit.message, 429, rateLimit.code, rateLimit.headers, request, requestId);
   }
 
   const upstream = upstreamConfig(env);
   if (!upstream.ok) {
-    return jsonError(upstream.message, 503, "upstream_not_configured", {}, request);
+    return jsonError(upstream.message, 503, "upstream_not_configured", {}, request, requestId);
   }
 
   const fetchImpl = options.fetchImpl || fetch;
-  const upstreamResponse = await fetchImpl(upstream.url, upstreamRequest(JSON.stringify(forwardedChatBody(body)), upstream, request.signal));
+  const upstreamResult = await fetchUpstreamWithRetries(
+    fetchImpl,
+    upstream,
+    JSON.stringify(forwardedChatBody(body)),
+    request,
+    limits,
+    requestId
+  );
 
-  return relayUpstreamResponse(upstreamResponse, request);
+  if (upstreamResult.response) {
+    return relayUpstreamResponse(upstreamResult.response, request, requestId, upstreamResult.attempts);
+  }
+
+  return jsonError(
+    upstreamResult.message,
+    upstreamResult.status,
+    upstreamResult.code,
+    { "retry-after": upstreamResult.retryAfter || "20" },
+    request,
+    requestId,
+    upstreamResult.details
+  );
 }
 
 function readLimits(env) {
@@ -96,7 +122,22 @@ function readLimits(env) {
       env.INSTALL_DAILY_PAGE_SUMMARY_REQUESTS,
       DEFAULT_LIMITS.installDailyPageSummaryRequests
     ),
-    globalDailyRequests: positiveInteger(env.GLOBAL_DAILY_REQUESTS, DEFAULT_LIMITS.globalDailyRequests)
+    globalDailyRequests: positiveInteger(env.GLOBAL_DAILY_REQUESTS, DEFAULT_LIMITS.globalDailyRequests),
+    upstreamRetryAttempts: clampInteger(
+      positiveInteger(env.UPSTREAM_RETRY_ATTEMPTS, DEFAULT_LIMITS.upstreamRetryAttempts),
+      1,
+      4
+    ),
+    upstreamRetryDelayMs: clampInteger(
+      positiveInteger(env.UPSTREAM_RETRY_DELAY_MS, DEFAULT_LIMITS.upstreamRetryDelayMs),
+      100,
+      10_000
+    ),
+    upstreamReadyTimeoutMs: clampInteger(
+      positiveInteger(env.UPSTREAM_READY_TIMEOUT_MS, DEFAULT_LIMITS.upstreamReadyTimeoutMs),
+      500,
+      20_000
+    )
   };
 }
 
@@ -333,6 +374,7 @@ function upstreamConfig(env) {
   if (!env.UPSTREAM_API_KEY) return { ok: false, message: "UPSTREAM_API_KEY is not configured." };
   return {
     ok: true,
+    baseUrl,
     url: `${baseUrl}/chat/completions`,
     apiKey: env.UPSTREAM_API_KEY,
     accessClientId: env.CF_ACCESS_CLIENT_ID || "",
@@ -352,11 +394,187 @@ function upstreamRequest(bodyText, upstream, signal) {
   return { method: "POST", headers, body: bodyText, signal };
 }
 
-function relayUpstreamResponse(response, request) {
+async function fetchUpstreamWithRetries(fetchImpl, upstream, bodyText, request, limits, requestId) {
+  const attempts = Math.max(1, limits.upstreamRetryAttempts);
+  let lastFailure = null;
+  for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    try {
+      const response = await fetchImpl(upstream.url, upstreamRequest(bodyText, upstream, request.signal));
+      if (!isRetryableUpstreamStatus(response.status)) {
+        return { response, attempts: attempt };
+      }
+      const body = await response.text().catch(() => "");
+      lastFailure = classifyUpstreamFailure({ status: response.status, body, attempt, attempts });
+    } catch (error) {
+      if (request.signal?.aborted) {
+        throw error;
+      }
+      lastFailure = classifyUpstreamFailure({ error, attempt, attempts });
+    }
+
+    if (attempt < attempts) {
+      console.warn(
+        JSON.stringify({
+          event: "tab_recap_upstream_retry",
+          requestId,
+          attempt,
+          nextAttempt: attempt + 1,
+          code: lastFailure?.code || "unknown"
+        })
+      );
+      await delay(limits.upstreamRetryDelayMs * attempt);
+    }
+  }
+  return {
+    response: null,
+    status: 503,
+    code: lastFailure?.code || "upstream_unavailable",
+    message: lastFailure?.message || "The TabRecap AI origin is temporarily unavailable.",
+    details: {
+      requestId,
+      upstreamStatus: lastFailure?.upstreamStatus || 0,
+      upstreamCode: lastFailure?.upstreamCode || "",
+      attempts
+    }
+  };
+}
+
+function isRetryableUpstreamStatus(status) {
+  return [408, 502, 503, 504, 520, 521, 522, 523, 524, 525, 526, 530].includes(Number(status));
+}
+
+function classifyUpstreamFailure({ status = 0, body = "", error = null } = {}) {
+  const text = compactResponseText(body || error?.message || "");
+  const upstreamCode = cloudflareErrorCode(text);
+  if (upstreamCode === "1033") {
+    return {
+      code: "origin_tunnel_unavailable",
+      message: "The local TabRecap AI origin is offline or its Cloudflare Tunnel has no healthy connection.",
+      upstreamStatus: status,
+      upstreamCode
+    };
+  }
+  if (Number(status) === 530 || upstreamCode) {
+    return {
+      code: "origin_cloudflare_error",
+      message: "Cloudflare could not reach the local TabRecap AI origin.",
+      upstreamStatus: status,
+      upstreamCode
+    };
+  }
+  if (error) {
+    return {
+      code: "origin_fetch_failed",
+      message: "The Worker could not connect to the local TabRecap AI origin.",
+      upstreamStatus: 0,
+      upstreamCode: ""
+    };
+  }
+  return {
+    code: "upstream_unavailable",
+    message: "The TabRecap AI origin is temporarily unavailable.",
+    upstreamStatus: status,
+    upstreamCode: ""
+  };
+}
+
+function cloudflareErrorCode(text) {
+  const match = String(text || "").match(/(?:error\s*code|code)\s*:?\s*(10\d{2})/i);
+  return match?.[1] || "";
+}
+
+async function upstreamReadiness(request, env, options = {}, requestId = "") {
+  const upstream = upstreamConfig(env);
+  if (!upstream.ok) {
+    return jsonResponse(
+      {
+        ok: false,
+        worker: true,
+        upstream: { ok: false, code: "upstream_not_configured", message: upstream.message }
+      },
+      503,
+      {},
+      request,
+      requestId
+    );
+  }
+
+  const limits = readLimits(env);
+  const url = upstreamHealthUrl(env, upstream);
+  const fetchImpl = options.fetchImpl || fetch;
+  const startedAt = Date.now();
+  try {
+    const response = await fetchWithTimeout(
+      fetchImpl,
+      url,
+      { method: "GET", headers: upstreamHealthHeaders(upstream) },
+      limits.upstreamReadyTimeoutMs
+    );
+    const body = await response.text().catch(() => "");
+    const ok = response.ok;
+    return jsonResponse(
+      {
+        ok,
+        worker: true,
+        upstream: {
+          ok,
+          status: response.status,
+          code: ok ? "ready" : classifyUpstreamFailure({ status: response.status, body }).code,
+          latencyMs: Date.now() - startedAt
+        }
+      },
+      ok ? 200 : 503,
+      {},
+      request,
+      requestId
+    );
+  } catch (error) {
+    return jsonResponse(
+      {
+        ok: false,
+        worker: true,
+        upstream: {
+          ok: false,
+          code: "origin_health_check_failed",
+          message: compactResponseText(error?.message || "Health check failed."),
+          latencyMs: Date.now() - startedAt
+        }
+      },
+      503,
+      {},
+      request,
+      requestId
+    );
+  }
+}
+
+function upstreamHealthUrl(env, upstream) {
+  if (env.UPSTREAM_HEALTH_URL) return String(env.UPSTREAM_HEALTH_URL);
+  return new URL(String(env.UPSTREAM_HEALTH_PATH || "/healthz"), upstream.baseUrl).toString();
+}
+
+function upstreamHealthHeaders(upstream) {
+  const headers = {};
+  if (upstream.accessClientId && upstream.accessClientSecret) {
+    headers["cf-access-client-id"] = upstream.accessClientId;
+    headers["cf-access-client-secret"] = upstream.accessClientSecret;
+  }
+  return headers;
+}
+
+function fetchWithTimeout(fetchImpl, url, options, timeoutMs) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  return fetchImpl(url, { ...options, signal: controller.signal }).finally(() => clearTimeout(timer));
+}
+
+function relayUpstreamResponse(response, request, requestId = "", attempts = 1) {
   const headers = {
     ...corsHeaders(request),
     "cache-control": "no-store",
-    "content-type": response.headers.get("content-type") || "application/json"
+    "content-type": response.headers.get("content-type") || "application/json",
+    ...requestIdHeaders(requestId),
+    "x-tab-recap-upstream-attempts": String(attempts || 1)
   };
   return new Response(response.body, { status: response.status, headers });
 }
@@ -402,27 +620,45 @@ function positiveInteger(value, fallback) {
   return Number.isInteger(numeric) && numeric > 0 ? numeric : fallback;
 }
 
-function jsonError(message, status, code, extraHeaders = {}, request = null) {
-  return jsonResponse({ error: { message, code } }, status, extraHeaders, request);
+function clampInteger(value, min, max) {
+  return Math.min(max, Math.max(min, Number(value)));
 }
 
-function jsonResponse(value, status = 200, extraHeaders = {}, request = null) {
+function requestIdFor(request) {
+  const provided = request.headers.get("x-tab-recap-request-id") || request.headers.get("x-request-id") || "";
+  const normalized = String(provided)
+    .replace(/[^a-zA-Z0-9_.:-]/g, "")
+    .slice(0, 96);
+  return normalized || crypto.randomUUID();
+}
+
+function requestIdHeaders(requestId) {
+  return requestId ? { "x-tab-recap-request-id": requestId } : {};
+}
+
+function jsonError(message, status, code, extraHeaders = {}, request = null, requestId = "", details = {}) {
+  return jsonResponse({ error: { message, code, requestId, ...details } }, status, extraHeaders, request, requestId);
+}
+
+function jsonResponse(value, status = 200, extraHeaders = {}, request = null, requestId = "") {
   return new Response(JSON.stringify(value), {
     status,
     headers: {
       "content-type": "application/json; charset=utf-8",
       ...corsHeaders(request),
+      ...requestIdHeaders(requestId),
       "cache-control": "no-store",
       ...extraHeaders
     }
   });
 }
 
-function emptyResponse(status, request = null) {
+function emptyResponse(status, request = null, requestId = "") {
   return new Response(null, {
     status,
     headers: {
       ...corsHeaders(request),
+      ...requestIdHeaders(requestId),
       "cache-control": "no-store"
     }
   });
@@ -434,7 +670,8 @@ function corsHeaders(request) {
   return {
     ...(allowedOrigin ? { "access-control-allow-origin": allowedOrigin } : {}),
     "access-control-allow-methods": "GET,POST,OPTIONS",
-    "access-control-allow-headers": "content-type,authorization,x-tab-recap-install-id,x-tab-recap-page-summary,x-tab-tidy-install-id,x-tab-tidy-page-summary",
+    "access-control-allow-headers": "content-type,authorization,x-tab-recap-install-id,x-tab-recap-page-summary,x-tab-recap-request-id,x-request-id,x-tab-tidy-install-id,x-tab-tidy-page-summary",
+    "access-control-expose-headers": "x-tab-recap-request-id,x-tab-recap-upstream-attempts",
     vary: "Origin"
   };
 }
@@ -444,4 +681,15 @@ function allowedCorsOrigin(origin) {
   if (/^(chrome|moz)-extension:\/\/[a-z0-9_-]+$/i.test(origin)) return origin;
   if (/^http:\/\/(127\.0\.0\.1|localhost)(:\d+)?$/i.test(origin)) return origin;
   return "";
+}
+
+function compactResponseText(text) {
+  return String(text || "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 300);
+}
+
+function delay(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }

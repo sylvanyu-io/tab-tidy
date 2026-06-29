@@ -239,6 +239,9 @@ export function gatewayHeaders(settings, requestMeta = {}) {
   if (settings.gatewayBaseUrl && settings.gatewayApiKey) {
     headers.authorization = `Bearer ${settings.gatewayApiKey}`;
   }
+  if (requestMeta.requestId) {
+    headers["x-tab-recap-request-id"] = requestMeta.requestId;
+  }
   if (!settings.gatewayBaseUrl && requestMeta.installId) {
     headers["x-tab-recap-install-id"] = requestMeta.installId;
   }
@@ -251,21 +254,29 @@ export function gatewayHeaders(settings, requestMeta = {}) {
 export function gatewayRequestMeta(inventory, options = {}) {
   return {
     installId: options.installId || "",
+    requestId: options.operationId || options.requestId || "",
     hasPageSamples: (inventory.pageSamples || []).some((sample) => sample.status === "ok")
   };
 }
 
 export function gatewayErrorMessage(response, data, settings) {
   const providerMessage = extractProviderErrorMessage(data);
+  const requestId = extractGatewayRequestId(response, data);
+  const suffix = requestId ? `（请求号 ${requestId}）` : "";
   if (response.status === 401 || response.status === 403) {
     return settings.gatewayBaseUrl
       ? "AI 服务拒绝访问。请检查自定义网关地址和密钥。"
-      : "默认 AI 服务拒绝访问。请稍后重试，或在更多选项里切换自定义网关。";
+      : `默认 AI 服务拒绝访问。请稍后重试，或在更多选项里切换自定义网关。${suffix}`;
+  }
+  if (isLocalOriginOffline(response, providerMessage, data)) {
+    return settings.gatewayBaseUrl
+      ? `自定义 AI 网关的本地源站暂时离线。请检查本机服务、Cloudflare Tunnel 和上游模型。${suffix}`
+      : `默认 AI 服务的本地源站暂时离线。请稍后再试；如果一直失败，说明本机网关或 Cloudflare Tunnel 需要恢复。${suffix}`;
   }
   if (isGatewayInfrastructureError(response, providerMessage)) {
     return settings.gatewayBaseUrl
-      ? "自定义 AI 网关暂时连不上。请检查网关地址、隧道或上游服务是否在线。"
-      : "默认 AI 服务暂时不可用。请稍后再试，或在更多选项里临时切换自定义 AI 网关。";
+      ? `自定义 AI 网关暂时连不上。请检查网关地址、隧道或上游服务是否在线。${suffix}`
+      : `默认 AI 服务暂时不可用。请稍后再试，或在更多选项里临时切换自定义 AI 网关。${suffix}`;
   }
   if (settings.gatewayBaseUrl) {
     return providerMessage
@@ -273,8 +284,8 @@ export function gatewayErrorMessage(response, data, settings) {
       : `自定义 AI 网关这次没有完成请求（${response.status}）。请检查网关服务后重试。`;
   }
   return providerMessage
-    ? "默认 AI 服务这次没有成功完成。请稍后再试，或在更多选项里临时切换自定义 AI 网关。"
-    : "默认 AI 服务这次没有成功响应。请稍后再试，或在更多选项里临时切换自定义 AI 网关。";
+    ? `默认 AI 服务这次没有成功完成。请稍后再试，或在更多选项里临时切换自定义 AI 网关。${suffix}`
+    : `默认 AI 服务这次没有成功响应。请稍后再试，或在更多选项里临时切换自定义 AI 网关。${suffix}`;
 }
 
 function extractProviderErrorMessage(data) {
@@ -283,6 +294,21 @@ function extractProviderErrorMessage(data) {
   if (typeof data.error?.message === "string") return data.error.message.trim();
   if (typeof data.message === "string") return data.message.trim();
   return "";
+}
+
+function extractGatewayRequestId(response, data) {
+  const fromBody = data?.error?.requestId || data?.requestId || "";
+  const fromHeader = response?.headers?.get?.("x-tab-recap-request-id") || "";
+  return String(fromBody || fromHeader || "").slice(0, 96);
+}
+
+function isLocalOriginOffline(response, providerMessage, data) {
+  const code = String(data?.error?.code || data?.error?.upstreamCode || data?.upstreamCode || "");
+  const text = `${providerMessage} ${code}`.toLowerCase();
+  return (
+    /origin_tunnel_unavailable|origin_cloudflare_error|origin_fetch_failed|1033|cloudflare tunnel|local .*origin|源站.*离线|tunnel/i.test(text) ||
+    Number(response?.status) === 530
+  );
 }
 
 function isGatewayInfrastructureError(response, providerMessage) {
