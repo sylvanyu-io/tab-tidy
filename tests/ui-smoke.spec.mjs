@@ -337,7 +337,8 @@ test("time recap mode renders a first-class recap surface", async ({ page }) => 
   await expect(page.locator(".recap-section-title").first()).toHaveText("时间线");
   await expect(page.locator(".recap-card").getByText("扩展产品打磨", { exact: true })).toBeVisible();
   await expect(page.locator(".recap-card").getByText("整理策略验证", { exact: true })).toBeVisible();
-  await expect(page.locator(".recap-card").getByText("发布完成后，这个检查清单可能可以关闭。", { exact: true })).toBeVisible();
+  await expect(page.locator(".recap-result")).not.toContainText("值得复查");
+  await expect(page.locator(".recap-result")).not.toContainText("发布完成后，这个检查清单可能可以关闭。");
   await expect(page.locator("#recapDetailsRoot")).toBeVisible();
   await expect
     .poll(() =>
@@ -454,7 +455,6 @@ test("time recap exposes page summary permission controls and sends enabled summ
                   timeline: [],
                   themes: [],
                   followUps: [],
-                  reviewCandidates: [],
                   coverageNote: ""
                 }
               }
@@ -578,7 +578,6 @@ test("time recap generation uses the shared bottom progress controls", async ({ 
         timeline: [{ label: "刚才", description: "验证回顾生成进度。", pageIds: [] }],
         themes: [],
         followUps: [],
-        reviewCandidates: [],
         coverageNote: "已参考本机活动。"
       }
     });
@@ -752,7 +751,6 @@ test("time recap and organize generation can run in parallel", async ({ page }) 
         timeline: [],
         themes: [],
         followUps: [],
-        reviewCandidates: [],
         coverageNote: ""
       }
     });
@@ -891,7 +889,6 @@ test("time recap fallback keeps raw AI errors out of the visible product copy", 
                   timeline: [],
                   themes: [],
                   followUps: [],
-                  reviewCandidates: [],
                   coverageNote: "已参考本机活动。"
                 }
               }
@@ -975,7 +972,6 @@ test("time recap error state does not resurrect the previous recap", async ({ pa
                   timeline: [],
                   themes: [],
                   followUps: [],
-                  reviewCandidates: [],
                   coverageNote: "已参考本机活动。"
                 }
               }

@@ -21,7 +21,6 @@ const DEFAULT_RANGE_MS = 7 * DAY_MS;
 const MAX_RANGE_MS = 90 * DAY_MS;
 const MAX_RECAP_PAGES = 360;
 const REVIEW_AGE_MS = 14 * DAY_MS;
-const REVIEW_IDLE_MS = 7 * DAY_MS;
 
 export { TIME_RECAP_GATEWAY_TIMEOUT_MS };
 
@@ -353,25 +352,6 @@ export function buildLocalTimeRecap(input, rawSettings = {}) {
     pageIds: bucket.pages.slice(0, 12).map((page) => page.id),
     evidence: bucket.pages.slice(0, 3).map((page) => page.hostname || page.title).filter(Boolean)
   }));
-  const reviewCandidates = pages
-    .filter((page) => page.open && (ageMs(page.firstSeenAt, input.range.to) >= REVIEW_AGE_MS || ageMs(page.lastSeenAt, input.range.to) >= REVIEW_IDLE_MS))
-    .sort((left, right) => ageMs(right.firstSeenAt, input.range.to) - ageMs(left.firstSeenAt, input.range.to))
-    .slice(0, 12)
-    .map((page) => ({
-      pageId: page.id,
-      tabId: page.tabId,
-      priority: ageMs(page.firstSeenAt, input.range.to) >= 30 * DAY_MS ? "high" : "medium",
-      reason: localizedText(
-        settings.languageMode,
-        "这个页面已经放了一段时间，可以先复查是否还需要保留。",
-        "This page has been around for a while and is worth reviewing."
-      ),
-      evidence: [
-        page.currentGroupTitle ? localizedText(settings.languageMode, `当前分组：${page.currentGroupTitle}`, `Current group: ${page.currentGroupTitle}`) : "",
-        page.summary ? localizedText(settings.languageMode, "已有页面摘要", "Has a page summary") : ""
-      ].filter(Boolean)
-    }));
-
   return {
     schema: "tab_tidy_time_recap_v1",
     language: settings.languageMode === "en-US" ? "en-US" : "zh-CN",
@@ -380,7 +360,6 @@ export function buildLocalTimeRecap(input, rawSettings = {}) {
     themes,
     timeline: localTimeline(pages, input, settings),
     followUps: localFollowUps(pages, settings),
-    reviewCandidates,
     coverageNote: coverageNote(input, settings)
   };
 }
@@ -395,8 +374,8 @@ function buildTimeRecapSystemPrompt(settings) {
     "currentGroupTitle is only a weak context clue from existing browser groups. Do not turn existing group names into the main recap unless page titles, summaries, and activity also support it.",
     "Use closed pages and still-open pages equally when their activity falls inside the range.",
     "Write user-facing product copy. Do not expose raw implementation terms such as activeCount, ageDays, idleDays, pageId, tabId, sampleable, sequenceIndex, cache, lifecycle, or hostname as labels.",
-    "Do not say tabs will be deleted. Review candidates are manual suggestions only.",
-    "Required JSON shape: {schema:\"tab_tidy_time_recap_v1\",language:\"zh-CN\"|\"en-US\",headline:string,summary:string,themes:[{title:string,description:string,confidence:\"high\"|\"medium\"|\"low\",ids:number[],evidence:string[]}],timeline:[{label:string,description:string,ids:number[]}],followUps:[{title:string,reason:string,ids:number[]}],reviewCandidates:[{id:number,priority:\"high\"|\"medium\"|\"low\",reason:string,evidence:string[]}],coverageNote:string}.",
+    "Do not recommend closing, deleting, cleaning, or reviewing tabs. This feature is recap-only; cleanup recommendations belong to the organizer flow.",
+    "Required JSON shape: {schema:\"tab_tidy_time_recap_v1\",language:\"zh-CN\"|\"en-US\",headline:string,summary:string,themes:[{title:string,description:string,confidence:\"high\"|\"medium\"|\"low\",ids:number[],evidence:string[]}],timeline:[{label:string,description:string,ids:number[]}],followUps:[{title:string,reason:string,ids:number[]}],coverageNote:string}.",
     settings.languageMode === "en-US"
       ? "Write all user-visible text in English."
       : "Write all user-visible text in Simplified Chinese."
@@ -441,20 +420,6 @@ function normalizeTimeRecap(parsed, input, settings) {
     pageIds: normalizeIds(item).slice(0, 12)
   })).filter((item) => item.title || item.reason);
 
-  const reviewCandidates = asArray(source.reviewCandidates || source.cleanupCandidates).slice(0, 20).map((item) => {
-    const id = Number(item?.id ?? item?.pageId ?? pageIdForTabId(input, Number(item?.tabId)));
-    const page = pagesById.get(id);
-    if (!page) return null;
-    return {
-      pageId: id,
-      tabId: page.tabId,
-      windowId: page.windowId,
-      priority: normalizePriority(item?.priority),
-      reason: text(item?.reason || "", 260),
-      evidence: asArray(item?.evidence).map((entry) => text(entry, 120)).filter(Boolean).slice(0, 4)
-    };
-  }).filter(Boolean);
-
   const local = buildLocalTimeRecap(input, settings);
   return {
     schema: "tab_tidy_time_recap_v1",
@@ -464,7 +429,6 @@ function normalizeTimeRecap(parsed, input, settings) {
     themes: themes.length ? themes : local.themes,
     timeline: timeline.length ? timeline : local.timeline,
     followUps: followUps.length ? followUps : local.followUps,
-    reviewCandidates: reviewCandidates.length ? reviewCandidates : local.reviewCandidates,
     coverageNote: text(source.coverageNote, 300) || text(local.coverageNote, 300)
   };
 }
@@ -767,10 +731,6 @@ function uniqueNumbers(values) {
 }
 
 function normalizeConfidence(value) {
-  return ["high", "medium", "low"].includes(value) ? value : "medium";
-}
-
-function normalizePriority(value) {
   return ["high", "medium", "low"].includes(value) ? value : "medium";
 }
 

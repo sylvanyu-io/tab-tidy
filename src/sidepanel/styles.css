@@ -771,26 +771,6 @@ h2 {
   white-space: normal;
 }
 
-.recap-review-row {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: 8px;
-  align-items: center;
-}
-
-.recap-review-row button {
-  min-height: 30px;
-  padding: 0 10px;
-  color: var(--primary);
-  background: var(--primary-soft);
-  border: 1px solid color-mix(in srgb, var(--primary) 26%, var(--line));
-  border-radius: 999px;
-  box-shadow: none;
-  font-size: 11px;
-  font-weight: 820;
-  cursor: pointer;
-}
-
 .recap-details pre {
   max-height: 220px;
   overflow: auto;

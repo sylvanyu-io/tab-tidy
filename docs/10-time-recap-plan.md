@@ -217,12 +217,6 @@ type TimeRecapOutput = {
     reason: string;
     ids: number[];
   }>;
-  reviewCandidates: Array<{
-    id: number;
-    priority: "high" | "medium" | "low";
-    reason: string;
-    evidence: string[];
-  }>;
   coverageNote: string;
 };
 ```
@@ -232,7 +226,7 @@ Validation rules:
 - Every returned `id` must exist in the recap input or be dropped.
 - Compatibility parser also accepts `pageIds`, `pages`, and `tabIds`, but normalized UI state uses page IDs.
 - Empty or duplicate themes are merged or removed locally.
-- Review candidates are suggestions only.
+- Time recap only explains the activity pattern for the selected range; cleanup recommendations belong to the organizer flow and are not shown in recap results.
 - Output language must follow the selected UI language.
 - Do not allow the model to request permissions or browser mutations.
 

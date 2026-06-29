@@ -144,7 +144,6 @@ const UI_COPY = Object.freeze({
     "recap.themes": "主题线索",
     "recap.timeline": "时间线",
     "recap.followUps": "下次继续",
-    "recap.review": "值得复查",
     "recap.evidence": "证据详情",
     "recap.evidenceRange": "时间范围：{from} - {to}",
     "recap.evidenceCoverage": "已整理 {included} 个本机页面线索，其中 {summaries} 个带页面摘要。",
@@ -384,7 +383,6 @@ const UI_COPY = Object.freeze({
     "recap.themes": "Topic clues",
     "recap.timeline": "Timeline",
     "recap.followUps": "Continue next",
-    "recap.review": "Worth reviewing",
     "recap.evidence": "Evidence details",
     "recap.evidenceRange": "Time range: {from} - {to}",
     "recap.evidenceCoverage": "Reviewed {included} local page signals, including {summaries} page summaries.",
@@ -1382,7 +1380,6 @@ function renderTimeRecap(result) {
   children.push(...recapTimelineSection(recap.timeline, pagesById));
   children.push(...recapSection(t("recap.themes"), recap.themes, pagesById, { sectionClass: "recap-topic-grid" }));
   children.push(...recapSection(t("recap.followUps"), recap.followUps, pagesById, { descriptionKey: "reason", sectionClass: "recap-followup-list" }));
-  children.push(...recapReviewSection(recap.reviewCandidates, pagesById));
 
   nodes.recapResult.replaceChildren(...children);
   nodes.recapDetailsRoot.hidden = false;
@@ -1425,7 +1422,7 @@ function recapMemoCard(result = {}) {
 function recapNarrativeRows(recap = {}) {
   const focus = recap.summary || recap.coverageNote || recap.headline || "";
   const returned = recapThemesSentence(recap.themes) || recapTimelineSentence(recap.timeline) || recap.coverageNote || "";
-  const next = recapFollowUpSentence(recap.followUps) || recapReviewSentence(recap.reviewCandidates) || recap.coverageNote || focus;
+  const next = recapFollowUpSentence(recap.followUps) || recap.coverageNote || focus;
   return [
     { tone: "focus", label: t("recap.memoFocus"), text: focus },
     { tone: "returned", label: t("recap.memoReturned"), text: returned },
@@ -1454,11 +1451,6 @@ function recapFollowUpSentence(followUps = []) {
   const item = asArray(followUps).find((entry) => entry?.title || entry?.reason || entry?.description);
   if (!item) return "";
   return [item.title, item.reason || item.description].filter(Boolean).join(uiLanguage === "en-US" ? ": " : "：");
-}
-
-function recapReviewSentence(candidates = []) {
-  const item = asArray(candidates).find((entry) => entry?.reason);
-  return item?.reason || "";
 }
 
 function recapMemoRow(row) {
@@ -1567,44 +1559,6 @@ function recapCard(item, pagesById, options = {}) {
   return card;
 }
 
-function recapReviewSection(candidates = [], pagesById) {
-  const validItems = Array.isArray(candidates) ? candidates.filter(Boolean) : [];
-  if (!validItems.length) return [];
-  const title = document.createElement("h3");
-  title.className = "recap-section-title";
-  title.textContent = t("recap.review");
-  return [
-    title,
-    ...validItems.map((candidate) => recapReviewCard(candidate, pagesById))
-  ];
-}
-
-function recapReviewCard(candidate, pagesById) {
-  const page = pagesById.get(candidate.pageId) || {};
-  const card = document.createElement("article");
-  card.className = "recap-card";
-  const row = document.createElement("div");
-  row.className = "recap-review-row";
-  const copy = document.createElement("div");
-  const title = document.createElement("h3");
-  title.textContent = page.title || page.hostname || candidate.reason || t("recap.review");
-  const reason = document.createElement("p");
-  reason.textContent = candidate.reason || "";
-  copy.append(title, reason);
-  row.append(copy);
-  if (Number.isInteger(candidate.tabId || page.tabId)) {
-    const button = document.createElement("button");
-    button.type = "button";
-    button.textContent = t("recap.findTab");
-    button.addEventListener("click", () => focusActivityTab({ tabId: candidate.tabId || page.tabId, windowId: candidate.windowId || page.windowId }));
-    row.append(button);
-  }
-  card.append(row);
-  const chips = recapPageChips([candidate.pageId], pagesById);
-  if (chips) card.append(chips);
-  return card;
-}
-
 function recapPageChips(ids, pagesById) {
   const pages = uniqueNumbers(ids).map((id) => pagesById.get(id)).filter(Boolean).slice(0, 6);
   if (!pages.length) return null;
@@ -1669,7 +1623,6 @@ function recapReferencedPages(recap = {}, input = {}, pagesById = new Map()) {
   collect(recap.timeline);
   collect(recap.themes);
   collect(recap.followUps);
-  collect(recap.reviewCandidates);
 
   const referenced = uniqueNumbers(ids)
     .map((id) => pagesById.get(id))
@@ -3347,16 +3300,6 @@ function mockTimeRecap() {
           title: uiLanguage === "en-US" ? "Verify the recap flow" : "验证回顾流程",
           reason: uiLanguage === "en-US" ? "The new surface should be tested with cached summaries and local fallback." : "新入口需要覆盖缓存摘要和本地回退两条路径。",
           pageIds: [1, 3]
-        }
-      ],
-      reviewCandidates: [
-        {
-          pageId: 2,
-          tabId: 32,
-          windowId: 1,
-          priority: "medium",
-          reason: uiLanguage === "en-US" ? "The release checklist may be closable after publishing." : "发布完成后，这个检查清单可能可以关闭。",
-          evidence: []
         }
       ],
       coverageNote: uiLanguage === "en-US" ? "Used local activity plus available summaries." : "已结合本机活动和可用摘要。"

@@ -139,7 +139,7 @@ test("time recap gateway request parses fenced JSON and keeps page references va
   assert.equal(result.source, "ai");
   assert.equal(result.recap.headline, "Extension work dominated the week.");
   assert.deepEqual(result.recap.themes[0].pageIds, [1]);
-  assert.equal(result.recap.reviewCandidates[0].pageId, 2);
+  assert.equal("reviewCandidates" in result.recap, false);
 });
 
 test("time recap model copy is normalized away from implementation field names", async () => {
@@ -221,12 +221,11 @@ test("time recap model copy is normalized away from implementation field names",
     result.recap.timeline[0].label,
     result.recap.timeline[0].description,
     result.recap.followUps[0].title,
-    result.recap.followUps[0].reason,
-    result.recap.reviewCandidates[0].reason,
-    ...result.recap.reviewCandidates[0].evidence
+    result.recap.followUps[0].reason
   ].join("\n");
 
   assert.notEqual(result.recap.headline, "");
+  assert.equal("reviewCandidates" in result.recap, false);
   assert.doesNotMatch(visibleText, /\b(?:activeCount|seenCount|ageDays|idleDays|sampleable|tabId|pageId|windowId|sequenceIndex|currentGroupTitle|hostname)\b/i);
   assert.match(visibleText, /打开次数/);
   assert.match(visibleText, /现有分组/);
