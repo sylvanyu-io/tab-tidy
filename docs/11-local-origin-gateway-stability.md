@@ -121,6 +121,46 @@ cliproxy.sylvanyu.io/readyz            -> {"ok":true}
 
 If local checks pass and public origin fails, restart Cloudflare Tunnel. If local proxy returns bad gateway, restart CLIProxyAPI first. If `/readyz` passes but chat completions fail, inspect model availability or upstream provider state.
 
+## Local Watchdog
+
+The Mac mini now runs a user LaunchAgent watchdog:
+
+```text
+com.router-for-me.cliproxyapi-watchdog
+```
+
+It runs every 180 seconds. Each run checks:
+
+- local CLIProxyAPI health on `127.0.0.1:8317`;
+- local API-only proxy health on `127.0.0.1:18317`;
+- product-facing Worker readiness on `https://cliproxy.sylvanyu.io/readyz`.
+
+Restart policy:
+
+- one failed run only records the failure;
+- two consecutive failures of the same kind trigger recovery;
+- local failures restart the full local stack;
+- tunnel/readiness failures restart the Cloudflare Tunnel first;
+- restarts have a 10-minute cooldown to avoid loops during upstream incidents.
+
+This is intentionally more conservative than a 60-second probe. The checks are tiny, but the AI gateway does not need sub-minute failover while it is still a Mac-hosted free service.
+
+Local files:
+
+```text
+/Users/yuyufeng/Projects/CLIProxyAPI/.codex/cliproxyapi-watchdog.sh
+/Users/yuyufeng/Library/LaunchAgents/com.router-for-me.cliproxyapi-watchdog.plist
+/Users/yuyufeng/Projects/CLIProxyAPI/.runtime-logs/watchdog.out.log
+/Users/yuyufeng/Projects/CLIProxyAPI/.runtime-logs/watchdog.err.log
+```
+
+Inspection commands:
+
+```bash
+launchctl print gui/$(id -u)/com.router-for-me.cliproxyapi-watchdog
+tail -n 50 /Users/yuyufeng/Projects/CLIProxyAPI/.runtime-logs/watchdog.out.log
+```
+
 ## Residual Risk
 
 This setup is still bounded by local-machine availability. If the Mac sleeps, loses network, restarts, or `cloudflared` exits, the public AI service can fail. The implemented changes make failures diagnosable and less noisy; they do not turn a local Mac into a managed production service.
@@ -171,3 +211,13 @@ Current runtime note: launchd services were not loaded, but the three fallback `
 | Direct origin tunnel health | 200 |
 | Product Worker readiness | 200 |
 | Public chat smoke | 200, 24.68 s |
+
+2026-07-01 02:25 Asia/Shanghai watchdog install:
+
+| Check | Result |
+| --- | --- |
+| Watchdog LaunchAgent | `com.router-for-me.cliproxyapi-watchdog` loaded |
+| Run interval | 180 seconds |
+| Consecutive failures before restart | 2 |
+| Restart cooldown | 600 seconds |
+| First watchdog run | `ok main=200 proxy=200 ready=200` |
