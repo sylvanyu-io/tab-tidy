@@ -17,6 +17,14 @@ extension
 
 `https://cliproxy.sylvanyu.io/healthz` only proves the Worker route is alive. It does not prove the Mac, tunnel, proxy, CLIProxyAPI, or model route is usable.
 
+The local Cloudflare Tunnel should be pinned to HTTP/2:
+
+```yaml
+protocol: http2
+```
+
+This avoids the observed QUIC failure mode where `cloudflared` stays alive but repeatedly logs `failed to dial to edge with quic: timeout` and public requests return 530.
+
 ## Failure Interpretation
 
 | Symptom | Meaning | Product behavior |
@@ -24,6 +32,7 @@ extension
 | `/healthz` 200, `/readyz` 503 | Worker is alive, local origin path is unhealthy | Show default service temporarily offline |
 | 530 with `error code: 1033` | Cloudflare has no healthy tunnel connection to the local origin | Retry once, then return structured JSON |
 | 502/503/504/52x from origin | Local proxy, tunnel, or origin service is unstable | Retry once, then return structured JSON |
+| cloudflared process is alive, public origin is 530, logs show QUIC timeouts | Process-level restart alone may not help; edge transport is unhealthy | Use `protocol: http2`, restart tunnel, then check `/readyz` |
 | 401/403 | Auth/config issue, not transient tunnel failure | Do not retry |
 | 429 | Rate/model capacity issue | Do not retry |
 | JSON parse failure from upstream | Model/output issue | Let extension show invalid output guidance |
@@ -136,3 +145,29 @@ This setup is still bounded by local-machine availability. If the Mac sleeps, lo
 | Extension build | `dist/tab-recap-0.2.3.zip` |
 
 Current runtime note: launchd services were not loaded, but the three fallback `screen` sessions were running and all local/public checks passed.
+
+2026-07-01 01:38 Asia/Shanghai:
+
+| Check | Result |
+| --- | --- |
+| Failure observed | `cliproxy-origin.sylvanyu.io` and `hermes.sylvanyu.io` both returned 530 |
+| cloudflared logs | repeated QUIC timeouts and `there are no free edge addresses left to resolve to` |
+| Mitigation | Added `protocol: http2` to local cloudflared configs |
+| Process supervision | Moved `cliproxyapi`, `cliroxy-v1-proxy`, and `cloudflared` from screen fallback back to launchd |
+| LaunchAgent state | all three loaded/running with `keepalive | runatload` |
+| Local main `127.0.0.1:8317/healthz` | 200 |
+| Local API-only proxy `127.0.0.1:18317/healthz` | 200 |
+| Direct origin tunnel health | 200 |
+| Product Worker readiness | 200 |
+| Public chat smoke | 200, 9.58 s |
+
+2026-07-01 01:53 Asia/Shanghai recheck:
+
+| Check | Result |
+| --- | --- |
+| LaunchAgent state | all three loaded |
+| Local main `127.0.0.1:8317/healthz` | 200 |
+| Local API-only proxy `127.0.0.1:18317/healthz` | 200 |
+| Direct origin tunnel health | 200 |
+| Product Worker readiness | 200 |
+| Public chat smoke | 200, 24.68 s |
