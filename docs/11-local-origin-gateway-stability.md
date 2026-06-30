@@ -133,6 +133,6 @@ This setup is still bounded by local-machine availability. If the Mac sleeps, lo
 | Product Worker readiness | 200 |
 | Worker unit tests | 16/16 passed |
 | Full test suite | 158/158 passed |
-| Extension build | `dist/tab-recap-0.2.2.zip` |
+| Extension build | `dist/tab-recap-0.2.3.zip` |
 
 Current runtime note: launchd services were not loaded, but the three fallback `screen` sessions were running and all local/public checks passed.
