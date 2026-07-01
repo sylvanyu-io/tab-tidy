@@ -35,6 +35,52 @@ test("worker readiness check reaches the configured local origin health endpoint
   assert.equal(calls[0].url, "https://raw-llm.example/healthz");
 });
 
+test("worker protects the real LLM readiness check with a monitor token", async () => {
+  const missingConfig = await handle(new Request("https://cliproxy.example/llm-readyz"), envWithKv());
+  assert.equal(missingConfig.status, 503);
+  assert.equal((await missingConfig.json()).error.code, "monitor_token_not_configured");
+
+  const unauthorized = await handle(new Request("https://cliproxy.example/llm-readyz"), envWithKv({ MONITOR_TOKEN: "secret" }));
+  assert.equal(unauthorized.status, 401);
+  assert.equal((await unauthorized.json()).error.code, "monitor_token_required");
+});
+
+test("worker LLM readiness check uses the tiny mini-model probe", async () => {
+  const calls = [];
+  const localHandle = createWorkerHandler({
+    fetchImpl: async (url, options) => {
+      calls.push({ url, options });
+      return new Response(JSON.stringify({ choices: [{ message: { content: "OK" } }] }), {
+        status: 200,
+        headers: { "content-type": "application/json" }
+      });
+    }
+  });
+
+  const response = await localHandle(
+    new Request("https://cliproxy.example/llm-readyz", {
+      headers: {
+        "x-monitor-token": "secret",
+        "x-tab-recap-request-id": "monitor_ping"
+      }
+    }),
+    envWithKv({ MONITOR_TOKEN: "secret" })
+  );
+  const body = await response.json();
+  const upstreamBody = JSON.parse(calls[0].options.body);
+
+  assert.equal(response.status, 200);
+  assert.equal(body.ok, true);
+  assert.equal(body.llm.model, "gpt-5.4-mini");
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].url, "https://raw-llm.example/v1/chat/completions");
+  assert.equal(calls[0].options.headers.authorization, "Bearer upstream-secret");
+  assert.equal(calls[0].options.headers["x-tab-recap-request-id"], "monitor_ping");
+  assert.equal(upstreamBody.model, "gpt-5.4-mini");
+  assert.equal(upstreamBody.reasoning_effort, "low");
+  assert.equal(upstreamBody.max_tokens, 2);
+});
+
 test("worker rejects chat requests without a rate limit store", async () => {
   const response = await handle(chatRequest());
   assert.equal(response.status, 429);
@@ -178,6 +224,7 @@ test("worker forwards with upstream secret and strips client authorization", asy
   assert.equal(calls.length, 1);
   assert.equal(calls[0].url, "https://raw-llm.example/v1/chat/completions");
   assert.equal(calls[0].options.headers.authorization, "Bearer upstream-secret");
+  assert.match(calls[0].options.headers["x-tab-recap-request-id"], /.+/);
   assert.equal(calls[0].options.headers["cf-access-client-id"], "access-id");
   assert.equal(calls[0].options.headers["cf-access-client-secret"], "access-secret");
   assert.deepEqual(Object.keys(JSON.parse(calls[0].options.body)).sort(), [

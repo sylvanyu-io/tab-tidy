@@ -89,15 +89,38 @@ This avoids the observed QUIC failure mode where `cloudflared` stays alive but r
 
    The extension can now show a stable product message instead of leaking raw Cloudflare text.
 
+5. Protected real LLM readiness probe
+
+   `/llm-readyz` checks the full model path by sending a tiny real chat request
+   through the Worker, Tunnel, local proxy, CLIProxyAPI, and upstream model:
+
+   ```text
+   model: gpt-5.4-mini
+   reasoning_effort: low
+   max_tokens: 2
+   ```
+
+   This endpoint requires `MONITOR_TOKEN` via `x-monitor-token` or
+   `Authorization: Bearer ...`. It is meant for low-frequency external uptime
+   checks, not browser clients.
+
 ## Worker Vars
 
 ```toml
 UPSTREAM_RETRY_ATTEMPTS = "2"
 UPSTREAM_RETRY_DELAY_MS = "1200"
 UPSTREAM_READY_TIMEOUT_MS = "8000"
+LLM_READY_MODEL = "gpt-5.4-mini"
+LLM_READY_REASONING_EFFORT = "low"
+LLM_READY_MAX_TOKENS = "2"
+LLM_READY_TIMEOUT_MS = "45000"
 ```
 
 The retry budget is intentionally small. If the local Mac is asleep or the tunnel is gone, more retries mostly waste time. If it is a short tunnel reconnect, one retry is enough to avoid a visible failure.
+
+`/readyz` does not spend model tokens and can be checked every 1-3 minutes.
+`/llm-readyz` does spend a tiny amount of model usage and should be checked
+every 30 minutes with email alerts.
 
 ## Local Ops Checklist
 
@@ -221,3 +244,14 @@ Current runtime note: launchd services were not loaded, but the three fallback `
 | Consecutive failures before restart | 2 |
 | Restart cooldown | 600 seconds |
 | First watchdog run | `ok main=200 proxy=200 ready=200` |
+
+2026-07-01 20:59 Asia/Shanghai LLM readiness deploy:
+
+| Check | Result |
+| --- | --- |
+| Worker version | `465d6a60-6578-47c0-8d7d-a009ada047b3` |
+| `/healthz` | 200, 0.31 s |
+| `/readyz` | 200, upstream ready, 347 ms |
+| `/llm-readyz` without token | 401 `monitor_token_required` |
+| `/llm-readyz` with token | 200, `gpt-5.4-mini`, 5.69 s |
+| Worker unit tests | 18/18 passed |

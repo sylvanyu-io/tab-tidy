@@ -58,6 +58,10 @@ Worker vars, already present in `worker/wrangler.toml`:
 UPSTREAM_RETRY_ATTEMPTS = "2"
 UPSTREAM_RETRY_DELAY_MS = "1200"
 UPSTREAM_READY_TIMEOUT_MS = "8000"
+LLM_READY_MODEL = "gpt-5.4-mini"
+LLM_READY_REASONING_EFFORT = "low"
+LLM_READY_MAX_TOKENS = "2"
+LLM_READY_TIMEOUT_MS = "45000"
 ```
 
 The Worker retries only Cloudflare/Tunnel infrastructure failures such as
@@ -99,6 +103,26 @@ curl https://cliproxy.sylvanyu.io/readyz
 `UPSTREAM_BASE_URL=https://cliproxy-origin.sylvanyu.io/v1` checks
 `https://cliproxy-origin.sylvanyu.io/healthz`. Override with
 `UPSTREAM_HEALTH_URL` only if the origin uses a different health path.
+
+LLM readiness check:
+
+```bash
+npx wrangler secret put MONITOR_TOKEN --config worker/wrangler.toml
+curl -H "x-monitor-token: $MONITOR_TOKEN" https://cliproxy.sylvanyu.io/llm-readyz
+```
+
+`/llm-readyz` is intentionally separate from `/readyz`:
+
+- `/readyz` is free and only verifies Worker -> Tunnel -> local origin health.
+- `/llm-readyz` spends a tiny amount of model usage by sending one protected
+  `gpt-5.4-mini`, `reasoning_effort=low`, `max_tokens=2` chat request through
+  the real upstream path.
+- The endpoint returns `401` unless the request includes `x-monitor-token` or
+  `Authorization: Bearer ...` matching the `MONITOR_TOKEN` Worker secret.
+
+Use `/llm-readyz` as a low-frequency external monitor. The current production
+policy is every 30 minutes with email alerts, while `/readyz` can run every
+1-3 minutes.
 
 Each chat request now carries an `x-tab-recap-request-id` response header. The
 extension sends the side-panel operation id as this header for default gateway

@@ -29,8 +29,12 @@ const DEFAULT_LIMITS = Object.freeze({
   globalDailyRequests: 3000,
   upstreamRetryAttempts: 2,
   upstreamRetryDelayMs: 1200,
-  upstreamReadyTimeoutMs: 8000
+  upstreamReadyTimeoutMs: 8000,
+  llmReadyTimeoutMs: 45000,
+  llmReadyMaxTokens: 2
 });
+const DEFAULT_LLM_READY_MODEL = "gpt-5.4-mini";
+const DEFAULT_LLM_READY_REASONING_EFFORT = "low";
 
 export default {
   fetch(request, env, ctx) {
@@ -51,6 +55,9 @@ export async function handleRequest(request, env = {}, ctx = {}, options = {}) {
   }
   if (url.pathname === "/readyz" && request.method === "GET") {
     return upstreamReadiness(request, env, options, requestId);
+  }
+  if (url.pathname === "/llm-readyz" && request.method === "GET") {
+    return llmReadiness(request, env, options, requestId);
   }
   if (url.pathname !== "/v1/chat/completions") {
     return jsonError("Not found.", 404, "not_found", {}, request, requestId);
@@ -137,6 +144,16 @@ function readLimits(env) {
       positiveInteger(env.UPSTREAM_READY_TIMEOUT_MS, DEFAULT_LIMITS.upstreamReadyTimeoutMs),
       500,
       20_000
+    ),
+    llmReadyTimeoutMs: clampInteger(
+      positiveInteger(env.LLM_READY_TIMEOUT_MS, DEFAULT_LIMITS.llmReadyTimeoutMs),
+      1_000,
+      90_000
+    ),
+    llmReadyMaxTokens: clampInteger(
+      positiveInteger(env.LLM_READY_MAX_TOKENS, DEFAULT_LIMITS.llmReadyMaxTokens),
+      1,
+      16
     )
   };
 }
@@ -382,11 +399,12 @@ function upstreamConfig(env) {
   };
 }
 
-function upstreamRequest(bodyText, upstream, signal) {
+function upstreamRequest(bodyText, upstream, signal, requestId = "") {
   const headers = {
     "content-type": "application/json",
     authorization: `Bearer ${upstream.apiKey}`
   };
+  if (requestId) headers["x-tab-recap-request-id"] = requestId;
   if (upstream.accessClientId && upstream.accessClientSecret) {
     headers["cf-access-client-id"] = upstream.accessClientId;
     headers["cf-access-client-secret"] = upstream.accessClientSecret;
@@ -399,7 +417,7 @@ async function fetchUpstreamWithRetries(fetchImpl, upstream, bodyText, request, 
   let lastFailure = null;
   for (let attempt = 1; attempt <= attempts; attempt += 1) {
     try {
-      const response = await fetchImpl(upstream.url, upstreamRequest(bodyText, upstream, request.signal));
+      const response = await fetchImpl(upstream.url, upstreamRequest(bodyText, upstream, request.signal, requestId));
       if (!isRetryableUpstreamStatus(response.status)) {
         return { response, attempts: attempt };
       }
@@ -546,6 +564,212 @@ async function upstreamReadiness(request, env, options = {}, requestId = "") {
       requestId
     );
   }
+}
+
+async function llmReadiness(request, env, options = {}, requestId = "") {
+  const auth = validateMonitorAuth(request, env);
+  if (!auth.ok) {
+    return jsonError(auth.message, auth.status, auth.code, {}, request, requestId);
+  }
+
+  const upstream = upstreamConfig(env);
+  if (!upstream.ok) {
+    return jsonResponse(
+      {
+        ok: false,
+        worker: true,
+        llm: { ok: false, code: "upstream_not_configured", message: upstream.message }
+      },
+      503,
+      {},
+      request,
+      requestId
+    );
+  }
+
+  const model = String(env.LLM_READY_MODEL || DEFAULT_LLM_READY_MODEL).trim();
+  if (!allowedModels(env).includes(model)) {
+    return jsonResponse(
+      {
+        ok: false,
+        worker: true,
+        llm: {
+          ok: false,
+          code: "llm_ready_model_not_allowed",
+          message: "The configured LLM health model is not in the Worker allowlist.",
+          model
+        }
+      },
+      503,
+      {},
+      request,
+      requestId
+    );
+  }
+
+  const limits = readLimits(env);
+  const bodyText = JSON.stringify({
+    model,
+    messages: [
+      { role: "system", content: "You are a health check endpoint. Reply with OK only." },
+      { role: "user", content: "Return OK." }
+    ],
+    max_tokens: limits.llmReadyMaxTokens,
+    reasoning_effort: String(env.LLM_READY_REASONING_EFFORT || DEFAULT_LLM_READY_REASONING_EFFORT).trim() || DEFAULT_LLM_READY_REASONING_EFFORT
+  });
+  const fetchImpl = options.fetchImpl || fetch;
+  const startedAt = Date.now();
+
+  try {
+    const response = await fetchWithTimeout(
+      fetchImpl,
+      upstream.url,
+      upstreamRequest(bodyText, upstream, request.signal, requestId),
+      limits.llmReadyTimeoutMs
+    );
+    const text = await response.text().catch(() => "");
+    const latencyMs = Date.now() - startedAt;
+
+    if (!response.ok) {
+      const failure = classifyUpstreamFailure({ status: response.status, body: text });
+      return jsonResponse(
+        {
+          ok: false,
+          worker: true,
+          llm: {
+            ok: false,
+            status: response.status,
+            code: failure.code,
+            message: failure.message,
+            upstreamCode: failure.upstreamCode || "",
+            latencyMs,
+            model
+          }
+        },
+        503,
+        {},
+        request,
+        requestId
+      );
+    }
+
+    const validation = validateLlmReadyResponse(text);
+    if (!validation.ok) {
+      return jsonResponse(
+        {
+          ok: false,
+          worker: true,
+          llm: {
+            ok: false,
+            status: response.status,
+            code: validation.code,
+            message: validation.message,
+            latencyMs,
+            model
+          }
+        },
+        502,
+        {},
+        request,
+        requestId
+      );
+    }
+
+    return jsonResponse(
+      {
+        ok: true,
+        worker: true,
+        llm: {
+          ok: true,
+          status: response.status,
+          code: "llm_ready",
+          latencyMs,
+          model
+        }
+      },
+      200,
+      {},
+      request,
+      requestId
+    );
+  } catch (error) {
+    return jsonResponse(
+      {
+        ok: false,
+        worker: true,
+        llm: {
+          ok: false,
+          code: error?.name === "AbortError" ? "llm_ready_timeout" : "llm_ready_failed",
+          message: compactResponseText(error?.message || "LLM readiness check failed."),
+          latencyMs: Date.now() - startedAt,
+          model
+        }
+      },
+      503,
+      {},
+      request,
+      requestId
+    );
+  }
+}
+
+function validateMonitorAuth(request, env) {
+  const expected = String(env.MONITOR_TOKEN || "").trim();
+  if (!expected) {
+    return {
+      ok: false,
+      status: 503,
+      code: "monitor_token_not_configured",
+      message: "LLM readiness monitoring is not configured."
+    };
+  }
+  const provided = monitorTokenFromRequest(request);
+  if (!constantTimeStringEqual(provided, expected)) {
+    return {
+      ok: false,
+      status: 401,
+      code: "monitor_token_required",
+      message: "A valid monitor token is required."
+    };
+  }
+  return { ok: true };
+}
+
+function monitorTokenFromRequest(request) {
+  const header = request.headers.get("x-monitor-token") || "";
+  if (header) return header.trim();
+  const auth = request.headers.get("authorization") || "";
+  const match = auth.match(/^Bearer\s+(.+)$/i);
+  return match?.[1]?.trim() || "";
+}
+
+function constantTimeStringEqual(a, b) {
+  const left = String(a || "");
+  const right = String(b || "");
+  let diff = left.length ^ right.length;
+  const length = Math.max(left.length, right.length);
+  for (let index = 0; index < length; index += 1) {
+    diff |= (left.charCodeAt(index) || 0) ^ (right.charCodeAt(index) || 0);
+  }
+  return diff === 0;
+}
+
+function validateLlmReadyResponse(text) {
+  let payload;
+  try {
+    payload = JSON.parse(text);
+  } catch {
+    return { ok: false, code: "llm_ready_invalid_json", message: "The LLM health check did not return JSON." };
+  }
+  const content =
+    payload?.choices?.[0]?.message?.content ||
+    payload?.choices?.[0]?.text ||
+    payload?.output_text ||
+    "";
+  if (!String(content).trim()) {
+    return { ok: false, code: "llm_ready_empty_response", message: "The LLM health check returned an empty response." };
+  }
+  return { ok: true };
 }
 
 function upstreamHealthUrl(env, upstream) {
