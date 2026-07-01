@@ -58,6 +58,8 @@ const UI_COPY = Object.freeze({
     "button.languageAria": "切换界面为英文",
     "mode.organize": "整理",
     "mode.recap": "回顾",
+    "mode.organizeSubtitle": "分组与清理",
+    "mode.recapSubtitle": "时间线总结",
     "status.recapPreparing": "正在准备回顾",
     "status.recapGenerating": "正在生成近期回顾",
     "status.recapCanceling": "正在停止生成回顾",
@@ -293,6 +295,8 @@ const UI_COPY = Object.freeze({
     "button.languageAria": "Switch UI to Chinese",
     "mode.organize": "Organize",
     "mode.recap": "Recap",
+    "mode.organizeSubtitle": "Group and clean",
+    "mode.recapSubtitle": "Timeline recap",
     "status.recapPreparing": "Preparing recap",
     "status.recapGenerating": "Generating recent recap",
     "status.recapCanceling": "Stopping recap generation",
@@ -714,8 +718,12 @@ function applyUiLanguage() {
   setText(".control-group .control-label span", t("scope.label"));
   setText('.choice-card[data-value="current_window"] .button-label', t("scope.currentWindow"));
   setText('.choice-card[data-value="consolidate_one_window"] .button-label', t("scope.allWindows"));
-  setText('.mode-tab[data-panel-mode="organize"]', t("mode.organize"));
-  setText('.mode-tab[data-panel-mode="recap"]', t("mode.recap"));
+  setText('.mode-tab[data-panel-mode="organize"] .mode-tab-title', t("mode.organize"));
+  setText('.mode-tab[data-panel-mode="recap"] .mode-tab-title', t("mode.recap"));
+  setText('.mode-tab[data-panel-mode="organize"] .mode-tab-subtitle', t("mode.organizeSubtitle"));
+  setText('.mode-tab[data-panel-mode="recap"] .mode-tab-subtitle', t("mode.recapSubtitle"));
+  setAttribute('.mode-tab[data-panel-mode="organize"]', "aria-label", t("mode.organize"));
+  setAttribute('.mode-tab[data-panel-mode="recap"]', "aria-label", t("mode.recap"));
   setAttribute("#organizeMode", "aria-label", t("scope.nativeLabel"));
   setOptionText("#organizeMode", "current_window", t("scope.optionCurrent"));
   setOptionText("#organizeMode", "consolidate_one_window", t("scope.optionAll"));
