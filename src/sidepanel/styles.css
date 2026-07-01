@@ -219,7 +219,7 @@ h2,
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 6px;
   width: min(100%, 430px);
-  margin: 6px 4px 10px;
+  margin: 4px 4px 4px;
   padding: 5px;
   background:
     linear-gradient(
@@ -236,17 +236,16 @@ h2,
 
 .mode-tab {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
-  gap: 8px;
+  grid-template-columns: minmax(0, 1fr);
   align-items: center;
-  min-height: 46px;
-  padding: 7px 10px;
+  min-height: 44px;
+  padding: 8px 12px;
   color: var(--text);
   background: transparent;
   border: 0;
   border-radius: 14px;
   box-shadow: none;
-  text-align: left;
+  text-align: center;
   cursor: pointer;
   transition:
     background 160ms var(--ease),
@@ -275,71 +274,19 @@ h2,
 }
 
 .mode-tab-glyph {
-  position: relative;
-  display: block;
-  width: 24px;
-  height: 24px;
-  border-radius: 9px;
-  background: color-mix(in srgb, var(--line) 7%, transparent);
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--line) 12%, transparent);
-}
-
-.mode-tab[aria-pressed="true"] .mode-tab-glyph {
-  background: rgba(255, 255, 255, 0.18);
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.32);
-}
-
-.mode-tab[data-panel-mode="organize"] .mode-tab-glyph::before {
-  content: "";
-  position: absolute;
-  top: 5px;
-  left: 5px;
-  width: 5px;
-  height: 5px;
-  border-radius: 2px;
-  background: #b7ff2a;
-  box-shadow:
-    9px 0 0 #2f65ff,
-    0 9px 0 #ef4d36,
-    9px 9px 0 color-mix(in srgb, var(--line) 22%, #ffffff);
-}
-
-.mode-tab[data-panel-mode="recap"] .mode-tab-glyph::before {
-  content: "";
-  position: absolute;
-  top: 4px;
-  left: 6px;
-  width: 5px;
-  height: 5px;
-  background: currentColor;
-  border-radius: 999px;
-  box-shadow:
-    0 7px 0 currentColor,
-    0 14px 0 currentColor;
-  opacity: 0.92;
-}
-
-.mode-tab[data-panel-mode="recap"] .mode-tab-glyph::after {
-  content: "";
-  position: absolute;
-  top: 8px;
-  left: 8px;
-  width: 2px;
-  height: 9px;
-  background: currentColor;
-  border-radius: 999px;
-  opacity: 0.28;
+  display: none;
 }
 
 .mode-tab-copy {
   display: grid;
   min-width: 0;
+  justify-items: center;
   gap: 2px;
 }
 
 .mode-tab-title {
   overflow: hidden;
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 900;
   line-height: 1.05;
   text-overflow: ellipsis;
@@ -349,7 +296,7 @@ h2,
 .mode-tab-subtitle {
   overflow: hidden;
   color: var(--muted);
-  font-size: 9.5px;
+  font-size: 10px;
   font-weight: 760;
   line-height: 1.15;
   text-overflow: ellipsis;
@@ -368,7 +315,7 @@ h2,
   margin-right: -10px;
   overflow: auto;
   overscroll-behavior: contain;
-  padding: 16px 12px 12px 2px;
+  padding: 8px 12px 12px 2px;
   scrollbar-width: thin;
   scrollbar-color: color-mix(in srgb, var(--line) 34%, transparent) transparent;
 }
