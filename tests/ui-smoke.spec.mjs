@@ -123,10 +123,14 @@ test("control surface renders settings and mock preview", async ({ page }) => {
   await expect(page.locator("#samplingRisk")).toHaveAttribute("data-tooltip", /不会读取密码/);
   await expect(page.locator("#analyzeGrouping")).toBeChecked();
   await expect(page.locator("#analyzeCleanup")).toBeChecked();
-  await expect(page.getByRole("button", { name: "整理 + 清理" })).toHaveAttribute("aria-pressed", "true");
-  await expect(page.getByRole("button", { name: "只整理" })).toHaveAttribute("aria-pressed", "false");
-  await expect(page.getByRole("button", { name: "只清理" })).toHaveAttribute("aria-pressed", "false");
-  await expect(page.locator("#analysisModeHint")).toContainText("一次 AI 分析同时给出分组方案和清理建议");
+  await expect(page.getByRole("button", { name: "整理 + 清理" })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "只整理" })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "只清理" })).toHaveCount(0);
+  await expect(page.locator("#analysisModeSelect")).not.toBeVisible();
+  await page.getByText("更多选项").click();
+  await expect(page.locator("#analysisModeSelect")).toBeVisible();
+  await expect(page.locator("#analysisModeSelect")).toHaveValue("both");
+  await expect(page.locator("#analysisModeHint")).toContainText("一次分析，同时给出分组方案和可复查的标签页");
   await expect(page.getByText("会读取页面文字摘要")).toHaveCount(0);
   await expect(page.getByText("会在后台保存短摘要")).toHaveCount(0);
   await expect(page.getByText("整理偏好")).toHaveCount(0);
@@ -166,7 +170,6 @@ test("control surface renders settings and mock preview", async ({ page }) => {
   await expect(page.locator("#hostPermissionRequestMode")).toHaveValue("ask_for_all_visible_origins");
   await expect(page.locator("#pageContextMode option[value='active_tab_only']")).toHaveCount(0);
 
-  await page.getByText("更多选项").click();
   await expect(page.getByLabel("页面摘要读取范围")).toHaveValue("ambiguous_with_permission");
   await expect(page.locator("#pageContextMode")).toContainText("尽量读取已授权页面");
   await expect(page.locator("#gatewayBaseUrl")).toHaveValue("");
@@ -194,7 +197,7 @@ test("control surface renders settings and mock preview", async ({ page }) => {
   await expect(page.locator(".advanced-switch-list")).toContainText("整理后收起分组");
   await expect(page.locator(".advanced-switch-list")).not.toContainText("合并到当前窗口");
   await expect(page.locator(".advanced-switch-list")).not.toContainText("撤销后关闭空窗口");
-  await expect(page.locator(".advanced-select-list .setting-select-row")).toHaveCount(7);
+  await expect(page.locator(".advanced-select-list .setting-select-row")).toHaveCount(8);
   await expect(page.locator("#urlPrivacyMode").locator("xpath=ancestor::*[contains(@class, 'advanced-select-list')]")).toHaveCount(1);
   await expect(page.locator("#dissolveExistingGroupsToggle")).toBeVisible();
   await expect(page.locator("#createReviewGroupToggle")).toBeVisible();
@@ -1054,10 +1057,11 @@ test("cleanup candidates are returned with the generated plan and can be closed 
 test("cleanup-only mode renders cleanup copy without fake grouping", async ({ page }) => {
   await page.goto(`${baseUrl}/src/sidepanel/index.html`);
 
-  await page.getByRole("button", { name: "只清理" }).click();
+  await page.getByText("更多选项").click();
+  await page.locator("#analysisModeSelect").selectOption("cleanup");
   await expect(page.locator("#analyzeGrouping")).not.toBeChecked();
   await expect(page.locator("#analyzeCleanup")).toBeChecked();
-  await expect(page.locator("#analysisModeHint")).toContainText("只列出值得复查的标签页");
+  await expect(page.locator("#analysisModeHint")).toContainText("列出值得复查的标签页");
 
   await page.getByRole("button", { name: "生成方案" }).click();
   await expect(page.locator(".preview .step-label")).toHaveText("清理预览");

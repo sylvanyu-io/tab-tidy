@@ -73,12 +73,12 @@ const UI_COPY = Object.freeze({
     "scope.optionAll": "合并并整理所有窗口",
     "analysis.mode.label": "本次分析",
     "analysis.mode.aria": "本次分析内容",
-    "analysis.mode.both": "整理 + 清理",
-    "analysis.mode.grouping": "只整理",
-    "analysis.mode.cleanup": "只清理",
-    "analysis.mode.hint.both": "默认一次 AI 分析同时给出分组方案和清理建议。",
-    "analysis.mode.hint.grouping": "只生成分组方案，不列清理清单。",
-    "analysis.mode.hint.cleanup": "只列出值得复查的标签页，不创建分组方案。",
+    "analysis.mode.both": "整理 + 清理建议",
+    "analysis.mode.grouping": "仅整理标签页",
+    "analysis.mode.cleanup": "仅清理建议",
+    "analysis.mode.hint.both": "一次分析，同时给出分组方案和可复查的标签页；关闭由你决定。",
+    "analysis.mode.hint.grouping": "生成分组方案，暂不列清理建议。",
+    "analysis.mode.hint.cleanup": "列出值得复查的标签页，暂不创建分组。",
     "sampling.title": "需要时补读页面摘要",
     "sampling.subtitle": "读取少量网页文字，帮助 AI 理解主题和回顾脉络",
     "sampling.tooltip": "会把标题、描述、标题层级和页面上的正文或讨论摘录发送给 AI，用于整理和回顾；不会读取密码、表单内容、Cookie、本地存储或完整 HTML。休眠标签页不会被唤醒。",
@@ -310,14 +310,14 @@ const UI_COPY = Object.freeze({
     "scope.nativeLabel": "Organization scope",
     "scope.optionCurrent": "Organize current window only",
     "scope.optionAll": "Merge and organize all windows",
-    "analysis.mode.label": "This run",
-    "analysis.mode.aria": "What AI should analyze",
-    "analysis.mode.both": "Organize + clean",
-    "analysis.mode.grouping": "Organize only",
-    "analysis.mode.cleanup": "Clean only",
-    "analysis.mode.hint.both": "Default: one AI run returns both groups and cleanup suggestions.",
-    "analysis.mode.hint.grouping": "Creates the grouping plan only, without a cleanup checklist.",
-    "analysis.mode.hint.cleanup": "Ranks tabs worth reviewing, without creating groups.",
+    "analysis.mode.label": "Analysis",
+    "analysis.mode.aria": "Analysis scope",
+    "analysis.mode.both": "Organize + cleanup suggestions",
+    "analysis.mode.grouping": "Organize tabs only",
+    "analysis.mode.cleanup": "Cleanup suggestions only",
+    "analysis.mode.hint.both": "One analysis returns both topic groups and tabs worth reviewing. You decide what to close.",
+    "analysis.mode.hint.grouping": "Creates a grouping plan without cleanup suggestions.",
+    "analysis.mode.hint.cleanup": "Lists tabs worth reviewing without creating groups.",
     "sampling.title": "Read page summaries when useful",
     "sampling.subtitle": "Reads a little page text so AI can understand topics and recaps",
     "sampling.tooltip": "Sends titles, descriptions, headings, and visible article or discussion excerpts to AI for organization and recaps. It will not read passwords, form values, cookies, local storage, or full HTML. Sleeping tabs are not awakened.",
@@ -554,8 +554,8 @@ const nodes = {
   progressFill: document.querySelector("#progressFill"),
   progressLabel: document.querySelector("#progressLabel"),
   progressPercent: document.querySelector("#progressPercent"),
+  analysisModeSelect: document.querySelector("#analysisModeSelect"),
   analysisModeHint: document.querySelector("#analysisModeHint"),
-  analysisModeButtons: document.querySelectorAll("[data-analysis-mode]"),
   uiLanguageToggle: document.querySelector("#uiLanguageToggle"),
   actions: document.querySelector(".actions"),
   analyzeBtn: document.querySelector("#analyzeBtn"),
@@ -692,9 +692,9 @@ function bindEvents() {
   fields.organizeMode.addEventListener("change", updateConditionalUi);
   fields.plannerProvider.addEventListener("change", updateConditionalUi);
   fields.gatewayModel.addEventListener("change", updateConditionalUi);
-  for (const button of nodes.analysisModeButtons || []) {
-    button.addEventListener("click", () => setAnalysisMode(button.dataset.analysisMode || "both", { persist: true }));
-  }
+  nodes.analysisModeSelect?.addEventListener("change", () => {
+    setAnalysisMode(nodes.analysisModeSelect.value || "both", { persist: true });
+  });
 
   nodes.analyzeBtn.addEventListener("click", handlePrimaryAction);
   nodes.cancelBtn.addEventListener("click", handleCancelAction);
@@ -750,11 +750,11 @@ function applyUiLanguage() {
   setAttribute("#organizeMode", "aria-label", t("scope.nativeLabel"));
   setOptionText("#organizeMode", "current_window", t("scope.optionCurrent"));
   setOptionText("#organizeMode", "consolidate_one_window", t("scope.optionAll"));
-  setText(".analysis-mode-panel .control-label span", t("analysis.mode.label"));
-  setAttribute(".analysis-mode-choice", "aria-label", t("analysis.mode.aria"));
-  setText('[data-analysis-mode="both"]', t("analysis.mode.both"));
-  setText('[data-analysis-mode="grouping"]', t("analysis.mode.grouping"));
-  setText('[data-analysis-mode="cleanup"]', t("analysis.mode.cleanup"));
+  setText('label[for="analysisModeSelect"]', t("analysis.mode.label"));
+  setAttribute("#analysisModeSelect", "aria-label", t("analysis.mode.aria"));
+  setOptionText("#analysisModeSelect", "both", t("analysis.mode.both"));
+  setOptionText("#analysisModeSelect", "grouping", t("analysis.mode.grouping"));
+  setOptionText("#analysisModeSelect", "cleanup", t("analysis.mode.cleanup"));
   syncAnalysisModeControl();
 
   setSwitchText("#ackSampling", "sampling.title", "sampling.subtitle");
@@ -1143,8 +1143,8 @@ function setAnalysisMode(mode, options = {}) {
 
 function syncAnalysisModeControl() {
   const mode = analysisModeFromFields();
-  for (const button of nodes.analysisModeButtons || []) {
-    button.setAttribute("aria-pressed", button.dataset.analysisMode === mode ? "true" : "false");
+  if (nodes.analysisModeSelect) {
+    nodes.analysisModeSelect.value = mode;
   }
   if (nodes.analysisModeHint) {
     nodes.analysisModeHint.textContent = t(`analysis.mode.hint.${mode}`);
