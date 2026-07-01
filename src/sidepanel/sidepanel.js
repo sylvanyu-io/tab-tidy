@@ -35,7 +35,7 @@ const UI_COPY = Object.freeze({
     "status.permissionAiGateway": "需要授权这个 AI 服务地址，才能发送整理请求。",
     "status.permissionContinuousSummary": "需要授权网页读取权限后，才能持续积累页面摘要。",
     "status.permissionPageSummary": "需要授权页面摘要权限，才能读取网页文字摘要。",
-    "status.permissionFirstEnablePageSummary": "需要先打开「需要时补读页面摘要」并完成授权，才能读取页面摘要。",
+    "status.permissionFirstEnablePageSummary": "需要先打开「页面摘要增强」并完成授权，才能读取页面摘要。",
     "status.unsupportedContinuousSummary": "当前安装包没有开启长期页面摘要。",
     "status.unsupportedPageSummary": "当前安装包没有开启页面摘要。",
     "status.customModelMissing": "请填写自定义模型名，或者选择一个预设模型。",
@@ -79,14 +79,10 @@ const UI_COPY = Object.freeze({
     "analysis.mode.hint.both": "一次分析，同时给出分组方案和可复查的标签页；关闭由你决定。",
     "analysis.mode.hint.grouping": "生成分组方案，暂不列清理建议。",
     "analysis.mode.hint.cleanup": "列出值得复查的标签页，暂不创建分组。",
-    "sampling.title": "需要时补读页面摘要",
-    "sampling.subtitle": "读取少量网页文字，帮助 AI 理解主题和回顾脉络",
-    "sampling.tooltip": "会把标题、描述、标题层级和页面上的正文或讨论摘录发送给 AI，用于整理和回顾；不会读取密码、表单内容、Cookie、本地存储或完整 HTML。休眠标签页不会被唤醒。",
+    "sampling.title": "页面摘要增强",
+    "sampling.subtitle": "读取少量网页文字，让整理和回顾更准",
+    "sampling.tooltip": "会把标题、描述、标题层级和页面上的正文或讨论摘录发送给 AI，用于整理和回顾；不会读取密码、表单内容、Cookie、本地存储或完整 HTML。可在更多选项里选择是否长期保存到本机。",
     "sampling.aria": "页面摘要说明",
-    "continuous.title": "长期积累页面摘要",
-    "continuous.subtitle": "本机保存短摘要，之后整理和回顾更准",
-    "continuous.tooltip": "开启后浏览器会请求网页读取权限；之后会在后台给打开过的、未休眠、非无痕页面保存短摘要。整理和回顾时，相关摘要会发送给 AI 辅助判断；不会主动唤醒标签页。",
-    "continuous.aria": "持续摘要说明",
     "activity.focused": "已定位标签页",
     "activity.focusFailed": "标签页可能已经关闭，请刷新清理建议。",
     "activity.firstSeen": "首次见到 {age}",
@@ -167,6 +163,7 @@ const UI_COPY = Object.freeze({
     "switch.collapse.subtitle": "新分组默认折叠",
     "field.urlPrivacy": "发送给 AI 的网址信息",
     "field.pageContext": "页面摘要读取范围",
+    "field.pageSummaryMemory": "摘要保存方式",
     "field.hostPermission": "站点授权",
     "field.resultLanguage": "结果语言",
     "field.promptPreset": "整理方式",
@@ -198,6 +195,8 @@ const UI_COPY = Object.freeze({
     "option.pageOff": "不补读页面摘要",
     "option.pageAmbiguous": "只读拿不准的页面",
     "option.pageGranted": "尽量读取已授权页面",
+    "option.summarySession": "仅本次使用",
+    "option.summaryContinuous": "长期保存到本机",
     "option.permissionNever": "整理时不弹授权",
     "option.permissionOrigin": "按站点询问",
     "option.permissionVisible": "一次授权可见站点",
@@ -318,14 +317,10 @@ const UI_COPY = Object.freeze({
     "analysis.mode.hint.both": "One analysis returns both topic groups and tabs worth reviewing. You decide what to close.",
     "analysis.mode.hint.grouping": "Creates a grouping plan without cleanup suggestions.",
     "analysis.mode.hint.cleanup": "Lists tabs worth reviewing without creating groups.",
-    "sampling.title": "Read page summaries when useful",
-    "sampling.subtitle": "Reads a little page text so AI can understand topics and recaps",
-    "sampling.tooltip": "Sends titles, descriptions, headings, and visible article or discussion excerpts to AI for organization and recaps. It will not read passwords, form values, cookies, local storage, or full HTML. Sleeping tabs are not awakened.",
+    "sampling.title": "Page summary boost",
+    "sampling.subtitle": "Reads a little page text for better organizing and recaps",
+    "sampling.tooltip": "Sends titles, descriptions, headings, and visible article or discussion excerpts to AI for organization and recaps. It will not read passwords, form values, cookies, local storage, or full HTML. In More options, you can choose whether summaries are saved locally for future runs.",
     "sampling.aria": "Page summary details",
-    "continuous.title": "Build page memory",
-    "continuous.subtitle": "Saves short local summaries for better future runs",
-    "continuous.tooltip": "Chrome will ask for page-reading access. After that, TabRecap saves short summaries for opened, awake, non-incognito pages in the background. Related summaries are sent to AI during organization and recaps. It will not wake sleeping tabs.",
-    "continuous.aria": "Accumulated summary details",
     "activity.focused": "Tab focused",
     "activity.focusFailed": "The tab may already be closed. Refresh suggestions.",
     "activity.firstSeen": "First seen {age}",
@@ -406,6 +401,7 @@ const UI_COPY = Object.freeze({
     "switch.collapse.subtitle": "New groups start collapsed",
     "field.urlPrivacy": "URLs sent to AI",
     "field.pageContext": "Page summary reading range",
+    "field.pageSummaryMemory": "Summary memory",
     "field.hostPermission": "Site access",
     "field.resultLanguage": "Result language",
     "field.promptPreset": "Organization mode",
@@ -437,6 +433,8 @@ const UI_COPY = Object.freeze({
     "option.pageOff": "Do not read page summaries",
     "option.pageAmbiguous": "Only unclear pages",
     "option.pageGranted": "Read authorized pages when possible",
+    "option.summarySession": "Use only this time",
+    "option.summaryContinuous": "Save locally for future runs",
     "option.permissionNever": "Do not ask while organizing",
     "option.permissionOrigin": "Ask per site",
     "option.permissionVisible": "Allow visible sites once",
@@ -548,7 +546,7 @@ const nodes = {
   modeTabs: document.querySelectorAll(".mode-tab"),
   statusText: document.querySelector("#statusText"),
   samplingRisk: document.querySelector("#samplingRisk"),
-  continuousSummaryRisk: document.querySelector("#continuousSummaryRisk"),
+  pageSummaryMemoryMode: document.querySelector("#pageSummaryMemoryMode"),
   hostPermissionField: document.querySelector("#hostPermissionField"),
   progressBar: document.querySelector("#progressBar"),
   progressFill: document.querySelector("#progressFill"),
@@ -649,41 +647,58 @@ function bindEvents() {
   }
   fields.ackSampling.addEventListener("change", async () => {
     if (fields.ackSampling.checked) {
-      if (fields.pageContextMode.value === "off" || fields.pageContextMode.value === "active_tab_only") {
-        fields.pageContextMode.value = "ambiguous_with_permission";
-      }
-      if (fields.hostPermissionRequestMode.value === "never") {
-        fields.hostPermissionRequestMode.value = "ask_for_all_visible_origins";
-      }
-      updateConditionalUi();
-      setStatusKey("status.requestingPageSummaryPermission");
       try {
-        await ensurePageSamplingPermissions(readSettings({ effectiveForAnalysis: true }), { requestMissing: true });
+        await enablePageSummaryEnhancement({ persistent: nodes.pageSummaryMemoryMode?.value === "continuous" });
       } catch (error) {
         fields.ackSampling.checked = false;
+        fields.continuousPageSummaries.checked = false;
         fields.hostPermissionRequestMode.value = "never";
+        syncPageSummaryMemoryControl();
         updateConditionalUi();
         await persistSettings();
         setErrorStatus(error);
-        return;
       }
-      await persistSettings();
-      setStatusKey("status.pageSummaryEnabled");
       return;
     }
+    fields.continuousPageSummaries.checked = false;
+    syncPageSummaryMemoryControl();
     await persistSettings();
   });
   fields.continuousPageSummaries.addEventListener("change", async () => {
     if (fields.continuousPageSummaries.checked) {
+      fields.ackSampling.checked = true;
       try {
         await ensureContinuousSummaryPermissions();
       } catch (error) {
         fields.continuousPageSummaries.checked = false;
+        syncPageSummaryMemoryControl();
         await persistSettings();
         setErrorStatus(error);
         return;
       }
     }
+    syncPageSummaryMemoryControl();
+    await persistSettings();
+  });
+  nodes.pageSummaryMemoryMode?.addEventListener("change", async () => {
+    const persistent = nodes.pageSummaryMemoryMode.value === "continuous";
+    fields.continuousPageSummaries.checked = persistent;
+    if (persistent && !fields.ackSampling.checked) {
+      fields.ackSampling.checked = true;
+    }
+    if (persistent) {
+      try {
+        await enablePageSummaryEnhancement({ persistent: true });
+      } catch (error) {
+        fields.continuousPageSummaries.checked = false;
+        syncPageSummaryMemoryControl();
+        updateConditionalUi();
+        await persistSettings();
+        setErrorStatus(error);
+      }
+      return;
+    }
+    syncPageSummaryMemoryControl();
     await persistSettings();
   });
   fields.customPrompt.addEventListener("input", debounce(persistSettings, 250));
@@ -758,11 +773,8 @@ function applyUiLanguage() {
   syncAnalysisModeControl();
 
   setSwitchText("#ackSampling", "sampling.title", "sampling.subtitle");
-  setSwitchText("#continuousPageSummaries", "continuous.title", "continuous.subtitle");
   setTooltip("#ackSampling", "sampling.tooltip");
-  setTooltip("#continuousPageSummaries", "continuous.tooltip");
   setAttribute("#samplingRisk", "aria-label", t("sampling.aria"));
-  setAttribute("#continuousSummaryRisk", "aria-label", t("continuous.aria"));
   setText('label[for="customPrompt"]', t("customPrompt.label"));
   setAttribute("#customPrompt", "placeholder", t("customPrompt.placeholder"));
   setText(".advanced-settings > summary", t("advanced.summary"));
@@ -775,6 +787,7 @@ function applyUiLanguage() {
 
   setText('label[for="urlPrivacyMode"]', t("field.urlPrivacy"));
   setText('label[for="pageContextMode"]', t("field.pageContext"));
+  setText('label[for="pageSummaryMemoryMode"]', t("field.pageSummaryMemory"));
   setText('label[for="hostPermissionRequestMode"]', t("field.hostPermission"));
   setText('label[for="languageMode"]', t("field.resultLanguage"));
   setText('label[for="promptPreset"]', t("field.promptPreset"));
@@ -819,6 +832,8 @@ function applyUiLanguage() {
   setOptionText("#pageContextMode", "off", t("option.pageOff"));
   setOptionText("#pageContextMode", "ambiguous_with_permission", t("option.pageAmbiguous"));
   setOptionText("#pageContextMode", "all_granted_origins", t("option.pageGranted"));
+  setOptionText("#pageSummaryMemoryMode", "session", t("option.summarySession"));
+  setOptionText("#pageSummaryMemoryMode", "continuous", t("option.summaryContinuous"));
   setOptionText("#hostPermissionRequestMode", "never", t("option.permissionNever"));
   setOptionText("#hostPermissionRequestMode", "ask_per_origin", t("option.permissionOrigin"));
   setOptionText("#hostPermissionRequestMode", "ask_for_all_visible_origins", t("option.permissionVisible"));
@@ -1092,6 +1107,28 @@ function effectivePageContextModeForRun(selectedPageContextMode, pageSummaryEnab
   return selectedPageContextMode === "off" ? "ambiguous_with_permission" : selectedPageContextMode;
 }
 
+async function enablePageSummaryEnhancement(options = {}) {
+  const persistent = Boolean(options.persistent);
+  fields.ackSampling.checked = true;
+  fields.continuousPageSummaries.checked = persistent;
+  if (fields.pageContextMode.value === "off" || fields.pageContextMode.value === "active_tab_only") {
+    fields.pageContextMode.value = "ambiguous_with_permission";
+  }
+  if (fields.hostPermissionRequestMode.value === "never") {
+    fields.hostPermissionRequestMode.value = "ask_for_all_visible_origins";
+  }
+  syncPageSummaryMemoryControl();
+  updateConditionalUi();
+  setStatusKey("status.requestingPageSummaryPermission");
+  if (persistent) {
+    await ensureContinuousSummaryPermissions();
+  } else {
+    await ensurePageSamplingPermissions(readSettings({ effectiveForAnalysis: true }), { requestMissing: true });
+  }
+  await persistSettings();
+  setStatusKey("status.pageSummaryEnabled");
+}
+
 function writeSettings(settings) {
   const displaySettings = {
     ...settings,
@@ -1115,6 +1152,7 @@ function writeSettings(settings) {
   }
   syncSettingSwitches();
   syncAnalysisModeControl();
+  syncPageSummaryMemoryControl();
   syncChoiceGroups();
 }
 
@@ -1151,6 +1189,12 @@ function syncAnalysisModeControl() {
   }
 }
 
+function syncPageSummaryMemoryControl() {
+  if (!nodes.pageSummaryMemoryMode) return;
+  nodes.pageSummaryMemoryMode.value = fields.continuousPageSummaries.checked ? "continuous" : "session";
+  nodes.pageSummaryMemoryMode.disabled = !fields.ackSampling.checked;
+}
+
 function normalizePanelPageContextMode(value) {
   return value === "active_tab_only" ? "all_granted_origins" : value;
 }
@@ -1171,7 +1215,7 @@ function updateConditionalUi() {
   nodes.appShell.dataset.contentAccess = contentAccessAvailable ? "on" : "off";
   const samplingEnabled = contentAccessAvailable && (fields.ackSampling.checked || fields.pageContextMode.value !== "off");
   nodes.samplingRisk.hidden = !contentAccessAvailable;
-  nodes.continuousSummaryRisk.hidden = !contentAccessAvailable;
+  syncPageSummaryMemoryControl();
   nodes.hostPermissionField.hidden =
     !samplingEnabled || fields.pageContextMode.value === "off";
   nodes.gatewayCustomModelField.hidden = fields.gatewayModel.value !== GATEWAY_CUSTOM_MODEL_VALUE;

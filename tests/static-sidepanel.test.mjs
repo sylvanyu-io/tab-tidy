@@ -9,7 +9,7 @@ test("static side panel recap copy matches the product-facing runtime defaults",
     html,
     /结合最近活跃、打开次数、保留时长、标题、网址、现有分组和可用页面摘要生成，不会自动关闭标签页。/
   );
-  assert.match(html, /帮助 AI 理解主题和回顾脉络/);
+  assert.match(html, /读取少量网页文字，让整理和回顾更准/);
   assert.match(html, /data-recap-preset="today">本日<\/button>/);
   assert.doesNotMatch(html, /根据本机活动、标题、网址和可用页面摘要生成/);
   assert.doesNotMatch(html, /data-recap-preset="today">今天<\/button>/);

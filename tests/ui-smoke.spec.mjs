@@ -165,8 +165,10 @@ test("control surface renders settings and mock preview", async ({ page }) => {
 
   await page.locator("#ackSampling").check();
   await expect(page.locator("#samplingRisk")).toBeVisible();
-  await expect(page.getByText("读取少量网页文字，帮助 AI 理解主题和回顾脉络")).toBeVisible();
+  await expect(page.getByText("读取少量网页文字，让整理和回顾更准")).toBeVisible();
   await expect(page.locator("#pageContextMode")).toHaveValue("ambiguous_with_permission");
+  await expect(page.locator("#pageSummaryMemoryMode")).toBeEnabled();
+  await expect(page.locator("#pageSummaryMemoryMode")).toHaveValue("session");
   await expect(page.locator("#hostPermissionRequestMode")).toHaveValue("ask_for_all_visible_origins");
   await expect(page.locator("#pageContextMode option[value='active_tab_only']")).toHaveCount(0);
 
@@ -197,7 +199,7 @@ test("control surface renders settings and mock preview", async ({ page }) => {
   await expect(page.locator(".advanced-switch-list")).toContainText("整理后收起分组");
   await expect(page.locator(".advanced-switch-list")).not.toContainText("合并到当前窗口");
   await expect(page.locator(".advanced-switch-list")).not.toContainText("撤销后关闭空窗口");
-  await expect(page.locator(".advanced-select-list .setting-select-row")).toHaveCount(8);
+  await expect(page.locator(".advanced-select-list .setting-select-row")).toHaveCount(9);
   await expect(page.locator("#urlPrivacyMode").locator("xpath=ancestor::*[contains(@class, 'advanced-select-list')]")).toHaveCount(1);
   await expect(page.locator("#dissolveExistingGroupsToggle")).toBeVisible();
   await expect(page.locator("#createReviewGroupToggle")).toBeVisible();
@@ -284,8 +286,8 @@ test("time recap mode renders a first-class recap surface", async ({ page }) => 
   await expect(page.locator("#timeRecapPanel")).toBeVisible();
   await expect(page.locator(".launch-panel")).toBeVisible();
   await expect(page.locator("#ackSampling")).toBeVisible();
-  await expect(page.locator("#continuousPageSummaries")).toBeVisible();
-  await expect(page.getByText("读取少量网页文字，帮助 AI 理解主题和回顾脉络")).toBeVisible();
+  await expect(page.locator("#continuousPageSummaries")).toBeHidden();
+  await expect(page.getByText("读取少量网页文字，让整理和回顾更准")).toBeVisible();
   await expect(page.locator(".actions")).toBeVisible();
   await expect(page.locator(".advanced-settings")).toBeVisible();
   await expect(page.locator("#gatewayModel")).toHaveValue("gpt-5.4");
@@ -2352,7 +2354,9 @@ test("continuous summaries request broad optional access once", async ({ page })
   });
 
   await page.goto(`${baseUrl}/src/sidepanel/index.html`);
-  await page.locator("#continuousPageSummaries").check();
+  await page.locator("#ackSampling").check();
+  await page.getByText("更多选项").click();
+  await page.locator("#pageSummaryMemoryMode").selectOption("continuous");
   await expect.poll(() => page.evaluate(() => window.__permissionRequests.at(-1))).toEqual({
     permissions: ["scripting"],
     origins: ["https://*/*", "http://*/*"]
@@ -2362,6 +2366,7 @@ test("continuous summaries request broad optional access once", async ({ page })
     "acknowledged_persistently"
   );
   await expect(page.locator("#continuousPageSummaries")).toBeChecked();
+  await expect(page.locator("#pageSummaryMemoryMode")).toHaveValue("continuous");
   await expect.poll(() => page.evaluate(() => window.__events.at(0))).toEqual({
     type: "permission_request",
     savedContinuous: undefined,
@@ -2414,6 +2419,7 @@ test("store manifest hides content-reading controls", async ({ page }) => {
   await expect(page.locator("#continuousPageSummaries")).toBeHidden();
   await page.getByText("更多选项").click();
   await expect(page.locator("#pageContextMode")).toBeHidden();
+  await expect(page.locator("#pageSummaryMemoryMode")).toBeHidden();
 });
 
 test("page summary permission denial rolls back the toggle before generation", async ({ page }) => {
@@ -2722,7 +2728,7 @@ test("generation does not request page sampling permissions from a stale enabled
 
   await page.goto(`${baseUrl}/src/sidepanel/index.html`);
   await page.getByRole("button", { name: "生成方案" }).click();
-  await expect(page.locator("#statusText")).toHaveText("需要先打开「需要时补读页面摘要」并完成授权，才能读取页面摘要。");
+  await expect(page.locator("#statusText")).toHaveText("需要先打开「页面摘要增强」并完成授权，才能读取页面摘要。");
   await expect.poll(() => page.evaluate(() => window.__permissionRequests)).toEqual([]);
 });
 
