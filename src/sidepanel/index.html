@@ -59,7 +59,7 @@
           <div class="preferences-panel">
             <label
               class="switch-row emphasis-toggle content-access-feature"
-              data-tooltip="会把标题、描述、标题层级和页面上的正文或讨论摘录发送给 AI，用于整理和回顾；不会读取密码、表单内容、Cookie、本地存储或完整 HTML。可在更多选项里选择是否长期保存到本机。"
+              data-tooltip="会把标题、描述、标题层级和页面上的正文或讨论摘录发送给 AI，用于整理和回顾；不会读取密码、表单内容、Cookie、本地存储或完整 HTML。短摘要会长期保存在本机，方便之后整理和回顾。"
             >
               <span>
                 <strong>
@@ -69,7 +69,7 @@
                     class="help-tip content-access-feature"
                     tabindex="0"
                     aria-label="页面摘要说明"
-                    data-tooltip="会把标题、描述、标题层级和页面上的正文或讨论摘录发送给 AI，用于整理和回顾；不会读取密码、表单内容、Cookie、本地存储或完整 HTML。可在更多选项里选择是否长期保存到本机。"
+                    data-tooltip="会把标题、描述、标题层级和页面上的正文或讨论摘录发送给 AI，用于整理和回顾；不会读取密码、表单内容、Cookie、本地存储或完整 HTML。短摘要会长期保存在本机，方便之后整理和回顾。"
                   >
                     <svg viewBox="0 0 16 16" aria-hidden="true" focusable="false">
                       <circle cx="8" cy="8" r="6.2" />
@@ -78,7 +78,7 @@
                     </svg>
                   </i>
                 </strong>
-                <small>读取少量网页文字，让整理和回顾更准</small>
+                <small>读取少量网页文字，并在本机保存短摘要</small>
               </span>
               <input id="ackSampling" type="checkbox" />
             </label>
@@ -245,14 +245,6 @@
                 <option value="off">不补读页面摘要</option>
                 <option value="ambiguous_with_permission">只读拿不准的页面</option>
                 <option value="all_granted_origins">尽量读取已授权页面</option>
-              </select>
-            </div>
-
-            <div class="field setting-select-row content-access-feature">
-              <label for="pageSummaryMemoryMode">摘要保存方式</label>
-              <select id="pageSummaryMemoryMode">
-                <option value="session">仅本次使用</option>
-                <option value="continuous">长期保存到本机</option>
               </select>
             </div>
 

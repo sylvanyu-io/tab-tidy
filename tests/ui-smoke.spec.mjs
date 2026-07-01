@@ -165,10 +165,10 @@ test("control surface renders settings and mock preview", async ({ page }) => {
 
   await page.locator("#ackSampling").check();
   await expect(page.locator("#samplingRisk")).toBeVisible();
-  await expect(page.getByText("读取少量网页文字，让整理和回顾更准")).toBeVisible();
+  await expect(page.getByText("读取少量网页文字，并在本机保存短摘要")).toBeVisible();
   await expect(page.locator("#pageContextMode")).toHaveValue("ambiguous_with_permission");
-  await expect(page.locator("#pageSummaryMemoryMode")).toBeEnabled();
-  await expect(page.locator("#pageSummaryMemoryMode")).toHaveValue("session");
+  await expect(page.locator("#continuousPageSummaries")).toBeChecked();
+  await expect(page.locator("#pageSummaryMemoryMode")).toHaveCount(0);
   await expect(page.locator("#hostPermissionRequestMode")).toHaveValue("ask_for_all_visible_origins");
   await expect(page.locator("#pageContextMode option[value='active_tab_only']")).toHaveCount(0);
 
@@ -199,7 +199,7 @@ test("control surface renders settings and mock preview", async ({ page }) => {
   await expect(page.locator(".advanced-switch-list")).toContainText("整理后收起分组");
   await expect(page.locator(".advanced-switch-list")).not.toContainText("合并到当前窗口");
   await expect(page.locator(".advanced-switch-list")).not.toContainText("撤销后关闭空窗口");
-  await expect(page.locator(".advanced-select-list .setting-select-row")).toHaveCount(9);
+  await expect(page.locator(".advanced-select-list .setting-select-row")).toHaveCount(8);
   await expect(page.locator("#urlPrivacyMode").locator("xpath=ancestor::*[contains(@class, 'advanced-select-list')]")).toHaveCount(1);
   await expect(page.locator("#dissolveExistingGroupsToggle")).toBeVisible();
   await expect(page.locator("#createReviewGroupToggle")).toBeVisible();
@@ -287,7 +287,7 @@ test("time recap mode renders a first-class recap surface", async ({ page }) => 
   await expect(page.locator(".launch-panel")).toBeVisible();
   await expect(page.locator("#ackSampling")).toBeVisible();
   await expect(page.locator("#continuousPageSummaries")).toBeHidden();
-  await expect(page.getByText("读取少量网页文字，让整理和回顾更准")).toBeVisible();
+  await expect(page.getByText("读取少量网页文字，并在本机保存短摘要")).toBeVisible();
   await expect(page.locator(".actions")).toBeVisible();
   await expect(page.locator(".advanced-settings")).toBeVisible();
   await expect(page.locator("#gatewayModel")).toHaveValue("gpt-5.4");
@@ -411,7 +411,12 @@ test("time recap exposes page summary permission controls and sends enabled summ
       permissions: {
         contains: async (request) => {
           if (request.permissions?.includes("scripting") && !window.__grantedPermissions.has("scripting")) return false;
-          return (request.origins || []).every((origin) => window.__grantedPermissions.has(origin));
+          return (request.origins || []).every(
+            (origin) =>
+              window.__grantedPermissions.has(origin) ||
+              (origin.startsWith("https://") && window.__grantedPermissions.has("https://*/*")) ||
+              (origin.startsWith("http://") && window.__grantedPermissions.has("http://*/*"))
+          );
         },
         request: async (request) => {
           window.__permissionRequests.push(request);
@@ -478,7 +483,7 @@ test("time recap exposes page summary permission controls and sends enabled summ
   await expect(page.locator("#ackSampling")).toBeChecked();
   await expect.poll(() => page.evaluate(() => window.__permissionRequests.at(-1))).toEqual({
     permissions: ["scripting"],
-    origins: ["https://example.com/*", "https://docs.example/*"]
+    origins: ["https://*/*", "http://*/*"]
   });
 
   await page.getByRole("button", { name: "生成回顾" }).click();
@@ -496,7 +501,7 @@ test("time recap exposes page summary permission controls and sends enabled summ
     )
     .toEqual({
       pageContextMode: "ambiguous_with_permission",
-      pageSamplingConsentMode: "acknowledged_for_session",
+      pageSamplingConsentMode: "acknowledged_persistently",
       hostPermissionRequestMode: "never"
     });
 });
@@ -2106,7 +2111,7 @@ test("apply confirms changed tabs before adding them to review", async ({ page }
   ]);
 });
 
-test("page summary main toggle requests scripting and page origins", async ({ page }) => {
+test("page summary main toggle requests persistent summary access", async ({ page }) => {
   await page.addInitScript(() => {
     let settings = {
       organizeMode: "current_window",
@@ -2161,7 +2166,12 @@ test("page summary main toggle requests scripting and page origins", async ({ pa
       permissions: {
         contains: async (request) =>
           (request.permissions || []).every((permission) => grantedPermissions.has(permission)) &&
-          (request.origins || []).every((origin) => grantedOrigins.has(origin)),
+          (request.origins || []).every(
+            (origin) =>
+              grantedOrigins.has(origin) ||
+              (origin.startsWith("https://") && grantedOrigins.has("https://*/*")) ||
+              (origin.startsWith("http://") && grantedOrigins.has("http://*/*"))
+          ),
         request: async (request) => {
           window.__permissionRequests.push(request);
           (request.permissions || []).forEach((permission) => grantedPermissions.add(permission));
@@ -2207,9 +2217,13 @@ test("page summary main toggle requests scripting and page origins", async ({ pa
   await expect.poll(() => page.evaluate(() => window.__savedSettings.at(-1)?.hostPermissionRequestMode)).toBe(
     "ask_for_all_visible_origins"
   );
+  await expect.poll(() => page.evaluate(() => window.__savedSettings.at(-1)?.continuousPageSummaries)).toBe(true);
+  await expect.poll(() => page.evaluate(() => window.__savedSettings.at(-1)?.pageSamplingConsentMode)).toBe(
+    "acknowledged_persistently"
+  );
   await expect.poll(() => page.evaluate(() => window.__permissionRequests)).toContainEqual({
     permissions: ["scripting"],
-    origins: ["https://example.com/*"]
+    origins: ["https://*/*", "http://*/*"]
   });
   const requestsAfterToggle = await page.evaluate(() => window.__permissionRequests.length);
 
@@ -2355,8 +2369,6 @@ test("continuous summaries request broad optional access once", async ({ page })
 
   await page.goto(`${baseUrl}/src/sidepanel/index.html`);
   await page.locator("#ackSampling").check();
-  await page.getByText("更多选项").click();
-  await page.locator("#pageSummaryMemoryMode").selectOption("continuous");
   await expect.poll(() => page.evaluate(() => window.__permissionRequests.at(-1))).toEqual({
     permissions: ["scripting"],
     origins: ["https://*/*", "http://*/*"]
@@ -2366,7 +2378,7 @@ test("continuous summaries request broad optional access once", async ({ page })
     "acknowledged_persistently"
   );
   await expect(page.locator("#continuousPageSummaries")).toBeChecked();
-  await expect(page.locator("#pageSummaryMemoryMode")).toHaveValue("continuous");
+  await expect(page.locator("#pageSummaryMemoryMode")).toHaveCount(0);
   await expect.poll(() => page.evaluate(() => window.__events.at(0))).toEqual({
     type: "permission_request",
     savedContinuous: undefined,
@@ -2419,7 +2431,7 @@ test("store manifest hides content-reading controls", async ({ page }) => {
   await expect(page.locator("#continuousPageSummaries")).toBeHidden();
   await page.getByText("更多选项").click();
   await expect(page.locator("#pageContextMode")).toBeHidden();
-  await expect(page.locator("#pageSummaryMemoryMode")).toBeHidden();
+  await expect(page.locator("#pageSummaryMemoryMode")).toHaveCount(0);
 });
 
 test("page summary permission denial rolls back the toggle before generation", async ({ page }) => {
@@ -2486,7 +2498,7 @@ test("page summary permission denial rolls back the toggle before generation", a
   await page.goto(`${baseUrl}/src/sidepanel/index.html?sourceWindowId=77`);
   await page.locator("#ackSampling").click();
   await expect(page.locator("#ackSampling")).not.toBeChecked();
-  await expect(page.locator("#statusText")).toHaveText("需要授权页面摘要权限，才能读取网页文字摘要。");
+  await expect(page.locator("#statusText")).toHaveText("需要授权网页读取权限后，才能保存页面摘要。");
   await expect.poll(() => page.evaluate(() => window.__permissionRequests.length)).toBeGreaterThan(0);
   await expect.poll(() => page.evaluate(() => window.__startAnalyzeCalled)).toBe(false);
 });
