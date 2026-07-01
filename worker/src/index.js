@@ -35,15 +35,70 @@ const DEFAULT_LIMITS = Object.freeze({
 });
 const DEFAULT_LLM_READY_MODEL = "gpt-5.4-mini";
 const DEFAULT_LLM_READY_REASONING_EFFORT = "low";
+const DEFAULT_MONITOR_REMINDER_HOURS = 6;
+const MONITOR_STATE_KEY = "monitor:ai-gateway:v1";
+const RESEND_EMAIL_API_URL = "https://api.resend.com/emails";
 
 export default {
   fetch(request, env, ctx) {
     return handleRequest(request, env, ctx);
+  },
+  scheduled(event, env, ctx) {
+    ctx.waitUntil(runScheduledMonitor(env, { scheduledTime: event.scheduledTime }));
   }
 };
 
 export function createWorkerHandler(options = {}) {
   return (request, env = {}, ctx = {}) => handleRequest(request, env, ctx, options);
+}
+
+export async function runScheduledMonitor(env = {}, options = {}) {
+  const now = new Date(options.scheduledTime || Date.now());
+  const requestId = `monitor_${now.getTime()}_${crypto.randomUUID().slice(0, 8)}`;
+  const emailConfig = monitorEmailConfig(env);
+  if (!emailConfig.ok) {
+    console.warn(JSON.stringify({ event: "tab_recap_monitor_not_configured", requestId, code: emailConfig.code }));
+    return {
+      ok: false,
+      event: "not_configured",
+      summary: { ok: false, status: "not_configured", failed: ["email"], requestId },
+      checks: {}
+    };
+  }
+  const checks = await runGatewayMonitorChecks(env, { ...options, requestId });
+  const summary = monitorSummary(checks);
+  const stateStore = monitorStateStore(env);
+  const previousState = await readMonitorState(stateStore);
+  const event = monitorNotificationEvent(previousState, summary, now, env);
+  const nextState = nextMonitorState(previousState, summary, event, now);
+
+  await writeMonitorState(stateStore, nextState);
+
+  if (event.type !== "none") {
+    const emailResult = await sendMonitorEmail(env, event, summary, checks, now, options.fetchImpl || fetch);
+    await writeMonitorState(stateStore, {
+      ...nextState,
+      lastAlertAt: emailResult.ok ? nextState.lastAlertAt : previousState?.lastAlertAt || "",
+      lastEmail: {
+        ok: emailResult.ok,
+        status: emailResult.status || 0,
+        code: emailResult.code || "",
+        at: now.toISOString()
+      }
+    });
+    if (!emailResult.ok) {
+      console.warn(
+        JSON.stringify({
+          event: "tab_recap_monitor_email_failed",
+          requestId,
+          code: emailResult.code,
+          status: emailResult.status || 0
+        })
+      );
+    }
+  }
+
+  return { ok: summary.ok, event: event.type, summary, checks };
 }
 
 export async function handleRequest(request, env = {}, ctx = {}, options = {}) {
@@ -502,19 +557,44 @@ function cloudflareErrorCode(text) {
 }
 
 async function upstreamReadiness(request, env, options = {}, requestId = "") {
+  const check = await checkUpstreamReadiness(env, options);
+  return jsonResponse(
+    {
+      ok: check.ok,
+      worker: true,
+      upstream: check
+    },
+    check.ok ? 200 : 503,
+    {},
+    request,
+    requestId
+  );
+}
+
+async function llmReadiness(request, env, options = {}, requestId = "") {
+  const auth = validateMonitorAuth(request, env);
+  if (!auth.ok) {
+    return jsonError(auth.message, auth.status, auth.code, {}, request, requestId);
+  }
+
+  const check = await checkLlmReadiness(env, { ...options, requestId, signal: request.signal });
+  return jsonResponse(
+    {
+      ok: check.ok,
+      worker: true,
+      llm: check
+    },
+    check.ok ? 200 : check.httpStatus || 503,
+    {},
+    request,
+    requestId
+  );
+}
+
+async function checkUpstreamReadiness(env, options = {}) {
   const upstream = upstreamConfig(env);
   if (!upstream.ok) {
-    return jsonResponse(
-      {
-        ok: false,
-        worker: true,
-        upstream: { ok: false, code: "upstream_not_configured", message: upstream.message }
-      },
-      503,
-      {},
-      request,
-      requestId
-    );
+    return { ok: false, code: "upstream_not_configured", message: upstream.message };
   }
 
   const limits = readLimits(env);
@@ -530,81 +610,40 @@ async function upstreamReadiness(request, env, options = {}, requestId = "") {
     );
     const body = await response.text().catch(() => "");
     const ok = response.ok;
-    return jsonResponse(
-      {
-        ok,
-        worker: true,
-        upstream: {
-          ok,
-          status: response.status,
-          code: ok ? "ready" : classifyUpstreamFailure({ status: response.status, body }).code,
-          latencyMs: Date.now() - startedAt
-        }
-      },
-      ok ? 200 : 503,
-      {},
-      request,
-      requestId
-    );
+    const failure = ok ? null : classifyUpstreamFailure({ status: response.status, body });
+    return {
+      ok,
+      status: response.status,
+      code: ok ? "ready" : failure.code,
+      message: ok ? "" : failure.message,
+      upstreamCode: failure?.upstreamCode || "",
+      latencyMs: Date.now() - startedAt
+    };
   } catch (error) {
-    return jsonResponse(
-      {
-        ok: false,
-        worker: true,
-        upstream: {
-          ok: false,
-          code: "origin_health_check_failed",
-          message: compactResponseText(error?.message || "Health check failed."),
-          latencyMs: Date.now() - startedAt
-        }
-      },
-      503,
-      {},
-      request,
-      requestId
-    );
+    return {
+      ok: false,
+      code: "origin_health_check_failed",
+      message: compactResponseText(error?.message || "Health check failed."),
+      latencyMs: Date.now() - startedAt
+    };
   }
 }
 
-async function llmReadiness(request, env, options = {}, requestId = "") {
-  const auth = validateMonitorAuth(request, env);
-  if (!auth.ok) {
-    return jsonError(auth.message, auth.status, auth.code, {}, request, requestId);
-  }
-
+async function checkLlmReadiness(env, options = {}) {
   const upstream = upstreamConfig(env);
   if (!upstream.ok) {
-    return jsonResponse(
-      {
-        ok: false,
-        worker: true,
-        llm: { ok: false, code: "upstream_not_configured", message: upstream.message }
-      },
-      503,
-      {},
-      request,
-      requestId
-    );
+    return { ok: false, code: "upstream_not_configured", message: upstream.message, httpStatus: 503 };
   }
 
   const model = String(env.LLM_READY_MODEL || DEFAULT_LLM_READY_MODEL).trim();
   if (!allowedModels(env).includes(model)) {
-    return jsonResponse(
-      {
-        ok: false,
-        worker: true,
-        llm: {
-          ok: false,
-          code: "llm_ready_model_not_allowed",
-          message: "The configured LLM health model is not in the Worker allowlist.",
-          model
-        }
-      },
-      503,
-      {},
-      request,
-      requestId
-    );
+    return {
+      ok: false,
+      code: "llm_ready_model_not_allowed",
+      message: "The configured LLM health model is not in the Worker allowlist.",
+      model,
+      httpStatus: 503
+    };
   }
 
   const limits = readLimits(env);
@@ -624,7 +663,7 @@ async function llmReadiness(request, env, options = {}, requestId = "") {
     const response = await fetchWithTimeout(
       fetchImpl,
       upstream.url,
-      upstreamRequest(bodyText, upstream, request.signal, requestId),
+      upstreamRequest(bodyText, upstream, options.signal, options.requestId || ""),
       limits.llmReadyTimeoutMs
     );
     const text = await response.text().catch(() => "");
@@ -632,84 +671,48 @@ async function llmReadiness(request, env, options = {}, requestId = "") {
 
     if (!response.ok) {
       const failure = classifyUpstreamFailure({ status: response.status, body: text });
-      return jsonResponse(
-        {
-          ok: false,
-          worker: true,
-          llm: {
-            ok: false,
-            status: response.status,
-            code: failure.code,
-            message: failure.message,
-            upstreamCode: failure.upstreamCode || "",
-            latencyMs,
-            model
-          }
-        },
-        503,
-        {},
-        request,
-        requestId
-      );
+      return {
+        ok: false,
+        status: response.status,
+        code: failure.code,
+        message: failure.message,
+        upstreamCode: failure.upstreamCode || "",
+        latencyMs,
+        model,
+        httpStatus: 503
+      };
     }
 
     const validation = validateLlmReadyResponse(text);
     if (!validation.ok) {
-      return jsonResponse(
-        {
-          ok: false,
-          worker: true,
-          llm: {
-            ok: false,
-            status: response.status,
-            code: validation.code,
-            message: validation.message,
-            latencyMs,
-            model
-          }
-        },
-        502,
-        {},
-        request,
-        requestId
-      );
+      return {
+        ok: false,
+        status: response.status,
+        code: validation.code,
+        message: validation.message,
+        latencyMs,
+        model,
+        httpStatus: 502
+      };
     }
 
-    return jsonResponse(
-      {
-        ok: true,
-        worker: true,
-        llm: {
-          ok: true,
-          status: response.status,
-          code: "llm_ready",
-          latencyMs,
-          model
-        }
-      },
-      200,
-      {},
-      request,
-      requestId
-    );
+    return {
+      ok: true,
+      status: response.status,
+      code: "llm_ready",
+      latencyMs,
+      model,
+      httpStatus: 200
+    };
   } catch (error) {
-    return jsonResponse(
-      {
-        ok: false,
-        worker: true,
-        llm: {
-          ok: false,
-          code: error?.name === "AbortError" ? "llm_ready_timeout" : "llm_ready_failed",
-          message: compactResponseText(error?.message || "LLM readiness check failed."),
-          latencyMs: Date.now() - startedAt,
-          model
-        }
-      },
-      503,
-      {},
-      request,
-      requestId
-    );
+    return {
+      ok: false,
+      code: error?.name === "AbortError" ? "llm_ready_timeout" : "llm_ready_failed",
+      message: compactResponseText(error?.message || "LLM readiness check failed."),
+      latencyMs: Date.now() - startedAt,
+      model,
+      httpStatus: 503
+    };
   }
 }
 
@@ -752,6 +755,177 @@ function constantTimeStringEqual(a, b) {
     diff |= (left.charCodeAt(index) || 0) ^ (right.charCodeAt(index) || 0);
   }
   return diff === 0;
+}
+
+async function runGatewayMonitorChecks(env, options = {}) {
+  const [readyz, llm] = await Promise.all([
+    checkUpstreamReadiness(env, options),
+    checkLlmReadiness(env, options)
+  ]);
+  return { readyz, llm, requestId: options.requestId || "" };
+}
+
+function monitorSummary(checks) {
+  const ok = Boolean(checks.readyz?.ok && checks.llm?.ok);
+  const failed = [];
+  if (!checks.readyz?.ok) failed.push("readyz");
+  if (!checks.llm?.ok) failed.push("llm-readyz");
+  return {
+    ok,
+    status: ok ? "ok" : "down",
+    failed,
+    requestId: checks.requestId || "",
+    readyzCode: checks.readyz?.code || "unknown",
+    llmCode: checks.llm?.code || "unknown",
+    llmModel: checks.llm?.model || DEFAULT_LLM_READY_MODEL
+  };
+}
+
+function monitorStateStore(env) {
+  return env.MONITOR_STATE_KV || env.RATE_LIMIT_KV || null;
+}
+
+async function readMonitorState(store) {
+  if (!store) return null;
+  try {
+    const raw = await store.get(MONITOR_STATE_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+}
+
+async function writeMonitorState(store, state) {
+  if (!store) return;
+  await store.put(MONITOR_STATE_KEY, JSON.stringify(state));
+}
+
+function monitorNotificationEvent(previousState, summary, now, env) {
+  if (summary.ok) {
+    if (previousState?.status === "down") {
+      return { type: "recovered", previousStatus: previousState.status };
+    }
+    return { type: "none" };
+  }
+
+  if (!previousState || previousState.status !== "down") {
+    return { type: "down", previousStatus: previousState?.status || "unknown" };
+  }
+
+  const reminderMs = positiveInteger(env.MONITOR_REMINDER_HOURS, DEFAULT_MONITOR_REMINDER_HOURS) * 60 * 60 * 1000;
+  const lastAlertAt = Date.parse(previousState.lastAlertAt || 0);
+  if (!Number.isFinite(lastAlertAt) || now.getTime() - lastAlertAt >= reminderMs) {
+    return { type: "still_down", previousStatus: previousState.status };
+  }
+
+  return { type: "none" };
+}
+
+function nextMonitorState(previousState, summary, event, now) {
+  const nowIso = now.toISOString();
+  return {
+    status: summary.status,
+    lastStatusAt: nowIso,
+    lastOkAt: summary.ok ? nowIso : previousState?.lastOkAt || "",
+    lastFailureAt: summary.ok ? previousState?.lastFailureAt || "" : previousState?.lastFailureAt || nowIso,
+    lastAlertAt: event.type === "none" ? previousState?.lastAlertAt || "" : nowIso,
+    lastEvent: event.type,
+    lastSummary: summary
+  };
+}
+
+async function sendMonitorEmail(env, event, summary, checks, now, fetchImpl) {
+  const config = monitorEmailConfig(env);
+  if (!config.ok) return config;
+
+  try {
+    const response = await fetchImpl(RESEND_EMAIL_API_URL, {
+      method: "POST",
+      headers: {
+        authorization: `Bearer ${config.apiKey}`,
+        "content-type": "application/json"
+      },
+      body: JSON.stringify({
+        from: config.from,
+        to: [config.to],
+        subject: monitorEmailSubject(event, summary),
+        text: monitorEmailText(event, summary, checks, now)
+      })
+    });
+    if (response.ok) return { ok: true, status: response.status };
+    const body = await response.text().catch(() => "");
+    return {
+      ok: false,
+      status: response.status,
+      code: "resend_failed",
+      message: compactResponseText(body)
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      code: "resend_fetch_failed",
+      message: compactResponseText(error?.message || "Failed to send monitor email.")
+    };
+  }
+}
+
+function monitorEmailConfig(env) {
+  const apiKey = String(env.RESEND_API_KEY || "").trim();
+  const to = String(env.ALERT_TO || "").trim();
+  const from = String(env.ALERT_FROM || "").trim();
+  if (!apiKey) return { ok: false, code: "resend_api_key_missing" };
+  if (!to) return { ok: false, code: "alert_to_missing" };
+  if (!from) return { ok: false, code: "alert_from_missing" };
+  return { ok: true, apiKey, to, from };
+}
+
+function monitorEmailSubject(event, summary) {
+  if (event.type === "recovered") return "[TabRecap] AI gateway recovered";
+  if (event.type === "still_down") return "[TabRecap] AI gateway is still down";
+  return `[TabRecap] AI gateway is down: ${summary.failed.join(", ") || "unknown"}`;
+}
+
+function monitorEmailText(event, summary, checks, now) {
+  const statusLine =
+    event.type === "recovered"
+      ? "The TabRecap AI gateway recovered."
+      : event.type === "still_down"
+        ? "The TabRecap AI gateway is still failing."
+        : "The TabRecap AI gateway started failing.";
+  return [
+    statusLine,
+    "",
+    `Time: ${now.toISOString()}`,
+    `Overall: ${summary.status}`,
+    `Request ID: ${summary.requestId || "-"}`,
+    "",
+    "Checks:",
+    `- readyz: ${formatMonitorCheck(checks.readyz)}`,
+    `- llm-readyz: ${formatMonitorCheck(checks.llm)}`,
+    "",
+    "Interpretation:",
+    "- readyz checks Worker -> Cloudflare Tunnel -> local API-only proxy health.",
+    "- llm-readyz sends a tiny real gpt-5.4-mini / low / max_tokens=2 request.",
+    "",
+    "Runbook:",
+    "1. Check https://cliproxy.sylvanyu.io/readyz",
+    "2. If readyz fails, restart the local CLIProxyAPI stack and Cloudflare Tunnel.",
+    "3. If readyz passes but llm-readyz fails, inspect model availability and CLIProxyAPI logs."
+  ].join("\n");
+}
+
+function formatMonitorCheck(check) {
+  if (!check) return "missing";
+  return [
+    check.ok ? "ok" : "failed",
+    `code=${check.code || "unknown"}`,
+    check.status ? `status=${check.status}` : "",
+    Number.isFinite(check.latencyMs) ? `latency=${check.latencyMs}ms` : "",
+    check.model ? `model=${check.model}` : "",
+    check.message ? `message=${check.message}` : ""
+  ]
+    .filter(Boolean)
+    .join(" ");
 }
 
 function validateLlmReadyResponse(text) {

@@ -62,6 +62,9 @@ LLM_READY_MODEL = "gpt-5.4-mini"
 LLM_READY_REASONING_EFFORT = "low"
 LLM_READY_MAX_TOKENS = "2"
 LLM_READY_TIMEOUT_MS = "45000"
+ALERT_TO = "me@sylvanyu.io"
+ALERT_FROM = "TabRecap Monitor <alerts@sylvanyu.io>"
+MONITOR_REMINDER_HOURS = "6"
 ```
 
 The Worker retries only Cloudflare/Tunnel infrastructure failures such as
@@ -123,6 +126,32 @@ curl -H "x-monitor-token: $MONITOR_TOKEN" https://cliproxy.sylvanyu.io/llm-ready
 Use `/llm-readyz` as a low-frequency external monitor. The current production
 policy is every 30 minutes with email alerts, while `/readyz` can run every
 1-3 minutes.
+
+Scheduled email monitoring:
+
+```bash
+npx wrangler secret put RESEND_API_KEY --config worker/wrangler.toml
+npx wrangler deploy --config worker/wrangler.toml
+```
+
+The Worker has a Cron Trigger:
+
+```toml
+[triggers]
+crons = ["*/30 * * * *"]
+```
+
+Every 30 minutes it checks both the local-origin readiness path and the tiny
+real LLM probe. It sends email through the Resend HTTP API only when state
+changes:
+
+- first detected outage;
+- recovery after an outage;
+- reminder after `MONITOR_REMINDER_HOURS` while still down.
+
+If `RESEND_API_KEY`, `ALERT_TO`, or `ALERT_FROM` is missing, the scheduled job
+returns early and does not run the real LLM probe, so it will not spend model
+usage before email delivery is configured.
 
 Each chat request now carries an `x-tab-recap-request-id` response header. The
 extension sends the side-panel operation id as this header for default gateway

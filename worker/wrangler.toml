@@ -26,3 +26,9 @@ LLM_READY_MODEL = "gpt-5.4-mini"
 LLM_READY_REASONING_EFFORT = "low"
 LLM_READY_MAX_TOKENS = "2"
 LLM_READY_TIMEOUT_MS = "45000"
+ALERT_TO = "me@sylvanyu.io"
+ALERT_FROM = "TabRecap Monitor <alerts@sylvanyu.io>"
+MONITOR_REMINDER_HOURS = "6"
+
+[triggers]
+crons = ["*/30 * * * *"]

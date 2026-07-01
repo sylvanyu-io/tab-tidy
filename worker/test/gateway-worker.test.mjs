@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { createWorkerHandler } from "../src/index.js";
+import { createWorkerHandler, runScheduledMonitor } from "../src/index.js";
 
 const handle = createWorkerHandler({
   fetchImpl: async () =>
@@ -79,6 +79,99 @@ test("worker LLM readiness check uses the tiny mini-model probe", async () => {
   assert.equal(upstreamBody.model, "gpt-5.4-mini");
   assert.equal(upstreamBody.reasoning_effort, "low");
   assert.equal(upstreamBody.max_tokens, 2);
+});
+
+test("scheduled monitor keeps quiet on healthy checks", async () => {
+  const calls = monitorFetch();
+  const result = await runScheduledMonitor(monitorEnv(), {
+    scheduledTime: Date.parse("2026-07-02T00:00:00.000Z"),
+    fetchImpl: calls.fetch
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(result.event, "none");
+  assert.equal(calls.emails.length, 0);
+});
+
+test("scheduled monitor does not spend LLM tokens before email is configured", async () => {
+  const calls = monitorFetch();
+  const result = await runScheduledMonitor(envWithKv(), {
+    scheduledTime: Date.parse("2026-07-02T00:00:00.000Z"),
+    fetchImpl: calls.fetch
+  });
+
+  assert.equal(result.event, "not_configured");
+  assert.equal(calls.calls.length, 0);
+  assert.equal(calls.emails.length, 0);
+});
+
+test("scheduled monitor alerts on outage, suppresses duplicate mail, and reminds later", async () => {
+  const env = monitorEnv({ MONITOR_REMINDER_HOURS: "6" });
+  const calls = monitorFetch({ llmStatus: 503, llmBody: "upstream temporarily unavailable" });
+
+  const first = await runScheduledMonitor(env, {
+    scheduledTime: Date.parse("2026-07-02T00:00:00.000Z"),
+    fetchImpl: calls.fetch
+  });
+  const duplicate = await runScheduledMonitor(env, {
+    scheduledTime: Date.parse("2026-07-02T00:30:00.000Z"),
+    fetchImpl: calls.fetch
+  });
+  const reminder = await runScheduledMonitor(env, {
+    scheduledTime: Date.parse("2026-07-02T06:30:00.000Z"),
+    fetchImpl: calls.fetch
+  });
+
+  assert.equal(first.ok, false);
+  assert.equal(first.event, "down");
+  assert.equal(duplicate.event, "none");
+  assert.equal(reminder.event, "still_down");
+  assert.equal(calls.emails.length, 2);
+  assert.match(calls.emails[0].subject, /down: llm-readyz/);
+  assert.match(calls.emails[1].subject, /still down/);
+});
+
+test("scheduled monitor retries alert mail when the email API fails", async () => {
+  const env = monitorEnv({ MONITOR_REMINDER_HOURS: "6" });
+  const firstMailFails = monitorFetch({
+    llmStatus: 503,
+    llmBody: "upstream temporarily unavailable",
+    emailStatuses: [500, 200]
+  });
+
+  const first = await runScheduledMonitor(env, {
+    scheduledTime: Date.parse("2026-07-02T00:00:00.000Z"),
+    fetchImpl: firstMailFails.fetch
+  });
+  const retry = await runScheduledMonitor(env, {
+    scheduledTime: Date.parse("2026-07-02T00:30:00.000Z"),
+    fetchImpl: firstMailFails.fetch
+  });
+
+  assert.equal(first.event, "down");
+  assert.equal(retry.event, "still_down");
+  assert.equal(firstMailFails.emails.length, 2);
+});
+
+test("scheduled monitor sends recovery mail after a failed state", async () => {
+  const env = monitorEnv();
+  const failing = monitorFetch({ readyzStatus: 530, readyzBody: "error code: 1033" });
+  const healthy = monitorFetch();
+
+  await runScheduledMonitor(env, {
+    scheduledTime: Date.parse("2026-07-02T00:00:00.000Z"),
+    fetchImpl: failing.fetch
+  });
+  const result = await runScheduledMonitor(env, {
+    scheduledTime: Date.parse("2026-07-02T00:30:00.000Z"),
+    fetchImpl: healthy.fetch
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(result.event, "recovered");
+  assert.equal(failing.emails.length, 1);
+  assert.equal(healthy.emails.length, 1);
+  assert.match(healthy.emails[0].subject, /recovered/);
 });
 
 test("worker rejects chat requests without a rate limit store", async () => {
@@ -455,6 +548,42 @@ function envWithKv(overrides = {}) {
     UPSTREAM_API_KEY: "upstream-secret",
     ...overrides
   };
+}
+
+function monitorEnv(overrides = {}) {
+  return envWithKv({
+    RESEND_API_KEY: "resend-secret",
+    ALERT_TO: "me@sylvanyu.io",
+    ALERT_FROM: "TabRecap Monitor <alerts@sylvanyu.io>",
+    ...overrides
+  });
+}
+
+function monitorFetch(options = {}) {
+  const emails = [];
+  const calls = [];
+  const fetch = async (url, requestOptions = {}) => {
+    calls.push({ url: String(url), options: requestOptions });
+    if (String(url).includes("api.resend.com")) {
+      emails.push(JSON.parse(requestOptions.body));
+      const status = Array.isArray(options.emailStatuses) ? options.emailStatuses.shift() || 200 : options.emailStatus || 200;
+      return new Response(options.emailBody || JSON.stringify({ id: "email_123" }), {
+        status,
+        headers: { "content-type": "application/json" }
+      });
+    }
+    if (String(url).endsWith("/healthz")) {
+      return new Response(options.readyzBody || "ok", { status: options.readyzStatus || 200 });
+    }
+    if (String(url).endsWith("/chat/completions")) {
+      return new Response(options.llmBody || JSON.stringify({ choices: [{ message: { content: "OK" } }] }), {
+        status: options.llmStatus || 200,
+        headers: { "content-type": "application/json" }
+      });
+    }
+    return new Response("not found", { status: 404 });
+  };
+  return { fetch, calls, emails };
 }
 
 class MemoryKv {

@@ -104,6 +104,29 @@ This avoids the observed QUIC failure mode where `cloudflared` stays alive but r
    `Authorization: Bearer ...`. It is meant for low-frequency external uptime
    checks, not browser clients.
 
+6. Worker Cron email alerts
+
+   The Worker also has a scheduled monitor:
+
+   ```toml
+   [triggers]
+   crons = ["*/30 * * * *"]
+   ```
+
+   It runs the same origin and real LLM checks every 30 minutes and sends email
+   through the Resend API to `me@sylvanyu.io`.
+
+   Email rules:
+
+   - first outage sends an email;
+   - repeated failures stay quiet to avoid inbox noise;
+   - persistent failure sends a reminder after 6 hours;
+   - recovery sends an email.
+
+   Until `RESEND_API_KEY` is configured, the scheduled job exits before running
+   the real LLM probe, so it does not spend model usage without a working alert
+   channel.
+
 ## Worker Vars
 
 ```toml
@@ -114,6 +137,9 @@ LLM_READY_MODEL = "gpt-5.4-mini"
 LLM_READY_REASONING_EFFORT = "low"
 LLM_READY_MAX_TOKENS = "2"
 LLM_READY_TIMEOUT_MS = "45000"
+ALERT_TO = "me@sylvanyu.io"
+ALERT_FROM = "TabRecap Monitor <alerts@sylvanyu.io>"
+MONITOR_REMINDER_HOURS = "6"
 ```
 
 The retry budget is intentionally small. If the local Mac is asleep or the tunnel is gone, more retries mostly waste time. If it is a short tunnel reconnect, one retry is enough to avoid a visible failure.
