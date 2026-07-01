@@ -7,6 +7,10 @@ The Worker validates the request, applies coarse anti-abuse limits, injects the
 real upstream API key on the server side, and forwards only to the configured
 upstream base URL.
 
+For the current production hostnames, local Mac origin, Cloudflare Tunnel,
+monitoring email, logs, and migration checklist, see
+[`docs/12-default-ai-gateway-runbook.md`](../docs/12-default-ai-gateway-runbook.md).
+
 ## What It Protects
 
 - No upstream API key is shipped in the extension.

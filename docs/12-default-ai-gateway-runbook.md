@@ -1,0 +1,468 @@
+# Default AI Gateway Runbook
+
+Status: current production path as of 2026-07-02 01:44 CST.
+
+This document records the public TabRecap AI gateway setup so it can be
+debugged, migrated, or rebuilt later without relying on memory. It intentionally
+records names, hostnames, file paths, commands, and expected health signals. It
+does not record API keys, tokens, or passwords.
+
+## What This Gateway Is
+
+TabRecap ships without a user-visible API key. The default free AI service is a
+Cloudflare Worker in front of a local Mac-hosted OpenAI-compatible gateway.
+
+The current request chain is:
+
+```text
+TabRecap extension
+  -> https://cliproxy.sylvanyu.io/v1/chat/completions
+  -> Cloudflare Worker: tab-tidy-gateway
+  -> https://cliproxy-origin.sylvanyu.io/v1
+  -> Cloudflare Tunnel: cliroxyapi
+  -> 127.0.0.1:18317 API-only proxy on the Mac
+  -> 127.0.0.1:8317 CLIProxyAPI on the Mac
+  -> upstream model account
+```
+
+Important distinction:
+
+- `cliproxy.sylvanyu.io` is the product-facing hostname used by the extension.
+  HTTP requests are handled by the Worker route.
+- `cliproxy-origin.sylvanyu.io` is the raw origin Tunnel hostname used by the
+  Worker.
+- `UPSTREAM_BASE_URL` must point to `https://cliproxy-origin.sylvanyu.io/v1`,
+  not `https://cliproxy.sylvanyu.io/v1`, otherwise the Worker can call itself
+  recursively.
+
+## Public Hostnames
+
+| Hostname | Role | Owner |
+| --- | --- | --- |
+| `cliproxy.sylvanyu.io` | Product-facing AI gateway | Cloudflare Worker route |
+| `cliproxy-origin.sylvanyu.io` | Raw local origin tunnel | Cloudflare Tunnel `cliroxyapi` |
+| `sylvanyu.io` | Website and email domain | separate from AI gateway |
+| `hermes.sylvanyu.io` | Separate tunnel/service | not part of TabRecap AI gateway |
+
+The DNS page can show `cliproxy.sylvanyu.io` as a Tunnel record. That is not
+the whole story: the Worker route for `cliproxy.sylvanyu.io/*` is what makes the
+extension traffic go through validation, quotas, secret injection, retries, and
+monitoring.
+
+## Local Machine
+
+Local project:
+
+```text
+/Users/yuyufeng/Projects/CLIProxyAPI
+```
+
+Main local service:
+
+```text
+127.0.0.1:8317
+```
+
+API-only local proxy:
+
+```text
+127.0.0.1:18317
+```
+
+The API-only proxy forwards only:
+
+```text
+/healthz
+/v1
+/v1/*
+```
+
+It should return `404` for management pages such as `/management.html`. Do not
+expose `127.0.0.1:8317` directly to the public internet.
+
+Important files:
+
+```text
+/Users/yuyufeng/Projects/CLIProxyAPI/config.yaml
+/Users/yuyufeng/Projects/CLIProxyAPI/.codex/v1-only-proxy.mjs
+/Users/yuyufeng/Projects/CLIProxyAPI/.codex/cliproxyapi-watchdog.sh
+/Users/yuyufeng/.cloudflared/config.yml
+/Users/yuyufeng/Library/LaunchAgents/com.router-for-me.cliproxyapi.plist
+/Users/yuyufeng/Library/LaunchAgents/com.router-for-me.cliproxyapi-v1-proxy.plist
+/Users/yuyufeng/Library/LaunchAgents/com.cloudflare.cloudflared.cliproxyapi.plist
+/Users/yuyufeng/Library/LaunchAgents/com.router-for-me.cliproxyapi-watchdog.plist
+```
+
+Current Cloudflare Tunnel config:
+
+```yaml
+tunnel: 35aaf3af-06b2-4d7e-b391-b607fc9bf2fd
+credentials-file: /Users/yuyufeng/.cloudflared/35aaf3af-06b2-4d7e-b391-b607fc9bf2fd.json
+protocol: http2
+
+ingress:
+  - hostname: cliproxy-origin.sylvanyu.io
+    service: http://127.0.0.1:18317
+  - hostname: cliproxy.sylvanyu.io
+    service: http://127.0.0.1:18317
+  - service: http_status:404
+```
+
+`protocol: http2` is intentional. It was added after QUIC tunnel failures caused
+Cloudflare `530 / 1033` responses while `cloudflared` was still running.
+
+## Local Service Commands
+
+Use the helper script instead of ad hoc commands:
+
+```bash
+/Users/yuyufeng/.codex/skills/cliroxyapi-service/scripts/manage-cliroxyapi-service.sh status
+/Users/yuyufeng/.codex/skills/cliroxyapi-service/scripts/manage-cliroxyapi-service.sh smoke
+/Users/yuyufeng/.codex/skills/cliroxyapi-service/scripts/manage-cliroxyapi-service.sh restart
+/Users/yuyufeng/.codex/skills/cliroxyapi-service/scripts/manage-cliroxyapi-service.sh stop
+/Users/yuyufeng/.codex/skills/cliroxyapi-service/scripts/manage-cliroxyapi-service.sh start
+```
+
+`status` checks processes, local health, public origin health, public Worker
+health, and launchd state. `smoke` sends one real public chat request through
+the Worker and local origin.
+
+Current healthy status snapshot, 2026-07-02 01:44 CST:
+
+```text
+main local 8317: 200
+proxy local 18317: 200
+public origin health: 200
+public origin models: 200
+public main health: 200
+public main ready: 200
+
+launchd:
+com.router-for-me.cliproxyapi: loaded
+com.router-for-me.cliproxyapi-v1-proxy: loaded
+com.cloudflare.cloudflared.cliproxyapi: loaded
+```
+
+Current public smoke snapshot, 2026-07-02 01:44 CST:
+
+```text
+HTTP_STATUS: 200
+TOTAL_TIME: 21.37s
+model: gpt-5.5
+```
+
+The service is usable, but it is still a Mac-hosted free service, not a managed
+cloud SLA.
+
+## Worker
+
+Worker config lives in the TabRecap repo:
+
+```text
+/Users/yuyufeng/Projects/tab-recap/worker/wrangler.toml
+```
+
+Worker name:
+
+```text
+tab-tidy-gateway
+```
+
+Public route:
+
+```toml
+routes = [
+  { pattern = "cliproxy.sylvanyu.io/*", zone_name = "sylvanyu.io" }
+]
+```
+
+Cron trigger:
+
+```toml
+[triggers]
+crons = ["*/30 * * * *"]
+```
+
+Current deployed Worker code version:
+
+```text
+a87a141e-6018-481c-a412-2233a4bd3f0c
+```
+
+Current effective Worker version after the Resend secret change:
+
+```text
+989a82f5-31e2-4581-b88b-9f2f9d48512f
+```
+
+Worker secrets currently configured:
+
+```text
+UPSTREAM_BASE_URL
+UPSTREAM_API_KEY
+MONITOR_TOKEN
+RESEND_API_KEY
+```
+
+Worker vars currently configured:
+
+```toml
+ALERT_TO = "me@sylvanyu.io"
+ALERT_FROM = "TabRecap Monitor <alerts@sylvanyu.io>"
+MONITOR_REMINDER_HOURS = "6"
+LLM_READY_MODEL = "gpt-5.4-mini"
+LLM_READY_REASONING_EFFORT = "low"
+LLM_READY_MAX_TOKENS = "2"
+LLM_READY_TIMEOUT_MS = "45000"
+UPSTREAM_RETRY_ATTEMPTS = "2"
+UPSTREAM_RETRY_DELAY_MS = "1200"
+UPSTREAM_READY_TIMEOUT_MS = "8000"
+```
+
+Useful Worker commands:
+
+```bash
+cd /Users/yuyufeng/Projects/tab-recap
+npx wrangler deploy --config worker/wrangler.toml
+npx wrangler secret list --config worker/wrangler.toml
+npx wrangler secret put RESEND_API_KEY --config worker/wrangler.toml
+npx wrangler secret put UPSTREAM_BASE_URL --config worker/wrangler.toml
+npx wrangler secret put UPSTREAM_API_KEY --config worker/wrangler.toml
+npx wrangler secret put MONITOR_TOKEN --config worker/wrangler.toml
+npx wrangler tail --config worker/wrangler.toml
+```
+
+Do not put secret values in shell history or source files.
+
+## Health Checks
+
+Fast checks:
+
+```bash
+curl -sS http://127.0.0.1:8317/healthz
+curl -sS http://127.0.0.1:18317/healthz
+curl -sS https://cliproxy-origin.sylvanyu.io/healthz
+curl -sS https://cliproxy.sylvanyu.io/healthz
+curl -sS https://cliproxy.sylvanyu.io/readyz
+```
+
+Expected meanings:
+
+| Check | Healthy result | Meaning |
+| --- | --- | --- |
+| `127.0.0.1:8317/healthz` | 200 | CLIProxyAPI main service is up |
+| `127.0.0.1:18317/healthz` | 200 | API-only proxy is up |
+| `cliproxy-origin.sylvanyu.io/healthz` | 200 | Tunnel reaches the Mac proxy |
+| `cliproxy.sylvanyu.io/healthz` | 200 | Worker route is alive |
+| `cliproxy.sylvanyu.io/readyz` | 200 | Worker reaches origin health |
+
+Real model-path check:
+
+```bash
+TOKEN="$(cat /Users/yuyufeng/Projects/CLIProxyAPI/.runtime-secrets/cliproxy-monitor-token)"
+curl -sS -H "x-monitor-token: $TOKEN" https://cliproxy.sylvanyu.io/llm-readyz
+```
+
+`/llm-readyz` spends a tiny model request. It should not be polled frequently.
+The Worker Cron already runs it every 30 minutes after email alerts are
+configured.
+
+## Monitoring And Email
+
+The Worker runs a Cron monitor every 30 minutes.
+
+Checks:
+
+1. Worker to origin readiness via `/readyz`.
+2. Real LLM path via `/llm-readyz`, using:
+
+   ```text
+   model: gpt-5.4-mini
+   reasoning_effort: low
+   max_tokens: 2
+   ```
+
+Email delivery:
+
+```text
+Provider: Resend
+From: TabRecap Monitor <alerts@sylvanyu.io>
+To: me@sylvanyu.io
+```
+
+Alert rules:
+
+- first outage sends an email;
+- repeated failures are quiet;
+- persistent failure sends another email after 6 hours;
+- recovery sends a recovery email.
+
+If `RESEND_API_KEY`, `ALERT_TO`, or `ALERT_FROM` is missing, the scheduled job
+returns before running the real LLM probe, so it does not spend model usage
+without a working alert channel.
+
+Resend test email was sent and received on 2026-07-02. Resend returned:
+
+```text
+7c5180ba-4542-43e5-8d73-3333ee5bd1cd
+```
+
+DNS/email coexistence notes:
+
+- Migadu receiving mail remains on `sylvanyu.io` MX records:
+  `aspmx1.migadu.com` and `aspmx2.migadu.com`.
+- Migadu DKIM remains on `key1._domainkey`, `key2._domainkey`, and
+  `key3._domainkey`.
+- Resend uses `resend._domainkey.sylvanyu.io`, so it does not overwrite Migadu
+  selectors.
+- `send.sylvanyu.io` has separate Amazon SES records and does not affect
+  `me@sylvanyu.io`.
+
+## Logs
+
+Local fallback/direct logs:
+
+```text
+/Users/yuyufeng/Projects/CLIProxyAPI/.runtime-logs/cli-proxy-api.out.log
+/Users/yuyufeng/Projects/CLIProxyAPI/.runtime-logs/v1-proxy.out.log
+/Users/yuyufeng/Projects/CLIProxyAPI/.runtime-logs/cloudflared.out.log
+```
+
+Screen fallback logs:
+
+```text
+/Users/yuyufeng/Projects/CLIProxyAPI/.runtime-logs/cli-proxy-api.screen.log
+/Users/yuyufeng/Projects/CLIProxyAPI/.runtime-logs/v1-proxy.screen.log
+/Users/yuyufeng/Projects/CLIProxyAPI/.runtime-logs/cloudflared.screen.log
+```
+
+Watchdog logs:
+
+```text
+/Users/yuyufeng/Projects/CLIProxyAPI/.runtime-logs/watchdog.out.log
+/Users/yuyufeng/Projects/CLIProxyAPI/.runtime-logs/watchdog.err.log
+/Users/yuyufeng/Projects/CLIProxyAPI/.runtime-logs/watchdog-restart.log
+```
+
+Worker logs:
+
+```bash
+cd /Users/yuyufeng/Projects/tab-recap
+npx wrangler tail --config worker/wrangler.toml
+```
+
+Useful local log commands:
+
+```bash
+tail -n 80 /Users/yuyufeng/Projects/CLIProxyAPI/.runtime-logs/cloudflared.screen.log
+tail -n 80 /Users/yuyufeng/Projects/CLIProxyAPI/.runtime-logs/watchdog.out.log
+launchctl print gui/$(id -u)/com.router-for-me.cliproxyapi-watchdog
+```
+
+## When The Service Is Down
+
+Start with:
+
+```bash
+/Users/yuyufeng/.codex/skills/cliroxyapi-service/scripts/manage-cliroxyapi-service.sh status
+```
+
+Then:
+
+```bash
+/Users/yuyufeng/.codex/skills/cliroxyapi-service/scripts/manage-cliroxyapi-service.sh smoke
+```
+
+Interpretation:
+
+| Symptom | Likely cause | Action |
+| --- | --- | --- |
+| local `8317` fails | CLIProxyAPI main service down | run helper `restart` |
+| local `18317` fails | API-only proxy down | run helper `restart` |
+| local healthy, origin public 530 | Cloudflare Tunnel unhealthy | restart tunnel/full stack |
+| Worker `/healthz` 200, `/readyz` fails | Worker up, origin path down | inspect tunnel/local services |
+| `/readyz` 200, chat fails | model route/upstream issue | inspect Worker tail and CLIProxyAPI logs |
+| `401` from origin direct `/v1` | normal for raw origin without key | test via Worker instead |
+| `530` / `error code: 1033` | Cloudflare has no healthy origin connection | restart tunnel; verify `protocol: http2` |
+
+Default recovery:
+
+```bash
+/Users/yuyufeng/.codex/skills/cliroxyapi-service/scripts/manage-cliroxyapi-service.sh restart
+/Users/yuyufeng/.codex/skills/cliroxyapi-service/scripts/manage-cliroxyapi-service.sh status
+/Users/yuyufeng/.codex/skills/cliroxyapi-service/scripts/manage-cliroxyapi-service.sh smoke
+```
+
+If `cloudflared` is running but public checks still return 530, inspect
+Cloudflare tunnel logs. If logs show QUIC timeouts or no free edge addresses,
+keep `protocol: http2` and restart the tunnel.
+
+## Migration Checklist
+
+Use this when moving the origin from this Mac to another machine or a server.
+
+1. Provision the new origin.
+
+   - Install CLIProxyAPI.
+   - Install Node for `.codex/v1-only-proxy.mjs`.
+   - Install `cloudflared`.
+   - Copy or recreate `config.yaml` with model-provider credentials.
+   - Do not expose `8317` publicly.
+
+2. Recreate the API-only proxy.
+
+   - Listen on `127.0.0.1:18317`.
+   - Forward only `/healthz`, `/v1`, and `/v1/*`.
+   - Verify `/management.html` returns 404.
+
+3. Recreate or move the Cloudflare Tunnel.
+
+   - Keep `cliproxy-origin.sylvanyu.io` as the raw origin hostname, or update
+     the Worker `UPSTREAM_BASE_URL` secret if the hostname changes.
+   - Keep `protocol: http2` unless there is a reason to revisit transport.
+
+4. Recreate service supervision.
+
+   - Prefer launchd/systemd/managed service over manual shell sessions.
+   - Add a watchdog equivalent to check local main, local proxy, and Worker
+     readiness.
+
+5. Update Worker secrets if needed.
+
+   ```bash
+   cd /Users/yuyufeng/Projects/tab-recap
+   npx wrangler secret put UPSTREAM_BASE_URL --config worker/wrangler.toml
+   npx wrangler secret put UPSTREAM_API_KEY --config worker/wrangler.toml
+   npx wrangler secret put MONITOR_TOKEN --config worker/wrangler.toml
+   npx wrangler secret put RESEND_API_KEY --config worker/wrangler.toml
+   npx wrangler deploy --config worker/wrangler.toml
+   ```
+
+6. Verify the whole chain.
+
+   ```bash
+   curl -sS https://cliproxy.sylvanyu.io/healthz
+   curl -sS https://cliproxy.sylvanyu.io/readyz
+   /Users/yuyufeng/.codex/skills/cliroxyapi-service/scripts/manage-cliroxyapi-service.sh smoke
+   ```
+
+7. Send a test alert email after DNS/provider setup.
+
+   Use Resend with:
+
+   ```text
+   from: TabRecap Monitor <alerts@sylvanyu.io>
+   to: me@sylvanyu.io
+   ```
+
+## Things Not To Forget
+
+- The extension should use `https://cliproxy.sylvanyu.io/v1`.
+- The Worker should use origin `https://cliproxy-origin.sylvanyu.io/v1`.
+- The raw origin is not a public product API.
+- `cliproxy.sylvanyu.io/healthz` is not enough; check `/readyz` or `smoke`.
+- `/llm-readyz` costs a tiny model request and is protected by `MONITOR_TOKEN`.
+- Resend is only for alerts; Migadu remains the mailbox provider for
+  `me@sylvanyu.io`.
+- Secret values live in Cloudflare Worker secrets and local config files, not in
+  this repo.

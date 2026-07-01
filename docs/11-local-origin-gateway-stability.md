@@ -2,6 +2,10 @@
 
 Status: implemented for the current local-machine deployment path.
 
+For the operational source of truth, including current hostnames, Worker
+secrets, Tunnel config, logs, alert email, and migration steps, see
+[Default AI Gateway Runbook](12-default-ai-gateway-runbook.md).
+
 TabRecap still uses the user's local machine as the default AI origin. That is acceptable for the current scale, but it changes the failure model: the public Worker can be healthy while the local origin, API-only proxy, Cloudflare Tunnel, or upstream model route is unavailable.
 
 ## Current Chain
